@@ -1,0 +1,97 @@
+{
+  "work_root": "build/vendor_synth",
+  "jobs": [
+    {
+      "name": "vivado_artix7",
+      "enabled": false,
+      "tool": "vivado",
+      "vendor": "xilinx",
+      "family": "artix7",
+      "part": "xc7a35tcsg324-1",
+      "executable": "C:/Xilinx/Vivado/2024.2/bin/vivado.bat",
+      "cases": [
+        "generic_r_w_32x1024",
+        "generic_rw_rw_32x1024",
+        "generic_crw_crw_32x1024",
+        "infer_r_w_bram_32x1024",
+        "infer_r_w_distributed_16x64",
+        "primitive_r_w_block_32x1024"
+      ],
+      "timeout_seconds": 3600
+    },
+    {
+      "name": "quartus_cyclone10",
+      "enabled": false,
+      "tool": "quartus",
+      "vendor": "intel",
+      "family": "Cyclone 10 LP",
+      "device": "10CL025YU256C8G",
+      "executable": "C:/intelFPGA_lite/24.1/quartus/bin64/quartus_sh.exe",
+      "cases": [
+        "generic_r_w_32x1024",
+        "generic_rw_rw_32x1024",
+        "generic_crw_crw_32x1024",
+        "infer_r_w_bram_32x1024",
+        "infer_r_w_distributed_16x64",
+        "primitive_r_w_block_32x1024"
+      ],
+      "timeout_seconds": 3600
+    },
+    {
+      "name": "diamond_ecp5",
+      "enabled": false,
+      "tool": "diamond",
+      "vendor": "lattice",
+      "family": "ecp5",
+      "device": "LFE5U-45F-6BG381C",
+      "executable": "C:/lscc/diamond/3.13/bin/nt64/diamondc.exe",
+      "cases": [
+        "generic_r_w_32x1024",
+        "generic_rw_rw_32x1024",
+        "generic_crw_crw_32x1024",
+        "infer_r_w_bram_32x1024",
+        "infer_r_w_distributed_16x64",
+        "primitive_r_w_block_32x1024"
+      ],
+      "timeout_seconds": 3600
+    },
+    {
+      "name": "radiant_nexus",
+      "enabled": false,
+      "tool": "radiant",
+      "vendor": "lattice",
+      "family": "nexus",
+      "device": "LIFCL-40-9BG400C",
+      "executable": "C:/lscc/radiant/2024.2/bin/nt64/radiantc.exe",
+      "cases": [
+        "generic_r_w_32x1024",
+        "generic_rw_rw_32x1024",
+        "generic_crw_crw_32x1024",
+        "infer_r_w_bram_32x1024",
+        "infer_r_w_distributed_16x64",
+        "primitive_r_w_block_32x1024"
+      ],
+      "timeout_seconds": 3600
+    },
+    {
+      "name": "libero_polarfire",
+      "enabled": false,
+      "tool": "libero",
+      "vendor": "microchip",
+      "family": "PolarFire",
+      "die": "MPF300T",
+      "package": "FCG484",
+      "speed": "-1",
+      "executable": "C:/Microchip/Libero_SoC_v2024.2/Libero/bin/libero.exe",
+      "cases": [
+        "generic_r_w_32x1024",
+        "generic_rw_rw_32x1024",
+        "generic_crw_crw_32x1024",
+        "infer_r_w_bram_32x1024",
+        "infer_r_w_distributed_16x64",
+        "primitive_r_w_block_32x1024"
+      ],
+      "timeout_seconds": 3600
+    }
+  ]
+}

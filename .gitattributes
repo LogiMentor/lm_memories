@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+* text=auto
+
+*.md text eol=lf
+*.py text eol=lf
+*.ps1 text eol=lf
+*.sh text eol=lf
+*.vhd text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.tcl text eol=lf
+.gitattributes text eol=lf

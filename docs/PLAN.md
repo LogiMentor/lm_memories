@@ -153,8 +153,8 @@ Secondary issues found during the reproduction (not the cause of #3):
 ## 3. Revised plan
 
 The decisions below were made after the diagnosis. They replace the first
-proposal (sections 3 to 5 of commit `680f4b2`). Items marked **[to confirm]**
-are defaults that the plan adopts until they are confirmed.
+proposal (sections 3 to 5 of commit `680f4b2`). Phase 0 was approved with the
+corrections included here; there are no defaults left to confirm.
 
 ### 3.1 Approach
 
@@ -181,9 +181,9 @@ Rules for the dual model:
   A silent fall back to flip-flops is never acceptable.
 
 The dual-model entity is `lm_mem_ram_crw_crw` itself, because it is the most
-general one (two clocks, two writers, mixed width). This gives one synthesis
-architecture per vendor instead of three. This reading of "one entity" is
-**[to confirm]**.
+general one (two clocks, two writers, mixed width). `lm_mem_ram_rw_rw` and
+`lm_mem_ram_crw_cw` are portable wrappers around it. This gives one synthesis
+architecture per vendor instead of three.
 
 Interface and behaviour:
 
@@ -253,9 +253,11 @@ files = ["src/sim/lm_mem_ram_crw_crw_rtl.vhd"]
 [filesets.crw_crw_amd]
 files = ["src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd"]
 tools = ["vivado"]               # never compiled by other tools
+check = "target-tool"            # see section 3.4
 
 [filesets.crw_crw_unsupported]
 files = ["src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd"]
+check = "ghdl-93-08"
 
 [flows.sim]
 filesets = ["common", "core", "crw_crw_sim", "wrappers", "fifo", "inference", "primitives"]
@@ -271,32 +273,46 @@ filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "fifo", "infere
 - A small reader, `tools/manifest`, gives the ordered file list of a flow to
   the scripts. For downstream users it also prints the list as
   `python -m tools.manifest list --flow synth-amd --format f|tcl|json`.
-- `tomllib` needs Python 3.11, while `pyproject.toml` declares 3.10 today.
-  Raising it to 3.11 is **[to confirm]**. CI already uses 3.12.
+- `tomllib` needs Python 3.11, so `pyproject.toml` requires Python 3.11 or
+  newer. CI already uses 3.12.
 
 ### 3.4 Conservative VHDL
 
-- Every RTL file under `src/` (cores, wrappers, simulation architecture,
-  fallback) must analyze with GHDL `--std=93c` **and** `--std=08`. CI checks
-  this. The current code already passes both.
-- Not allowed in RTL: `process(all)`, `else`/`elsif` and `case` generate,
-  `std.env`, `to_hstring`, unconstrained element types, generic types and
-  packages, protected types, `??` and matching operators, sequential conditional
-  assignments, external names.
-- Exception: a vendor synthesis architecture (`src/vendor/<vendor>/`) uses what
-  the vendor template needs. The AMD one starts from the UG901 true dual-port
-  template, which uses a plain `shared variable`. That file is compiled only by
-  Vivado. It is never seen by GHDL or another vendor tool, and it is verified
-  through its post-synthesis netlist. The protected-type variant is excluded
-  (wrong netlist in Vivado 2023.1, section 2).
+- Every file under `src/core/`, `src/generic/` and `src/sim/` must analyze
+  with GHDL `--std=93c` **and** `--std=08`. CI checks this. The current code
+  already passes both.
+- Not allowed in those directories: `process(all)`, `else`/`elsif` and `case`
+  generate, `std.env`, `to_hstring`, unconstrained element types, generic types
+  and packages, protected types, `??` and matching operators, sequential
+  conditional assignments, external names.
+- `src/vendor/` and `src/vendor/unsupported/` have no implicit exception. Each
+  file set declares its check in the manifest (`check = ...`), and CI or the
+  local scripts run exactly that check:
+
+  | `check` value | Meaning | Used for |
+  | --- | --- | --- |
+  | `ghdl-93-08` | GHDL analysis in `--std=93c` and `--std=08` | `src/vendor/unsupported/` (fallback architecture) |
+  | `ghdl-relaxed` | GHDL analysis with `--std=08 -frelaxed` (warnings allowed) | vendor files that GHDL can parse |
+  | `target-tool` | Analysis and synthesis only with the tool in `tools = [...]`, plus post-synthesis simulation of the netlist | `src/vendor/amd/` (UG901 template with a plain `shared variable`) |
+
+- The AMD two-writer architecture starts from the UG901 true dual-port
+  template, which uses a plain `shared variable`; this is allowed in that file
+  only. The protected-type variant is excluded (wrong netlist in Vivado 2023.1,
+  section 2).
 - Testbenches use VHDL-2008.
 
 ### 3.5 Reference behaviour and undefined cases
 
-These cases are checked:
+Defined behaviour (checked):
 
-- Read during write, same address, same clock: the old data is returned
-  (read-first).
+- Read during write on the **same port**: the old data is returned
+  (read-first). This applies to port A of `lm_mem_ram_crw_cr` and to each port
+  of the two-writer RAMs.
+- Common-clock simple dual port (`lm_mem_ram_r_w`, `lm_mem_ram_r_w_ratio`):
+  a read of the address being written in the same cycle returns the old data,
+  **where the vendor supports it**. This is checked per vendor with
+  post-synthesis simulation, and the exceptions are listed in the README
+  status table.
 - Enable gating: `ena_i` gates the port A read and write; `enb_i` gates port
   B. Both output stages hold their value while disabled.
 - Latency 1 and 2.
@@ -304,23 +320,46 @@ These cases are checked:
 - Mixed width: the lower narrow address holds the lower bits of the wide word.
 - `g_init_file /= ""` is rejected.
 
-These cases are undefined and excluded from the scoreboard and from the
-post-synthesis comparison:
+Undefined behaviour (excluded from the comparison, but counted):
 
-- Both ports write the same address in the same cycle. The simulation model
-  raises `assert ... severity warning`. **[to confirm]**
-- Different clocks: one port reads an address while the other port writes it,
-  within one cycle of either clock. Block RAMs return undefined data in this
-  case. This item is not in the decision list and is added here.
-  **[to confirm]**
+- **Read during write between different ports of any true dual-port RAM**
+  (`lm_mem_ram_crw_cr`, `lm_mem_ram_rw_rw`, `lm_mem_ram_crw_cw`,
+  `lm_mem_ram_crw_crw`). This includes `lm_mem_ram_rw_rw` with a single clock,
+  because some tools configure the block in two-clock mode.
+- Any read/write collision between ports on different clocks, including
+  dual-clock simple dual port (`lm_mem_ram_cr_cw`, `lm_mem_ram_cr_cw_ratio`,
+  FIFOs). A collision is a read and a write of the same address (or of
+  overlapping narrow words) where the two clock edges are less than one period
+  of the slower clock apart.
+- Two writes to the same address (or overlapping words) on different ports,
+  in the same cycle or within the collision window.
 
-Other defaults:
+How the scoreboard and the models handle collisions:
 
-- `g_simulation` stays in every signature and is ignored. Each core instance
-  emits one `report ... severity note`, and the generic is documented as
-  deprecated. **[to confirm]**
+| Collision | Effect in the scoreboard |
+| --- | --- |
+| Read/write | Only that read is excluded. The cell keeps the written value. |
+| Write/write | The cell becomes undefined. Reads of that address are excluded until the next valid write to it. |
+
+- Each collision raises `assert ... severity warning` and is counted. The
+  test report prints the number of collisions and of excluded reads by kind,
+  and fails if more than a set fraction of the reads is excluded. Without that
+  limit, a test that excludes everything would still pass.
+- Where the warning comes from: for the dual-model entity it is raised by the
+  simulation architecture in `src/sim/`, which may use `now` and other
+  non-synthesizable constructs. A portable core is also the synthesis model,
+  so it must not contain timing checks. For portable cores the warning is
+  raised by the collision monitor in the testbench harness, which watches the
+  core's ports.
+- The frozen reference copy in `sim/ref/` does not change. Its result for a
+  collision is ignored, like the DUT's.
+
+Confirmed defaults:
+
+- `g_simulation` stays in every signature, is ignored, and is documented as
+  deprecated. Each core instance emits one `report ... severity note`.
 - `*_ratio`: if a vendor does not infer the asymmetric template, fall back to
-  a symmetric RAM at the wider width plus conversion logic. **[to confirm]**
+  a symmetric RAM at the wider width plus conversion logic.
 - `*_prim` wrappers: kept as deprecated wrappers on the new cores. No rename.
 
 ### 3.6 Verification
@@ -331,13 +370,12 @@ Other defaults:
 | --- | --- | --- | --- |
 | Synthesis AMD | Vivado | 2023.1 | available |
 | Synthesis Intel | Quartus Prime Lite | 23.1std.0 build 991 | available (families: Cyclone V, MAX 10) |
-| Synthesis Lattice | Diamond (LSE, Synplify Pro) | 3.14 | installed; the command-line Tcl shell does not start yet (to fix in phase 4) |
+| Synthesis Lattice | Diamond (LSE, Synplify Pro) | 3.14.0.75.2 | installed, but the node-locked license expired on 2026-08-20; `pnmainc.exe` exits with no output. **NOT RUN** until the license is renewed |
 | Synthesis Microchip | Libero | - | not installed: **NOT RUN** |
 | Simulation, reference and CI | GHDL | 6.0.0 (local), Ubuntu package (CI) | available |
 | Simulation AMD | Vivado simulator (xsim) | 2023.1 | available |
 | Simulation Intel, Lattice, Microchip | Questa Sim | 2021.1 | available |
-| | Questa Sim | 2024.3 | installed, no VHDL license |
-| | Questa Intel Starter FPGA Edition | 2023.3 | installed, license check fails |
+| | Questa Sim 2024.3, Questa Intel Starter 2023.3 | - | not used (no license) |
 | Test runner | VUnit | 4.7.1 (pip) | available; no xsim support (see below) |
 
 **Behaviour tests (new testbenches only)**
@@ -373,6 +411,11 @@ Other defaults:
   in Questa 2021.1.
 - Lattice: VHDL netlist from Diamond, plus the ECP5 simulation library, in
   Questa 2021.1.
+- Vendor simulation libraries for Questa 2021.1 (Cyclone V and MAX 10 atoms,
+  `altera_mf`, `altera_lnsim`, ECP5) are compiled by a repeatable script,
+  `sim/scripts/compile_vendor_libs.py`, into the build directory outside the
+  repo. The script is written when the first Intel or Lattice post-synthesis
+  run needs it (phase 4).
 - Microchip: not run.
 
 **Synthesis checks (`tools/vendor_synth`)**
@@ -399,16 +442,15 @@ Other defaults:
 - Configurations: 32 x 1024, `lm_mem_ram_r_w` 16 x 64, FIFO 32 x 16, plus
   latency 2, ratio 32 -> 8 and 8 -> 32, and FIFO 32 x 1024.
 
-### 3.7 Reference devices (proposal)
+### 3.7 Reference devices
 
-| Vendor | Device | Reason |
+| Vendor | Device | Status |
 | --- | --- | --- |
-| AMD | `xc7a35tfgg484-2` | Fixed by the decision list |
-| Intel | `5CEBA4F23C7` (Cyclone V E) | Installed family, M10K blocks and MLAB; MAX 10 `10M50DAF484C7G` as the second family if needed |
-| Lattice | `LFE5U-45F-6BG381C` (ECP5) | Already in the vendor-synth example configuration; EBR and distributed RAM |
-| Microchip | `MPF100T-FCG484I` (PolarFire), for later | Libero not installed |
-
-These are proposals. Each one is confirmed before phase 4 uses it.
+| AMD 7-series | `xc7a35tfgg484-2` | approved |
+| AMD UltraScale+ | `xcku3p-ffva676-2-e` (Kintex UltraScale+) | proposed. Device support is installed in Vivado 2023.1 and the synthesis license is available (checked). It also has URAM. |
+| Intel | `5CEBA4F23C7` (Cyclone V E), `10M50DAF484C7G` (MAX 10) | approved |
+| Lattice | `LFE5U-45F-6BG381C` (ECP5) | approved; blocked by the expired Diamond license |
+| Microchip | `MPF100T-FCG484I` (PolarFire) | approved; Libero not installed |
 
 ### 3.8 Phases
 
@@ -429,15 +471,8 @@ Each phase ends with a report and waits for confirmation.
 
 ### 3.9 Open points
 
-1. Dual-model entity = `lm_mem_ram_crw_crw`, with `rw_rw` and `crw_cw` as
-   portable wrappers (section 3.1).
-2. Cross-clock read/write collisions treated as undefined (section 3.5).
-3. Python 3.11 minimum for `tomllib` (section 3.3).
-4. Plain `shared variable` in the AMD-only synthesis architecture, as in the
-   UG901 template (section 3.4).
-5. Reference devices (section 3.7).
-6. Defaults marked **[to confirm]**: `g_simulation`, same-address double
-   write, `*_ratio` fallback.
+1. Second AMD family: `xcku3p-ffva676-2-e` (section 3.7).
+2. Diamond license renewal: until it is renewed, Lattice is **NOT RUN**.
 
 ## Appendix: how the reproduction was run
 

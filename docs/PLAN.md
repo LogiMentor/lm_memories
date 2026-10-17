@@ -3,9 +3,12 @@
 
 # Plan: inferable generic RAMs (issue #3)
 
-Status: phase A (diagnosis only). No RTL was changed. This document records
-the reproduction, the root cause, the proposed fix and the proposed tests, plus
-the decisions that are still open.
+Status: phase 0 of the implementation (plan and structure). No RTL has been
+changed yet.
+
+Sections 1 and 2 record the diagnosis: the reproduction and the root cause.
+Section 3 is the revised implementation plan: binding decisions, layout,
+manifest, verification and phases.
 
 ## 1. Reproduction
 
@@ -147,192 +150,294 @@ Secondary issues found during the reproduction (not the cause of #3):
   and loops that are not in any vendor template. They are not the cause, but the
   fix replaces them with direct indexing.
 
-## 3. Proposed fix
+## 3. Revised plan
 
-### Goals and constraints
+The decisions below were made after the diagnosis. They replace the first
+proposal (sections 3 to 5 of commit `680f4b2`). Items marked **[to confirm]**
+are defaults that the plan adopts until they are confirmed.
 
-- Clean VHDL-2008: no `shared variable` of a non-protected type, no `-frelaxed`,
-  no vendor library in the generic path.
-- Same entity names, generics, ports, port widths and defaults as today, so no
-  downstream change is needed.
-- Same behaviour as the current model where hardware can provide it (see
-  "Behaviour to keep").
-- One process per clock domain and one writer per memory signal, as already
-  required by `docs/coding_style.md`.
+### 3.1 Approach
 
-### New internal cores
+Three kinds of implementation, chosen by the number of write ports:
 
-Replace the single core with two cores. Each core has one entity per file, in
-`src/generic/`.
-
-**`lm_mem_ram_sdp`: one write port, one read port.**
-
-- Generics: `g_wr_data_w`, `g_wr_depth`, `g_rd_data_w`, `g_rd_latency`,
-  `g_init_file` (`g_simulation` is passed through and unused, see the open
-  decisions).
-- Ports: `wr_clk_i`, `ena_i`, `wen_i`, `wr_addr_i`, `wr_dat_i`, `rd_clk_i`,
-  `enb_i`, `rd_addr_i`, `rd_dat_o`.
-- Write process on `wr_clk_i`, read process on `rd_clk_i`. The storage is a
-  `signal` written only by the write process. This is the UG901 simple
-  dual-port template and works with the same clock on both sides.
-- Mixed width: the storage is an array of `min(wr, rd)` width. The wide port
-  loops over `RATIO` narrow words inside its own process, as in the UG901
-  asymmetric templates. The narrow address is `wide_addr * RATIO + i`, and
-  narrow word `i` sits at bits `(i+1)*W-1 downto i*W`, as in today's
-  `f_read_word`/`p_write_word`. The Vivado check (section 4) must confirm the
-  asymmetric case. If it does not infer, the fallback is wide storage with a
-  registered sub-word select on the narrow port.
-- Latency 2: a second output register with the same enable as the first. Vivado
-  can merge it into the BRAM output register (`DOB_REG`).
-
-**`lm_mem_ram_tdp1w`: port A read/write, port B read-only.**
-
-- Process A on `clk_a_i` reads and writes the storage `signal`. Process B on
-  `clk_b_i` only reads it. This is the first control experiment above:
-  `RAM_TDP`, 1 RAMB36, 0 CRITICAL WARNINGs.
-
-### Entity mapping
-
-| Entity | Write ports | New implementation |
+| Kind | Entities | Model |
 | --- | --- | --- |
-| `lm_mem_ram_r_w` | 1 | `lm_mem_ram_sdp`, `wr_clk_i = rd_clk_i = clk_i` |
-| `lm_mem_ram_cr_cw` | 1 | `lm_mem_ram_sdp` |
-| `lm_mem_ram_r_w_ratio` | 1 | `lm_mem_ram_sdp`, mixed width, common clock |
-| `lm_mem_ram_cr_cw_ratio` | 1 | `lm_mem_ram_sdp`, mixed width (this also fixes `lm_mem_fifo*`) |
-| `lm_mem_ram_crw_cr` | 1 (A) | `lm_mem_ram_tdp1w` |
-| `lm_mem_ram_rw_rw` | 2 | see "Two write ports" |
-| `lm_mem_ram_crw_cw` | 2 | see "Two write ports" |
-| `lm_mem_ram_crw_crw` | 2 | see "Two write ports" |
+| Portable core | `lm_mem_ram_r_w`, `lm_mem_ram_cr_cw`, `lm_mem_ram_r_w_ratio`, `lm_mem_ram_cr_cw_ratio` (and every FIFO) on `lm_mem_ram_sdp`; `lm_mem_ram_crw_cr` on `lm_mem_ram_tdp1w` | One model for synthesis and simulation |
+| Dual model | `lm_mem_ram_crw_crw`, plus `lm_mem_ram_rw_rw` and `lm_mem_ram_crw_cw`, which stay portable wrappers around it | One entity, one simulation architecture (the reference model), one synthesis architecture per vendor or family, one fallback architecture |
+| Vendor example | `examples/vendor/` (XPM for AMD, `altera_syncram` for Intel) | Same interface, **outside the verification matrix** |
 
-`lm_mem_ram_r_w_infer` keeps its structure; only the Vivado `ram_style` value
-is fixed (`"block"`/`"distributed"`).
+Rules for the dual model:
 
-### Behaviour to keep
+- Every architecture of the dual-model entity is named `rtl`. Only the file
+  manifest of each flow decides which one is compiled (section 3.3).
+- Configurations, `translate_off/on` around behaviour, and `if ... generate`
+  on a generic to choose the model are not allowed.
+- **Fallback:** for a vendor without a validated two-writer architecture, the
+  manifest selects an architecture that stops synthesis. It uses
+  `assert false report "..." severity failure` with an explicit message. A
+  second mechanism, an out-of-range constant such as
+  `constant C_LM_MEM_TDP_NOT_SUPPORTED : natural range 0 to 0 := 1;`, covers
+  tools that ignore assertions. Each tool is checked for this (section 3.6).
+  A silent fall back to flip-flops is never acceptable.
 
-These rules describe today's model. The new tests check them against the old
-model (section 4).
+The dual-model entity is `lm_mem_ram_crw_crw` itself, because it is the most
+general one (two clocks, two writers, mixed width). This gives one synthesis
+architecture per vendor instead of three. This reading of "one entity" is
+**[to confirm]**.
 
-- Read during write to the same address on the same clock returns the old data
-  (read-first). This is the result of signal semantics in the current single
-  process. 7-series BRAM supports it.
-- `ena_i` gates both the read and the write of port A. `enb_i` gates the read
-  (and, where present, the write) of port B. Both output register stages hold
-  their value while the enable is low.
-- Initial content is all zeros. There is no reset on the storage or the output
-  registers.
-- `g_init_file /= ""` is still rejected by an assertion.
-- Mixed width: lower narrow address = lower bits of the wide word.
-- Two writes to the same address in the same cycle: today port B wins (it is
-  assigned later in the process). Hardware does not guarantee this, so the
-  behaviour becomes "undefined" in the documentation and the tests do not check
-  it.
+Interface and behaviour:
 
-### Two write ports
+- Entity names, generics, ports and defaults do not change.
+- Today's behaviour is the reference. A frozen copy of today's core is kept as
+  `sim/ref/lm_mem_ref_ram_crw_crw.vhd` and renamed so it can sit in the same
+  library as the new code. The new code is compared with it cycle by cycle.
 
-No strategy that meets all the constraints gives inferred BRAM with two
-writers. The options:
+### 3.2 Layout
 
-| Option | Inference | Clean VHDL-2008 | GHDL | Cost |
-| --- | --- | --- | --- | --- |
-| A. Declare it not supported for inference. Keep a corrected behavioural model and refuse synthesis by default with an elaboration-time assertion (opt-in generic for designs that want registers). | no | yes | yes | Users must use a vendor wrapper for TDP |
-| B. Vendor architecture in `src/primitives/` (e.g. `xpm_memory_tdpram` for AMD) | yes | per vendor | XPM cannot be simulated in GHDL (SystemVerilog models) | One wrapper per vendor, no portable test |
-| C. `shared variable` of a protected type | no: Vivado 2023.1 produces a wrong netlist (port A read tied to 0) | yes | yes | Ruled out for Vivado 2023.1 |
-| D. Plain `shared variable` (UG901 template) | yes (verified) | no, needs `-frelaxed` | only with `-frelaxed` | Ruled out by the issue |
-| E. Live value table / XOR multi-bank built from SDP RAMs | yes | yes | yes | 2-4x BRAM, plus a `depth x 1` table in registers; different collision behaviour |
-| F. Two processes writing one `signal` | yes (verified) | legal for resolved types only | gives `X` on every write (verified) | Ruled out: simulation and synthesis do not match |
+```text
+src/
+  common/      lm_mem_pkg.vhd, lm_mem_ccd_resync.vhd          (unchanged)
+  core/        lm_mem_ram_sdp.vhd, lm_mem_ram_tdp1w.vhd       (portable, one model)
+               lm_mem_ram_crw_crw_ent.vhd                     (dual-model entity only)
+  generic/     existing public wrappers, same paths            (rewired to src/core)
+  sim/         lm_mem_ram_crw_crw_rtl.vhd                     (simulation architecture = reference model)
+  vendor/
+    amd/       lm_mem_ram_crw_crw_rtl.vhd                     (Vivado synthesis architecture)
+    intel/     ...                                            (only when validated)
+    lattice/   ...
+    microchip/ ...
+    unsupported/ lm_mem_ram_crw_crw_rtl.vhd                   (fallback: stops synthesis)
+  fifo/, inference/, primitives/                              (unchanged; *_prim deprecated)
+sim/
+  ref/         lm_mem_ref_ram_crw_crw.vhd                     (frozen copy of today's core)
+  tb/          existing testbenches                           (unchanged)
+  vunit/       new harnesses and VUnit testbenches, run.py
+  scripts/     run_ghdl.py (dedicated workdir), run_xsim.py, run_postsynth.py
+examples/vendor/
+  amd/         XPM wrapper          (not verified, declared as such)
+  intel/       altera_syncram wrapper
+manifests/
+  lm_memories.toml                                            (single manifest, all flows)
+```
 
-Recommendation: A now (so no user gets a register file by accident), and B as
-a separate follow-up for AMD. C would be the clean answer, but Vivado 2023.1
-synthesizes it to a wrong netlist with no error. That makes it unsafe, which is
-worse than not supported. E is not recommended for a general library.
+Effects on existing users:
 
-### Work breakdown (phase B, after approval)
+- The public wrappers keep their paths. File lists that name them keep
+  working.
+- `src/generic/lm_mem_ram_crw_crw.vhd` moves to
+  `src/core/lm_mem_ram_crw_crw_ent.vhd`, which holds only the entity. A
+  downstream file list that is not updated fails at analysis or elaboration
+  ("no architecture"), not silently. This must be in the release notes.
+- `docs/coding_style.md` requires the entity and the architecture in the same
+  file. It gets an exception for dual-model entities.
 
-1. Add `lm_mem_ram_sdp` and `lm_mem_ram_tdp1w`, and move the 1-writer wrappers
-   to them. Keep the old core as a test-only reference model under `sim/ref/`.
-2. Two-writer entities: apply the chosen option.
-3. Fix the `ram_style` value in the vendor-synth case.
-4. Add the tests in section 4. Update `docs/support_matrix.md` (status per
-   entity, inference result per family) and the README.
+### 3.3 File manifest
 
-## 4. Proposed tests
+One TOML file, `manifests/lm_memories.toml`, is read by every synthesis and
+simulation script. Named file sets are listed in compile order, and each flow
+is a list of file sets:
 
-### Behaviour: GHDL + VUnit (CI)
+```toml
+[filesets.common]
+std   = "93"                     # must also analyze as 2008
+files = ["src/common/lm_mem_pkg.vhd", "src/common/lm_mem_ccd_resync.vhd"]
 
-- Add a VUnit `run.py` (`vunit_hdl` from pip) next to the current runner, and
-  run it in the `ghdl` CI job. Keep `run_ghdl.py` until the VUnit suite covers
-  the same tests.
-- One generic, self-checking testbench per core and a thin one per wrapper, with
-  VUnit configurations for:
-  - depth: 16, 64, 1024; width: 1, 8, 32;
-  - ratio: 1:1, 1:2, 1:4, 2:1, 4:1 (`*_ratio` entities);
-  - latency 1 and 2;
-  - clocks: same clock; and unrelated periods (e.g. 10 ns / 7 ns) for `c*`
-    entities.
-- Stimulus: constrained-random writes and reads with random enables, checked
-  against a scoreboard. For dual-clock cases the scoreboard is a protected type
-  inside the testbench, which is legal VHDL-2008.
-- Directed checks for the rules in "Behaviour to keep": read-first on the same
-  address, enable gating on both stages, latency, mixed-width bit order, zero
-  initial content.
-- Regression against the old model: the same random stream drives the new
-  entity and the reference copy of today's `lm_mem_ram_crw_crw` in `sim/ref/`.
-  Outputs must match cycle by cycle, except for same-cycle write collisions.
-- Two-writer entities (if option A): keep the behavioural tests, and add a check
-  that the synthesis guard fires when it is not overridden.
+[filesets.core]
+std   = "93"
+files = ["src/core/lm_mem_ram_sdp.vhd", "src/core/lm_mem_ram_tdp1w.vhd",
+         "src/core/lm_mem_ram_crw_crw_ent.vhd"]
 
-### Inference: Vivado script (local, not in CI)
+[filesets.crw_crw_sim]
+files = ["src/sim/lm_mem_ram_crw_crw_rtl.vhd"]
 
-- Extend `tools/vendor_synth` instead of adding a new tool: each built-in case
-  gets expectations such as `expect_bram_tiles`, `expect_lutram`,
-  `max_registers`, `max_critical_warnings = 0`, and forbidden message IDs
-  (`Synth 8-6859`, `Synth 8-5787`, `Synth 8-4767`). A case is `pass` only if
-  the reports match. Exit code 0 alone is not enough.
-- Add one case per entity on `xc7a35tfgg484-2`, out-of-context: 32 x 1024
-  (expect BRAM), 16 x 64 (expect a RAM primitive, BRAM or LUTRAM, never
-  flip-flops; the reference template gets one RAMB18 with `ram_style` left at
-  `auto`), plus mixed-width, latency 2 and the FIFOs.
-- Read the counts from `report_ram_utilization`, `report_utilization` and
-  `get_msg_config -severity {CRITICAL WARNING} -count`. Raise the per-ID
-  message limit so the counts are real.
-- Lessons from this reproduction that the script must handle:
-  - Run each case in its own working directory, and retry once on
-    "couldn't read file ..." errors. In this campaign Vivado 2023.1 failed at
-    random reading its own Tcl helpers or the shared `.Xil` directory. This
-    happened in about 1 run in 4, also with one run at a time, and a retry
-    always succeeded.
-  - Do not pass generics as `name=value` on the command line through
-    `vivado.bat`: `cmd.exe` splits on `=`, and Vivado silently binds the generic
-    to 0. Generate a top-level wrapper (as `vendor_synth` already does) or
-    pass generics in a Tcl file.
-  - One case at 32 x 1024 that fails inference needs about 1.5 GB of RAM and a
-    few minutes. Run cases one after another by default.
-- Optional CI proxy (open decision): Yosys + `ghdl-yosys-plugin`,
-  `proc; memory -nomap; stat`. The job asserts that each core produces one
-  memory cell and no `depth x width` flip-flop array. This catches the
-  "dissolved into registers" class of bug without vendor tools.
+[filesets.crw_crw_amd]
+files = ["src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd"]
+tools = ["vivado"]               # never compiled by other tools
 
-## 5. Open decisions
+[filesets.crw_crw_unsupported]
+files = ["src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd"]
 
-1. **Two-writer entities** (`rw_rw`, `crw_cw`, `crw_crw`): option A, B or E
-   (see above; C, D and F are ruled out). The recommendation is A, with B as a
-   follow-up.
-2. **`g_simulation`**: it has no effect today. Options: keep it as a documented
-   no-op for compatibility; give it a meaning (for example, allow the
-   register-based two-writer model only when `g_simulation = 1`); or deprecate
-   it. A default of 1 in a synthesizable library is misleading in any case.
-3. **Same-address write collision on two-writer ports**: document it as
-   undefined (proposed), or keep "port B wins" in the model.
-4. **Mixed-width fallback**: if Vivado does not infer the asymmetric SDP
-   template, accept wide storage with a narrow-port mux, or limit `*_ratio` to
-   ratios Vivado supports.
-5. **VUnit in CI**: add `vunit_hdl` as a CI dependency and migrate the current
-   testbenches, or keep the plain GHDL runner and add only the new tests.
-6. **Yosys proxy in CI**: add the OSS CAD Suite to CI for a vendor-neutral
-   inference check, or rely only on local vendor runs.
-7. **Primitive wrapper names**: `lm_mem_*_ram_r_w_prim` instantiate the generic
-   RAM, not vendor primitives. Rename them, or implement real primitives (out of
-   scope for #3).
+[flows.sim]
+filesets = ["common", "core", "crw_crw_sim", "wrappers", "fifo", "inference", "primitives"]
+
+[flows.synth-amd]
+filesets = ["common", "core", "crw_crw_amd", "wrappers", "fifo", "inference", "primitives"]
+
+[flows.synth-intel]               # becomes crw_crw_intel once validated
+filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "fifo", "inference", "primitives"]
+```
+
+- All files go into library `work`, as today.
+- A small reader, `tools/manifest`, gives the ordered file list of a flow to
+  the scripts. For downstream users it also prints the list as
+  `python -m tools.manifest list --flow synth-amd --format f|tcl|json`.
+- `tomllib` needs Python 3.11, while `pyproject.toml` declares 3.10 today.
+  Raising it to 3.11 is **[to confirm]**. CI already uses 3.12.
+
+### 3.4 Conservative VHDL
+
+- Every RTL file under `src/` (cores, wrappers, simulation architecture,
+  fallback) must analyze with GHDL `--std=93c` **and** `--std=08`. CI checks
+  this. The current code already passes both.
+- Not allowed in RTL: `process(all)`, `else`/`elsif` and `case` generate,
+  `std.env`, `to_hstring`, unconstrained element types, generic types and
+  packages, protected types, `??` and matching operators, sequential conditional
+  assignments, external names.
+- Exception: a vendor synthesis architecture (`src/vendor/<vendor>/`) uses what
+  the vendor template needs. The AMD one starts from the UG901 true dual-port
+  template, which uses a plain `shared variable`. That file is compiled only by
+  Vivado. It is never seen by GHDL or another vendor tool, and it is verified
+  through its post-synthesis netlist. The protected-type variant is excluded
+  (wrong netlist in Vivado 2023.1, section 2).
+- Testbenches use VHDL-2008.
+
+### 3.5 Reference behaviour and undefined cases
+
+These cases are checked:
+
+- Read during write, same address, same clock: the old data is returned
+  (read-first).
+- Enable gating: `ena_i` gates the port A read and write; `enb_i` gates port
+  B. Both output stages hold their value while disabled.
+- Latency 1 and 2.
+- Initial content is zero, and there is no reset.
+- Mixed width: the lower narrow address holds the lower bits of the wide word.
+- `g_init_file /= ""` is rejected.
+
+These cases are undefined and excluded from the scoreboard and from the
+post-synthesis comparison:
+
+- Both ports write the same address in the same cycle. The simulation model
+  raises `assert ... severity warning`. **[to confirm]**
+- Different clocks: one port reads an address while the other port writes it,
+  within one cycle of either clock. Block RAMs return undefined data in this
+  case. This item is not in the decision list and is added here.
+  **[to confirm]**
+
+Other defaults:
+
+- `g_simulation` stays in every signature and is ignored. Each core instance
+  emits one `report ... severity note`, and the generic is documented as
+  deprecated. **[to confirm]**
+- `*_ratio`: if a vendor does not infer the asymmetric template, fall back to
+  a symmetric RAM at the wider width plus conversion logic. **[to confirm]**
+- `*_prim` wrappers: kept as deprecated wrappers on the new cores. No rename.
+
+### 3.6 Verification
+
+**Tool matrix**
+
+| Role | Tool | Version | Status on the reference machine |
+| --- | --- | --- | --- |
+| Synthesis AMD | Vivado | 2023.1 | available |
+| Synthesis Intel | Quartus Prime Lite | 23.1std.0 build 991 | available (families: Cyclone V, MAX 10) |
+| Synthesis Lattice | Diamond (LSE, Synplify Pro) | 3.14 | installed; the command-line Tcl shell does not start yet (to fix in phase 4) |
+| Synthesis Microchip | Libero | - | not installed: **NOT RUN** |
+| Simulation, reference and CI | GHDL | 6.0.0 (local), Ubuntu package (CI) | available |
+| Simulation AMD | Vivado simulator (xsim) | 2023.1 | available |
+| Simulation Intel, Lattice, Microchip | Questa Sim | 2021.1 | available |
+| | Questa Sim | 2024.3 | installed, no VHDL license |
+| | Questa Intel Starter FPGA Edition | 2023.3 | installed, license check fails |
+| Test runner | VUnit | 4.7.1 (pip) | available; no xsim support (see below) |
+
+**Behaviour tests (new testbenches only)**
+
+- Each new test has three layers:
+  - a **harness** in plain VHDL-2008 with no VUnit dependency. It holds the
+    DUT adapter, constrained-random stimulus, the scoreboard, and the
+    comparison with `sim/ref/`;
+  - a **VUnit testbench** that drives the harness: GHDL in CI, and Questa
+    2021.1 locally through VUnit's ModelSim/Questa interface;
+  - a **plain top** per configuration for simulators without VUnit.
+- VUnit has no xsim support: the latest release is v4.7.0, there is no xsim
+  interface in `vunit/sim_if`, and the upstream issue VUnit/vunit#209 "Add
+  support for Vivado XSIM" is still open. `sim/scripts/run_xsim.py` therefore
+  runs the plain tops with the same harness and the same configuration list.
+- **DUT adapter:** `lm_tb_dut_<core>` has an `rtl` architecture that
+  instantiates the library entity with generics, and a `netlist` architecture
+  that instantiates the synthesized top of one fixed configuration. The flow
+  manifest picks one, as for the RTL. This lets the same harness and the same
+  scoreboard run on RTL and on netlists.
+- The existing testbenches stay as they are. `run_ghdl.py` still runs them,
+  now with a dedicated workdir and no `.exe`/`.o` files in the repo root.
+
+**Post-synthesis simulation**
+
+- Mandatory for the dual-model entities on every supported vendor. For the
+  portable cores it is optional, but the export is prepared.
+- AMD: synthesize a generated top with fixed generics, out-of-context, then
+  `write_vhdl -mode funcsim`. Run it in GHDL with UNISIM analyzed from
+  Vivado's `data/vhdl/src/unisims`; relaxed GHDL flags, if needed, apply only
+  to that vendor library. Also run it in xsim with the precompiled UNISIM.
+- Intel: VHDL netlist from `quartus_eda`, plus the Cyclone V or MAX 10 atoms,
+  in Questa 2021.1.
+- Lattice: VHDL netlist from Diamond, plus the ECP5 simulation library, in
+  Questa 2021.1.
+- Microchip: not run.
+
+**Synthesis checks (`tools/vendor_synth`)**
+
+- Expected-results files `tools/vendor_synth/expected/<vendor>.toml`, keyed by
+  entity × configuration. Each entry gives the exact number of RAM blocks, the
+  LUTRAM count, the register ceiling, CRITICAL WARNINGs = 0, and the forbidden
+  message IDs (at least `Synth 8-6859`, `Synth 8-5787`). For a fallback
+  architecture the expected result is "synthesis stops with the fallback
+  message". A case passes only when the reports match the expected results;
+  the exit code alone never makes a pass.
+- The per-ID message limit is raised (`set_msg_config -limit`), so the counts
+  are real.
+- The script reads the effective value of each generic from the log
+  (`Parameter <name> bound to: <value>`). The case fails if it differs from
+  the requested value.
+- It retries at most twice, and only on "couldn't read file". Each retry is
+  recorded in the report.
+- Runs are sequential, one tool process at a time. The script never touches
+  tool processes it did not start.
+- Logs and artefacts go outside the repo. The default is a folder under the
+  system temporary directory, changed with `--work-root` or `LM_MEM_BUILD_DIR`.
+- A tool that is not installed is reported as **NOT RUN**, never as pass.
+- Configurations: 32 x 1024, `lm_mem_ram_r_w` 16 x 64, FIFO 32 x 16, plus
+  latency 2, ratio 32 -> 8 and 8 -> 32, and FIFO 32 x 1024.
+
+### 3.7 Reference devices (proposal)
+
+| Vendor | Device | Reason |
+| --- | --- | --- |
+| AMD | `xc7a35tfgg484-2` | Fixed by the decision list |
+| Intel | `5CEBA4F23C7` (Cyclone V E) | Installed family, M10K blocks and MLAB; MAX 10 `10M50DAF484C7G` as the second family if needed |
+| Lattice | `LFE5U-45F-6BG381C` (ECP5) | Already in the vendor-synth example configuration; EBR and distributed RAM |
+| Microchip | `MPF100T-FCG484I` (PolarFire), for later | Libero not installed |
+
+These are proposals. Each one is confirmed before phase 4 uses it.
+
+### 3.8 Phases
+
+Each phase ends with a report and waits for confirmation.
+
+0. Plan, layout, manifest format, tool inventory (this revision).
+1. Portable cores (`lm_mem_ram_sdp`, `lm_mem_ram_tdp1w`), wrappers and FIFOs
+   rewired, `sim/ref/`, VUnit harnesses on GHDL, `run_ghdl.py` workdir,
+   `.gitignore`. A draft PR to `main` opens at the end of this phase.
+2. Vivado synthesis checks in `tools/vendor_synth`, with expected results.
+3. Two-writer RAM on AMD: entity, simulation architecture, Vivado
+   architecture, fallback, and post-synthesis on GHDL and xsim.
+4. Other vendors, for installed tools only: Quartus and Diamond back ends,
+   portable cores, two-writer architectures only where synthesis and
+   post-synthesis both pass.
+5. Vendor examples, README (approaches, "which one to use", status table
+   generated by the scripts).
+
+### 3.9 Open points
+
+1. Dual-model entity = `lm_mem_ram_crw_crw`, with `rw_rw` and `crw_cw` as
+   portable wrappers (section 3.1).
+2. Cross-clock read/write collisions treated as undefined (section 3.5).
+3. Python 3.11 minimum for `tomllib` (section 3.3).
+4. Plain `shared variable` in the AMD-only synthesis architecture, as in the
+   UG901 template (section 3.4).
+5. Reference devices (section 3.7).
+6. Defaults marked **[to confirm]**: `g_simulation`, same-address double
+   write, `*_ratio` fallback.
 
 ## Appendix: how the reproduction was run
 

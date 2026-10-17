@@ -122,6 +122,7 @@ def parse_vivado_utilization(text: str) -> dict[str, float | None]:
   """Resource counts from report_utilization (7-series and UltraScale+ names)."""
   return {
     "luts": _util_value(text, ("Slice LUTs*", "Slice LUTs", "CLB LUTs*", "CLB LUTs")),
+    "luts_logic": _util_value(text, ("LUT as Logic",)),
     "lutram": _util_value(text, ("LUT as Memory",)),
     "registers": _util_value(text, ("Slice Registers", "CLB Registers")),
     "bram_tiles": _util_value(text, ("Block RAM Tile",)),
@@ -151,7 +152,7 @@ def compare(metrics: dict[str, Any], log: dict[str, Any], expectation: dict[str,
       got = metrics.get(key)
       if got is None or abs(float(got) - float(expectation[key])) > 1e-9:
         problems.append(f"{label}: expected {expectation[key]}, got {got}")
-  ceilings = (("max_registers", "registers"), ("max_luts", "luts"))
+  ceilings = (("max_registers", "registers"), ("max_luts", "luts_logic"))
   for key, metric in ceilings:
     if key in expectation:
       got = metrics.get(metric)

@@ -345,7 +345,7 @@ cases = ["infer_r_w_bram_32x1024"]
 
       summary = json.loads((work / "summary.json").read_text(encoding="utf-8"))
       self.assertEqual(result, 1)
-      self.assertEqual(summary["results"][0]["status"], "fail")
+      self.assertEqual(summary["results"][0]["status"], "tool-error")
       self.assertIn("Vivado Synthesis failed", summary["results"][0]["message"])
 
 

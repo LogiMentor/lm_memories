@@ -948,7 +948,7 @@ def _evaluate(job: dict[str, Any], case: dict[str, Any], top: str, log_text: str
   problems: list[str] = []
   if log["errors"] or not log["synth_ran"] or not util_file.is_file():
     problems.append("synthesis did not complete: " + "; ".join(log["errors"][:3] or ["no utilization report"]))
-    return {"status": "fail", "problems": problems, "metrics": metrics, "log": log}
+    return {"status": "tool-error", "problems": problems, "metrics": metrics, "log": log}
   if case.get("kind") == "entity":
     problems += check.check_generics(case.get("generics", {}), log["generics"])
   expectation = check.find_expectation(check.load_expected(_vendor(job)), case["name"], str(job.get("part", "")))
@@ -959,14 +959,14 @@ def _evaluate(job: dict[str, Any], case: dict[str, Any], top: str, log_text: str
   return {"status": "fail" if problems else "pass", "problems": problems, "metrics": metrics, "log": log}
 
 
-def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool) -> dict[str, Any]:
+def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evaluate_only: bool = False) -> dict[str, Any]:
   job = item.job
   case = item.case
   top = _top_name(job, case)
   case_dir = work_root / _sanitize(_job_name(job)) / _sanitize(case["name"])
   reports = case_dir / "reports"
 
-  if clean and case_dir.exists():
+  if clean and not evaluate_only and case_dir.exists():
     shutil.rmtree(case_dir)
   reports.mkdir(parents=True, exist_ok=True)
 
@@ -975,11 +975,12 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool) -> dic
   generics: dict[str, Any] = {}
   if case.get("kind") == "entity":
     generics = dict(case.get("generics", {}))
-  else:
+  elif not evaluate_only:
     top_file = case_dir / f"{top}.vhd"
     top_file.write_text(_render_top(job, case, top), encoding="utf-8")
     sources = sources + [top_file]
-  command = _tool_script(job, top, sources, script_file, reports, generics)
+  # Evaluation only: keep the script that actually ran.
+  command = [] if evaluate_only else _tool_script(job, top, sources, script_file, reports, generics)
   log_file = case_dir / "run.log"
 
   result: dict[str, Any] = {
@@ -1008,6 +1009,20 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool) -> dic
   if dry_run:
     log_file.write_text("dry run: command was not executed\ncommand: " + " ".join(command) + "\n", encoding="utf-8")
     result.update(status="dry-run", completed_at=result["started_at"], message="")
+    return result
+
+  if evaluate_only:
+    if not log_file.is_file():
+      result.update(status="not-run", completed_at=result["started_at"], message="no previous run to evaluate")
+      result["problems"] = [result["message"]]
+      return result
+    evaluation = _evaluate(job, case, top, log_file.read_text(encoding="utf-8", errors="ignore"), reports)
+    log = evaluation["log"]
+    result.update(
+      status=evaluation["status"], problems=evaluation["problems"], metrics=evaluation["metrics"],
+      tool_version=log.get("version", ""), critical_warnings=log.get("critical_warnings"),
+      completed_at=result["started_at"], message="; ".join(evaluation["problems"])[:400],
+    )
     return result
 
   if not _executable_available(job, _default_executable(job)):
@@ -1086,6 +1101,19 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]]) -> None:
 
   summary_json.write_text(json.dumps({"results": results}, indent=2) + "\n", encoding="utf-8")
 
+  # Results without local paths or commands, suitable for docs/results/.
+  public = [
+    {
+      "tool": r["tool"], "tool_version": r.get("tool_version", ""), "vendor": r["vendor"],
+      "family": r["family"], "part": r.get("part", ""), "case": r["case"], "top": r["top"],
+      "generics": r.get("generics", {}), "status": r["status"], "metrics": r.get("metrics", {}),
+      "critical_warnings": r.get("critical_warnings"), "retries": len(r.get("retries", [])),
+      "problems": r.get("problems", []),
+    }
+    for r in results
+  ]
+  (work_root / "summary_public.json").write_text(json.dumps({"results": public}, indent=2) + "\n", encoding="utf-8")
+
   fields = ["job", "tool", "tool_version", "part", "case", "status", "bram_tiles", "lutram", "uram",
             "registers", "luts", "critical_warnings", "retries", "message"]
   with summary_csv.open("w", newline="", encoding="utf-8") as handle:
@@ -1101,7 +1129,8 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]]) -> None:
         "message": r.get("message", ""),
       })
 
-  status_text = {"pass": "pass", "fail": "FAIL", "unchecked": "UNCHECKED (no expected results)",
+  status_text = {"pass": "pass", "fail": "FAIL", "tool-error": "TOOL ERROR (synthesis did not complete)",
+                 "unchecked": "UNCHECKED (no expected results)",
                  "not-run": "NOT RUN", "timeout": "TIMEOUT", "dry-run": "dry run"}
   lines = [
     "# Vendor Synthesis Summary",
@@ -1170,6 +1199,8 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--list", action="store_true", help="list configured jobs and cases")
   parser.add_argument("--no-clean", action="store_true", help="do not remove previous per-case work directories")
   parser.add_argument("--keep-going", action="store_true", help="continue after a failed case")
+  parser.add_argument("--evaluate-only", action="store_true",
+                      help="do not run tools; check the existing results in the work root against the expected results")
   return parser
 
 
@@ -1201,10 +1232,10 @@ def main(argv: list[str] | None = None) -> int:
   results: list[dict[str, Any]] = []
   exit_code = 0
   for item in items:
-    result = _run_item(item, work_root, args.dry_run, not args.no_clean)
+    result = _run_item(item, work_root, args.dry_run, not args.no_clean, args.evaluate_only)
     results.append(result)
     print(f"{result['status']:9} {result['job']} {result['case']} {result.get('message', '')}", flush=True)
-    if result["status"] in ("fail", "timeout", "unchecked", "not-run"):
+    if result["status"] in ("fail", "tool-error", "timeout", "unchecked", "not-run"):
       exit_code = 1
       if not args.keep_going and result["status"] != "not-run":
         break

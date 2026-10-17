@@ -183,9 +183,26 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(result["status"], "pass", result["problems"])
     self.assertEqual(len(result["retries"]), 2)
 
+  def test_evaluate_only_rechecks_without_running(self) -> None:
+    first = self._run(self._good_spec())
+    self.assertEqual(first["status"], "pass")
+    config = self.root / "config.json"
+    work = self.root / "work"
+    calls_before = (self.root / "calls.txt").read_text()
+    code = main(["--config", str(config), "--evaluate-only"])
+    result = json.loads((work / "summary.json").read_text(encoding="utf-8"))["results"][0]
+    self.assertEqual(code, 0)
+    self.assertEqual(result["status"], "pass")
+    self.assertEqual(result["command"], [])
+    self.assertEqual((self.root / "calls.txt").read_text(), calls_before, "the tool must not run")
+    public = json.loads((work / "summary_public.json").read_text(encoding="utf-8"))["results"][0]
+    self.assertNotIn("work_dir", public)
+    self.assertNotIn("command", public)
+
   def test_retries_are_capped(self) -> None:
     result = self._run(self._good_spec(fail_reads=3))
-    self.assertEqual(result["status"], "fail")
+    self.assertEqual(result["status"], "tool-error")
+    self.assertEqual(result["exit_code"], 1)
     self.assertEqual(len(result["retries"]), 2)
 
 

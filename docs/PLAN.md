@@ -333,6 +333,14 @@ Undefined behaviour (excluded from the comparison, but counted):
   of the slower clock apart.
 - Two writes to the same address (or overlapping words) on different ports,
   in the same cycle or within the collision window.
+- **Accesses at or beyond the depth** (possible only when a depth is not a
+  power of two). A read returns undefined data. A write never changes an
+  address within the depth. The cores contain no address comparison: the
+  storage covers the whole address range, so a non-power-of-two depth uses the
+  next power of two words. The scoreboard and the simulation models raise a
+  warning for these accesses: a write is ignored by the model, and a read is
+  excluded from the comparison. Both are counted. This is a **breaking
+  change**: the previous model returned zeros (`CHANGELOG.md`).
 
 How the scoreboard and the models handle collisions:
 
@@ -434,8 +442,13 @@ Confirmed defaults:
   the requested value.
 - It retries at most twice, and only on "couldn't read file". Each retry is
   recorded in the report.
-- Runs are sequential, one tool process at a time. The script never touches
-  tool processes it did not start.
+- Runs are sequential, one tool process at a time. Each run holds the
+  machine-wide lock `lm_eda_heavy_tools.lock` in the system temporary
+  directory (`tools/eda_lock.py`, fixed name, not tied to the repo), so
+  sessions on the same machine queue up. The timeout is set with
+  `LM_EDA_LOCK_TIMEOUT`, and a waiting run prints who holds the lock. A
+  stale lock is removed only if its process no longer exists. The script never
+  terminates a process it did not start.
 - Logs and artefacts go outside the repo. The default is a folder under the
   system temporary directory, changed with `--work-root` or `LM_MEM_BUILD_DIR`.
 - A tool that is not installed is reported as **NOT RUN**, never as pass.
@@ -447,7 +460,7 @@ Confirmed defaults:
 | Vendor | Device | Status |
 | --- | --- | --- |
 | AMD 7-series | `xc7a35tfgg484-2` | approved |
-| AMD UltraScale+ | `xcku3p-ffva676-2-e` (Kintex UltraScale+) | proposed. Device support is installed in Vivado 2023.1 and the synthesis license is available (checked). It also has URAM. |
+| AMD UltraScale+ | `xcku3p-ffva676-2-e` (Kintex UltraScale+) | approved. Expected results cover block RAM only: no URAM, because the cores carry no `ram_style` attribute. |
 | Intel | `5CEBA4F23C7` (Cyclone V E), `10M50DAF484C7G` (MAX 10) | approved |
 | Lattice | `LFE5U-45F-6BG381C` (ECP5) | approved; blocked by the expired Diamond license |
 | Microchip | `MPF100T-FCG484I` (PolarFire) | approved; Libero not installed |
@@ -471,17 +484,19 @@ Each phase ends with a report and waits for confirmation.
 
 ### 3.9 Open points
 
-1. Second AMD family: `xcku3p-ffva676-2-e` (section 3.7).
-2. Diamond license renewal: until it is renewed, Lattice is **NOT RUN**.
+1. Diamond license renewal: until it is renewed, Lattice is **NOT RUN**.
 
 ### 3.10 Phase 1 implementation notes
 
-- **Out-of-range addresses** (only possible when a depth is not a power of
-  two): a write is ignored, as before. A read now leaves the read registers
-  unchanged; the previous model returned zeros. Returning zeros would need a
-  multiplexer after the RAM output, which prevents the output register from
-  being absorbed into the block. The behaviour is documented as undefined, and
-  the tests never use out-of-range addresses.
+- **Accesses beyond the depth:** see section 3.5. The first phase 1 version
+  compared addresses with the depth inside the cores; that was removed after
+  review. Vivado 2023.1 (`xc7a35tfgg484-2`) checks:
+  - `lm_mem_ram_r_w` at 1024 and 1000 words and `lm_mem_ram_crw_cr` at 1000
+    words: 1 RAMB36, 0 LUTs, 0 registers. `ENARDEN`/`ENBWREN` are driven
+    directly by `ena_i`/`enb_i`, and `WEA` by `wen_i`.
+  - At 1536 words: 2 RAMB36 (the storage is 2048 words), 0 LUTs.
+  The tests generate accesses beyond the depth in four configurations whose
+  depth is not a power of two. They fail if none occurs.
 - **Unused generics:** `g_ram_a_latency` of the `*_ratio` wrappers belongs to
   the unused port A output. It is still checked (1 or 2), as before, and
   otherwise ignored.
@@ -496,15 +511,39 @@ Each phase ends with a report and waits for confirmation.
   `sim/ref/` by the RAM tests.
 - **Two-writer RAMs** (`crw_crw`, `rw_rw`, `crw_cw`) are unchanged until
   phase 3. The manifest still lists the original `lm_mem_ram_crw_crw`.
+- **Independence from process order** (reviewed after a GHDL/Questa
+  difference). GHDL and Questa run processes of the same delta cycle in
+  different orders. The new testbenches were checked decision by decision:
+  - *Expected value, "never written", "undefined" of a read:* taken from each
+    cell's state before the current instant. Each cell keeps its value,
+    written flag and undefined flag from before its last write instant.
+    **Changed:** the written and undefined flags used to be read after a
+    same-instant write if that write was processed first.
+  - *Write/write collisions:* decided per cell. **Changed:** a collision
+    marked every cell of the second write as undefined, so a wide write and a
+    narrow write at the same instant gave different results depending on which
+    ran second.
+  - *Old-data coverage and read/write collisions:* taken from the write log
+    when the read is resolved. A read is resolved only after the instant has
+    passed (common clock) or after a full collision window (two clocks), so
+    every write that can affect it is already logged. **Changed in `cada114`.**
+  - *Stimulus and sampling:* inputs change on falling edges and are sampled on
+    rising edges; DUT outputs are observed on falling edges; a common clock
+    comes from a single process, so both edges fall in the same delta. Not
+    changed.
+  - *FIFO scoreboard:* the writer pushes a word before the edge that writes
+    it, and the reader pops only words flagged by `valid_o`, so a push and a
+    pop in the same delta never touch the same word. Not changed.
+  - *Pending queue, counters and the end process:* updates to a protected
+    type, so concurrent calls are serialized. The end process flushes only
+    after both stimuli finished plus four collision windows. Not changed.
+- **Coverage threshold:** every RAM configuration has a minimum number of
+  compared reads after all exclusions (`g_min_checked`, 1000 by default). A
+  FIFO configuration compares every word written. The final line of each test
+  reports the simulator and its version.
 - **Simulator:** `sim/vunit/run.py` uses GHDL unless `VUNIT_SIMULATOR` is
-  set. Without the default, VUnit picks the first simulator on `PATH`, which
-  on the reference machine is Questa. The suite also passes on Questa 2021.1
-  (run with `-p 1`).
-- **Order-independent scoreboard:** the "old data" coverage flag is computed
-  from the write log when the read is resolved, not when it is issued.
-  Otherwise the result depends on whether the simulator runs the read or the
-  write monitor first in the same delta cycle: Questa and GHDL order them
-  differently.
+  set. The run holds the machine-wide EDA lock. With Questa 2021.1, run one
+  test at a time (`-p 1`).
 - **Mutation check** (`python sim/vunit/mutation_check.py`): six deliberate
   defects were introduced in the cores one at a time. Each one made a test
   fail at simulation time (not at compile time):

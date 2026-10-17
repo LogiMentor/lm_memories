@@ -41,7 +41,7 @@ FAILURE_PATTERNS = (
 SOURCE_COMMON = ("src/common/lm_mem_pkg.vhd",)
 SOURCE_GENERIC_CRW_CRW = ("src/generic/lm_mem_ram_crw_crw.vhd",)
 SOURCE_GENERIC_R_W = (
-  "src/generic/lm_mem_ram_crw_crw.vhd",
+  "src/core/lm_mem_ram_sdp.vhd",
   "src/generic/lm_mem_ram_r_w.vhd",
 )
 SOURCE_GENERIC_RW_RW = (

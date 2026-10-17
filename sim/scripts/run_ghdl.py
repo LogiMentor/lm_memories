@@ -18,6 +18,8 @@ GHDL = os.environ.get("GHDL", "ghdl")
 SOURCES = [
   "src/common/lm_mem_pkg.vhd",
   "src/common/lm_mem_ccd_resync.vhd",
+  "src/core/lm_mem_ram_sdp.vhd",
+  "src/core/lm_mem_ram_tdp1w.vhd",
   "src/generic/lm_mem_ram_crw_crw.vhd",
   "src/generic/lm_mem_ram_rw_rw.vhd",
   "src/generic/lm_mem_ram_cr_cw.vhd",

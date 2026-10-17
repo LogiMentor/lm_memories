@@ -9,6 +9,7 @@
 -- Description:
 --  Dual-clock RAM wrapper with one write port and one read port.
 --  The read and write data widths may differ by an integer ratio.
+--  Implemented on lm_mem_ram_sdp, independent clocks.
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -41,28 +42,28 @@ end entity lm_mem_ram_cr_cw_ratio;
 
 architecture a_rtl of lm_mem_ram_cr_cw_ratio is
 begin
-  inst_mem : entity work.lm_mem_ram_crw_crw
+  assert (g_ram_a_latency = 1) or (g_ram_a_latency = 2)
+    report "lm_mem_ram_cr_cw_ratio: port A latency must be 1 or 2"
+    severity failure;
+
+  inst_mem : entity work.lm_mem_ram_sdp
     generic map(
-      g_ram_a_latency => g_ram_a_latency,
-      g_ram_a_data_w  => g_ram_a_data_w,
-      g_ram_a_depth   => g_ram_a_depth,
-      g_ram_b_latency => g_ram_b_latency,
-      g_ram_b_data_w  => g_ram_b_data_w,
-      g_init_file     => g_init_file,
-      g_simulation    => g_simulation
+      g_wr_data_w  => g_ram_a_data_w,
+      g_wr_depth   => g_ram_a_depth,
+      g_rd_data_w  => g_ram_b_data_w,
+      g_rd_latency => g_ram_b_latency,
+      g_init_file  => g_init_file,
+      g_simulation => g_simulation
     )
     port map(
-      clk_a_i     => wr_clk_i,
-      clk_b_i     => rd_clk_i,
-      ena_i       => ena_i,
-      enb_i       => enb_i,
-      wen_a_i     => wen_i,
-      wen_b_i     => '0',
-      data_wr_a_i => wr_dat_i,
-      data_wr_b_i => (others => '0'),
-      addr_a_i    => wr_addr_i,
-      addr_b_i    => rd_addr_i,
-      data_rd_a_o => open,
-      data_rd_b_o => rd_dat_o
+      wr_clk_i  => wr_clk_i,
+      rd_clk_i  => rd_clk_i,
+      ena_i     => ena_i,
+      enb_i     => enb_i,
+      wen_i     => wen_i,
+      wr_addr_i => wr_addr_i,
+      wr_dat_i  => wr_dat_i,
+      rd_addr_i => rd_addr_i,
+      rd_dat_o  => rd_dat_o
     );
 end architecture a_rtl;

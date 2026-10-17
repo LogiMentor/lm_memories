@@ -11,6 +11,10 @@ first simulator found on PATH. With Questa 2021.1 run one test at a time
 (-p 1): parallel runs race for the library lock of the implicit vopt step
 (vsim-1962).
 
+A run holds the machine-wide EDA lock (tools/eda_lock.py), so runs from
+different sessions on the same machine queue up. Listing does not lock.
+Each test reports the simulator name and version in its final line.
+
   python sim/vunit/run.py              # all configurations
   python sim/vunit/run.py "*cr_cw*"    # a subset
   python sim/vunit/run.py --list
@@ -19,6 +23,9 @@ first simulator found on PATH. With Questa 2021.1 run one test at a time
 from __future__ import annotations
 
 import os
+import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -29,6 +36,7 @@ from vunit import VUnit  # noqa: E402
 ROOT_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT_DIR))
 
+from tools.eda_lock import heavy_tool_lock  # noqa: E402
 from tools.manifest import load  # noqa: E402
 
 BUILD_ROOT = Path(os.environ["LM_MEM_BUILD_DIR"]) if os.environ.get("LM_MEM_BUILD_DIR") else ROOT_DIR / "sim" / "build"
@@ -42,8 +50,12 @@ TDP1W = dict(g_a_writes=True, g_a_reads=True, g_b_writes=False, g_b_reads=True)
 
 
 def ram(name, dut, roles, *, a_w=32, b_w=None, depth=1024, a_lat=1, b_lat=1,
-        same_clock=True, a_per=FAST, b_per=FAST, cycles=2000, hot=8, seed=1):
-  """One RAM configuration. Common-clock simple dual port reads old data across ports."""
+        same_clock=True, a_per=FAST, b_per=FAST, cycles=2000, hot=8, seed=1, min_checked=1000):
+  """One RAM configuration. Common-clock simple dual port reads old data across ports.
+
+  min_checked: the test fails if fewer reads than this are compared after
+  the collision and beyond-depth exclusions.
+  """
   b_w = a_w if b_w is None else b_w
   cross_rdw_valid = same_clock and roles is SDP
   generics = dict(
@@ -51,6 +63,7 @@ def ram(name, dut, roles, *, a_w=32, b_w=None, depth=1024, a_lat=1, b_lat=1,
     g_a_latency=a_lat, g_b_latency=b_lat, g_same_clock=same_clock,
     g_a_period_ps=a_per, g_b_period_ps=b_per if not same_clock else a_per,
     g_cross_rdw_valid=cross_rdw_valid, g_n_cycles=cycles, g_hot_addrs=hot, g_seed=seed,
+    g_min_checked=min_checked,
     **roles,
   )
   return name, generics
@@ -87,6 +100,13 @@ RAM_CONFIGS = [
       same_clock=False, a_per=SLOW, seed=30),
   ram("crw_cr.1clk.32x1024.lat1", "lm_mem_ram_crw_cr", TDP1W, seed=31),
   ram("crw_cr.2clk.32x1024.lat2", "lm_mem_ram_crw_cr", TDP1W, a_lat=2, b_lat=2, same_clock=False, b_per=SLOW, seed=32),
+  # Depths that are not a power of two: accesses beyond the depth are generated,
+  # checked to be harmless and excluded from the comparison.
+  ram("sdp.1clk.32x48", "lm_mem_ram_sdp", SDP, depth=48, seed=51),
+  ram("sdp.2clk.32to8.depth48", "lm_mem_ram_sdp", SDP, b_w=8, depth=48, same_clock=False, b_per=SLOW, seed=52),
+  ram("tdp1w.2clk.16x40.lat21", "lm_mem_ram_tdp1w", TDP1W, a_w=16, depth=40, a_lat=2,
+      same_clock=False, a_per=SLOW, seed=53),
+  ram("r_w_ratio.8to32.depth48", "lm_mem_ram_r_w_ratio", SDP, a_w=8, b_w=32, depth=48, hot=16, seed=54),
 ]
 
 
@@ -110,6 +130,24 @@ FIFO_CONFIGS = [
 ]
 
 
+def simulator_info() -> str:
+  """Simulator name and version, made safe for a VHDL string generic."""
+  name = os.environ["VUNIT_SIMULATOR"]
+  if name == "ghdl":
+    cmd = [os.environ.get("GHDL", shutil.which("ghdl") or "ghdl"), "--version"]
+  elif name == "modelsim":
+    folder = os.environ.get("VUNIT_MODELSIM_PATH")
+    cmd = [str(Path(folder) / "vsim") if folder else (shutil.which("vsim") or "vsim"), "-version"]
+  else:
+    return name
+  try:
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=120).stdout
+  except (OSError, subprocess.SubprocessError):
+    return f"{name} (version unknown)"
+  first = next((line.strip() for line in out.splitlines() if line.strip()), "version unknown")
+  return re.sub(r"[^A-Za-z0-9._()-]+", "_", f"{name}: {first}")
+
+
 def main() -> None:
   argv = sys.argv[1:]
   if not any(arg.startswith("--output-path") or arg == "-o" for arg in argv):
@@ -121,15 +159,24 @@ def main() -> None:
   for source in load().files("test-vunit"):
     lib.add_source_file(str(source.path), vhdl_standard="2008")
 
+  listing = any(arg in ("--list", "-l", "--files", "--compile") for arg in argv)
+  sim_info = "listing" if listing else simulator_info()
+  if not listing:
+    print(f"Simulator: {sim_info}")
+
   tb_ram = lib.test_bench("tb_lm_mem_ram")
   for name, generics in RAM_CONFIGS:
-    tb_ram.add_config(name=name, generics=generics)
+    tb_ram.add_config(name=name, generics={**generics, "g_sim_info": sim_info})
 
   tb_fifo = lib.test_bench("tb_lm_mem_fifo")
   for name, generics in FIFO_CONFIGS:
-    tb_fifo.add_config(name=name, generics=generics)
+    tb_fifo.add_config(name=name, generics={**generics, "g_sim_info": sim_info})
 
-  vu.main()
+  if listing:
+    vu.main()
+  else:
+    with heavy_tool_lock(f"VUnit {os.environ['VUNIT_SIMULATOR']}: {' '.join(argv) or 'all tests'}"):
+      vu.main()
 
 
 if __name__ == "__main__":

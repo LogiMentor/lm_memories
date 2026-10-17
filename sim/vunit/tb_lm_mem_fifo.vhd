@@ -12,7 +12,11 @@
 --  lowest bits first, a wide read pops them in the same order. Writes are only
 --  issued while full_o is low, so every issued write is accepted; reads are
 --  checked whenever valid_o is high. The test also checks that the FIFO ends
---  empty and that every written word was read back.
+--  empty and that every written word was read back, so every configuration
+--  checks exactly g_n_writes * write_width / read_width reads.
+--  Process order: the writer pushes a word before the rising edge that writes
+--  it, and the reader pops only words already flagged by valid_o, so a push
+--  and a pop in the same delta cycle never touch the same word.
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -36,7 +40,8 @@ entity tb_lm_mem_fifo is
     g_wr_period_ps : positive := 10000;
     g_rd_period_ps : positive := 7000;
     g_n_writes     : positive := 400;
-    g_seed         : positive := 1
+    g_seed         : positive := 1;
+    g_sim_info     : string   := "unknown simulator"
   );
 end entity tb_lm_mem_fifo;
 
@@ -214,6 +219,10 @@ begin
       v_err := v_err + 1;
       report "tb_lm_mem_fifo: " & integer'image(sv_queue.size) & " words never read" severity error;
     end if;
+    report "tb_lm_mem_fifo [" & g_sim_info & "]: words_written=" &
+           integer'image(g_n_writes * C_WR_WORDS) & " reads_checked=" & integer'image(v_got) &
+           " errors=" & integer'image(v_err)
+      severity note;
     s_errors  <= v_err;
     s_rd_done <= true;
     wait;

@@ -39,7 +39,9 @@ entity tb_lm_mem_ram is
     g_n_cycles         : positive := 2000;
     g_hot_addrs        : positive := 8;
     g_seed             : positive := 1;
-    g_max_excluded_pct : natural  := 25
+    g_max_excluded_pct : natural  := 25;
+    g_min_checked      : natural  := 1000;
+    g_sim_info         : string   := "unknown simulator"
   );
 end entity tb_lm_mem_ram;
 
@@ -66,7 +68,9 @@ begin
       g_n_cycles         => g_n_cycles,
       g_hot_addrs        => g_hot_addrs,
       g_seed             => g_seed,
-      g_max_excluded_pct => g_max_excluded_pct
+      g_max_excluded_pct => g_max_excluded_pct,
+      g_min_checked      => g_min_checked,
+      g_sim_info         => g_sim_info
     )
     port map(
       done_o   => s_done,

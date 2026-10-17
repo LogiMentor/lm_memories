@@ -17,9 +17,16 @@
 --    the reference model, cycle by cycle, except reads excluded by the
 --    collision rules (docs/PLAN.md section 3.5).
 --  - Checks that each read output holds its value while its enable is low.
---  - Fails on coverage holes: no checked read, no read of never-written data,
---    no read-first case where one is expected, no masked write, no hold
---    check, or too many excluded reads.
+--  - Addresses cover the whole address range, so a depth that is not a power
+--    of two also gets accesses beyond the depth (undefined: writes ignored by
+--    the model, reads excluded, both counted).
+--  - Fails on coverage holes: fewer checked reads than g_min_checked, no read
+--    of never-written data, no read-first case where one is expected, no
+--    masked write, no hold check, no access beyond a non-power-of-two depth,
+--    or too many reads excluded by collisions.
+--  - Process order: inputs change on falling edges and are sampled on rising
+--    edges; outputs are observed on falling edges; every scoreboard decision
+--    uses the state before the current instant (see lm_mem_tb_pkg).
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -48,7 +55,9 @@ entity lm_mem_tb_harness is
     g_n_cycles         : positive := 2000;
     g_hot_addrs        : positive := 8;
     g_seed             : positive := 1;
-    g_max_excluded_pct : natural  := 25
+    g_max_excluded_pct : natural  := 25;
+    g_min_checked      : natural  := 1000;
+    g_sim_info         : string   := "unknown simulator"
   );
   port(
     done_o   : out boolean;
@@ -64,25 +73,14 @@ architecture a_tb of lm_mem_tb_harness is
   constant C_CELLS    : positive := g_a_depth * C_A_WORDS;
   constant C_A_AW     : positive := f_ceil_log2(g_a_depth);
   constant C_B_AW     : positive := f_ceil_log2(C_B_DEPTH);
+  constant C_A_SPAN   : positive := 2 ** C_A_AW;
+  constant C_B_SPAN   : positive := 2 ** C_B_AW;
+  constant C_POW2     : boolean  := (C_A_SPAN = g_a_depth) and (C_B_SPAN = C_B_DEPTH);
   constant C_A_HOT    : positive := f_min(g_hot_addrs, g_a_depth);
   constant C_B_HOT    : positive := f_max(1, f_min((C_A_HOT * C_A_WORDS) / C_B_WORDS, C_B_DEPTH));
   constant C_WINDOW   : time     := maximum(g_a_period, g_b_period);
   constant C_PORT_A   : natural  := 0;
   constant C_PORT_B   : natural  := 1;
-
-  type t_token is record
-    valid : boolean;
-    base  : natural;
-    t     : time;
-    exp   : t_tb_data;
-    undef : boolean;
-    init  : boolean;
-  end record t_token;
-
-  constant C_NO_TOKEN : t_token := (
-    valid => false, base => 0, t => 0 ns, exp => (others => '0'),
-    undef => false, init => false
-  );
 
   shared variable sv_sb : t_scoreboard;
 
@@ -239,7 +237,7 @@ begin
       if v_bit = '1' then
         p_tb_rand_int(v_s1, v_s2, 0, C_A_HOT - 1, v_int);
       else
-        p_tb_rand_int(v_s1, v_s2, 0, g_a_depth - 1, v_int);
+        p_tb_rand_int(v_s1, v_s2, 0, C_A_SPAN - 1, v_int);
       end if;
       s_addr_a <= std_logic_vector(to_unsigned(v_int, C_A_AW));
       p_tb_rand_slv(v_s1, v_s2, v_data);
@@ -272,7 +270,7 @@ begin
       if v_bit = '1' then
         p_tb_rand_int(v_s1, v_s2, 0, C_B_HOT - 1, v_int);
       else
-        p_tb_rand_int(v_s1, v_s2, 0, C_B_DEPTH - 1, v_int);
+        p_tb_rand_int(v_s1, v_s2, 0, C_B_SPAN - 1, v_int);
       end if;
       s_addr_b <= std_logic_vector(to_unsigned(v_int, C_B_AW));
       p_tb_rand_slv(v_s1, v_s2, v_data);
@@ -287,9 +285,9 @@ begin
 
   -- Monitors: sample on the rising edge, observe outputs on the falling edge.
   proc_mon_a : process
-    variable v_tok1     : t_token := C_NO_TOKEN;
-    variable v_out      : t_token := C_NO_TOKEN;
-    variable v_new      : t_token;
+    variable v_tok1     : t_tb_read := C_TB_NO_READ;
+    variable v_out      : t_tb_read := C_TB_NO_READ;
+    variable v_new      : t_tb_read;
     variable v_base     : natural;
     variable v_have_out : boolean;
     variable v_have_obs : boolean := false;
@@ -308,12 +306,7 @@ begin
         end if;
       end if;
       if g_a_reads and (s_ena = '1') then
-        v_new := (
-          valid => true, base => v_base, t => now,
-          exp   => sv_sb.expected(v_base, C_A_WORDS, now),
-          undef => sv_sb.undefined(v_base, C_A_WORDS),
-          init  => sv_sb.never_written(v_base, C_A_WORDS)
-        );
+        v_new := sv_sb.snapshot(v_base, C_A_WORDS, now);
         if g_a_latency = 1 then
           v_out := v_new;
         else
@@ -324,8 +317,7 @@ begin
       end if;
       wait until falling_edge(s_clk_a);
       if v_have_out then
-        sv_sb.push_read(C_PORT_A, v_out.base, C_A_WORDS, v_out.t, v_out.exp, v_out.undef,
-                        v_out.init, s_dout_a, s_rdout_a, "port A");
+        sv_sb.push_read(C_PORT_A, v_out, s_dout_a, s_rdout_a, "port A");
         v_last := s_dout_a;
         v_have_obs := true;
       elsif g_a_reads and v_have_obs then
@@ -340,9 +332,9 @@ begin
   end process proc_mon_a;
 
   proc_mon_b : process
-    variable v_tok1     : t_token := C_NO_TOKEN;
-    variable v_out      : t_token := C_NO_TOKEN;
-    variable v_new      : t_token;
+    variable v_tok1     : t_tb_read := C_TB_NO_READ;
+    variable v_out      : t_tb_read := C_TB_NO_READ;
+    variable v_new      : t_tb_read;
     variable v_base     : natural;
     variable v_have_out : boolean;
     variable v_have_obs : boolean := false;
@@ -361,12 +353,7 @@ begin
         end if;
       end if;
       if g_b_reads and (s_enb = '1') then
-        v_new := (
-          valid => true, base => v_base, t => now,
-          exp   => sv_sb.expected(v_base, C_B_WORDS, now),
-          undef => sv_sb.undefined(v_base, C_B_WORDS),
-          init  => sv_sb.never_written(v_base, C_B_WORDS)
-        );
+        v_new := sv_sb.snapshot(v_base, C_B_WORDS, now);
         if g_b_latency = 1 then
           v_out := v_new;
         else
@@ -377,8 +364,7 @@ begin
       end if;
       wait until falling_edge(s_clk_b);
       if v_have_out then
-        sv_sb.push_read(C_PORT_B, v_out.base, C_B_WORDS, v_out.t, v_out.exp, v_out.undef,
-                        v_out.init, s_dout_b, s_rdout_b, "port B");
+        sv_sb.push_read(C_PORT_B, v_out, s_dout_b, s_rdout_b, "port B");
         v_last := s_dout_b;
         v_have_obs := true;
       elsif g_b_reads and v_have_obs then
@@ -404,8 +390,9 @@ begin
     v_c := sv_sb.counts;
     v_excluded := v_c.reads_excl_rw + v_c.reads_excl_undef;
 
-    if v_c.reads_checked = 0 then
-      sv_sb.add_error("coverage: no read was checked");
+    if v_c.reads_checked < g_min_checked then
+      sv_sb.add_error("coverage: " & integer'image(v_c.reads_checked) & " reads checked, minimum " &
+                      integer'image(g_min_checked));
     end if;
     if v_excluded * 100 > g_max_excluded_pct * v_c.reads then
       sv_sb.add_error("too many excluded reads: " & integer'image(v_excluded) & " of " &
@@ -425,9 +412,17 @@ begin
     if v_c.hold_checks = 0 then
       sv_sb.add_error("coverage: no output hold check");
     end if;
+    if not C_POW2 then
+      if (g_a_writes or g_b_writes) and (v_c.writes_oor = 0) then
+        sv_sb.add_error("coverage: no write beyond the depth");
+      end if;
+      if v_c.reads_excl_oor = 0 then
+        sv_sb.add_error("coverage: no read beyond the depth");
+      end if;
+    end if;
 
     v_c := sv_sb.counts;
-    report "lm_mem_tb_harness " & g_dut & ": " & f_tb_counts_image(v_c) severity note;
+    report "lm_mem_tb_harness " & g_dut & " [" & g_sim_info & "]: " & f_tb_counts_image(v_c) severity note;
     errors_o <= v_c.errors;
     done_o   <= true;
     s_stop   <= true;

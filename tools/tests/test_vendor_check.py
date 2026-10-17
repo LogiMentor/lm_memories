@@ -1,0 +1,193 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+"""Tests for result extraction and expected-result checks in vendor_synth.
+
+A fake Vivado (a Python script) prints a synthesis log and writes the
+utilization report, so the whole run/evaluate path is exercised without the
+real tool. The tests use a private lock file.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import tempfile
+import textwrap
+import unittest
+from pathlib import Path
+
+from tools.vendor_synth import check
+from tools.vendor_synth.cli import main
+
+UTIL_TEMPLATE = """\
++-------------------------+------+-------+------------+-----------+-------+
+|        Site Type        | Used | Fixed | Prohibited | Available | Util% |
++-------------------------+------+-------+------------+-----------+-------+
+| Slice LUTs*             | {luts} |     0 |          0 |     20800 |  0.00 |
+|   LUT as Logic          | {luts} |     0 |          0 |     20800 |  0.00 |
+|   LUT as Memory         | {lutram} |     0 |          0 |      9600 |  0.00 |
+| Slice Registers         | {regs} |     0 |          0 |     41600 |  0.00 |
+| Block RAM Tile    | {bram} |     0 |          0 |        50 |  2.00 |
+"""
+
+FAKE_VIVADO = r'''
+import os, re, sys
+script = open(sys.argv[sys.argv.index("-source") + 1]).read()
+cfg = os.environ["FAKE_VIVADO"]
+state = os.path.join(os.path.dirname(cfg), "calls.txt")
+calls = int(open(state).read()) if os.path.exists(state) else 0
+open(state, "w").write(str(calls + 1))
+spec = eval(open(cfg).read())
+print("****** Vivado v2023.1 (64-bit)")
+if calls < spec.get("fail_reads", 0):
+    print('couldn\'t read file "C:/Xilinx/Vivado/2023.1/scripts/rt/data/x.tcl": No error')
+    print("ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
+    sys.exit(1)
+top = re.search(r"-top (\S+)", script).group(1)
+print("Command: synth_design -mode out_of_context -top " + top)
+print("INFO: [Synth 8-638] synthesizing module '%s' [x.vhd:1]" % top)
+for name, value in spec["generics"].items():
+    print("\tParameter %s bound to: %s - type: integer " % (name, value))
+print("INFO: [Synth 8-256] done synthesizing module '%s'" % top)
+for line in spec.get("extra", []):
+    print(line)
+util = re.search(r"report_utilization -file \{([^}]+)\}", script).group(1)
+open(util, "w").write(spec["util"])
+'''
+
+
+class CheckParsingTest(unittest.TestCase):
+  def test_parse_log_ignores_echoed_commands_and_reads_top_generics(self) -> None:
+    log = textwrap.dedent("""\
+      ****** Vivado v2023.1 (64-bit)
+      # set_msg_config -id {Synth 8-6859} -limit 1000000
+      CRITICAL WARNING: [Common 17-741] No write access right to the local Tcl store
+      Command: synth_design -mode out_of_context -top lm_mem_ram_r_w
+      INFO: [Synth 8-638] synthesizing module 'lm_mem_ram_r_w' [a.vhd:1]
+      \tParameter g_ram_depth bound to: 64 - type: integer
+      \tParameter g_init_file bound to: (null) - type: string
+      INFO: [Synth 8-638] synthesizing module 'lm_mem_ram_sdp' [b.vhd:1]
+      \tParameter g_wr_depth bound to: 64 - type: integer
+      CRITICAL WARNING: [Synth 8-6859] multi-driven net on pin x
+      """)
+    parsed = check.parse_vivado_log(log, "lm_mem_ram_r_w")
+    self.assertEqual(parsed["version"], "2023.1")
+    self.assertEqual(parsed["critical_warnings"], 1)
+    self.assertEqual(parsed["critical_warnings_outside_synth"], 1)
+    self.assertEqual(parsed["message_ids"]["Synth 8-6859"], 1)
+    self.assertEqual(parsed["generics"]["g_ram_depth"], ("64", "integer"))
+    self.assertNotIn("g_wr_depth", parsed["generics"])
+
+  def test_generic_mismatch_is_reported(self) -> None:
+    problems = check.check_generics({"g_ram_depth": 64}, {"g_ram_depth": ("0", "integer")})
+    self.assertEqual(len(problems), 1)
+    self.assertIn("synthesized with 0", problems[0])
+
+  def test_utilization_names_for_both_families(self) -> None:
+    us = "| CLB LUTs*  |    3 |\n|   LUT as Memory |    0 |\n| CLB Registers |   5 |\n| Block RAM Tile |  0.5 |\n| URAM |    0 |\n"
+    m = check.parse_vivado_utilization(us)
+    self.assertEqual((m["luts"], m["registers"], m["bram_tiles"], m["uram"]), (3.0, 5.0, 0.5, 0.0))
+
+  def test_compare_flags_every_kind_of_mismatch(self) -> None:
+    log = {"critical_warnings": 2, "message_ids": {"Synth 8-5787": 4}, "limited_messages": ["Synth 8-1"]}
+    metrics = {"bram_tiles": 0.0, "lutram": 0.0, "uram": 0.0, "registers": 65568.0, "luts": 9845.0}
+    expectation = {"bram_tiles": 1, "lutram": 0, "uram": 0, "max_registers": 0, "max_luts": 0,
+                   "max_critical_warnings": 0, "forbidden_messages": ["Synth 8-5787"]}
+    problems = check.compare(metrics, log, expectation)
+    self.assertEqual(len(problems), 6, problems)
+
+
+class VendorRunTest(unittest.TestCase):
+  def setUp(self) -> None:
+    self.tmp = tempfile.TemporaryDirectory()
+    self.root = Path(self.tmp.name)
+    self.fake = self.root / "fake_vivado.py"
+    self.fake.write_text(FAKE_VIVADO, encoding="utf-8")
+    self.spec = self.root / "spec.txt"
+    self.old_env = {k: os.environ.get(k) for k in ("FAKE_VIVADO", "TEMP", "TMP", "TMPDIR")}
+    os.environ["FAKE_VIVADO"] = str(self.spec)
+    lockdir = self.root / "lockdir"
+    lockdir.mkdir()
+    for key in ("TEMP", "TMP", "TMPDIR"):
+      os.environ[key] = str(lockdir)
+    tempfile.tempdir = None
+
+  def tearDown(self) -> None:
+    for key, value in self.old_env.items():
+      if value is None:
+        os.environ.pop(key, None)
+      else:
+        os.environ[key] = value
+    tempfile.tempdir = None
+    self.tmp.cleanup()
+
+  def _run(self, spec: dict, case: str = "r_w_16x64", part: str = "xc7a35tfgg484-2", executable=None) -> dict:
+    self.spec.write_text(repr(spec), encoding="utf-8")
+    config = self.root / "config.json"
+    work = self.root / "work"
+    config.write_text(json.dumps({
+      "work_root": str(work),
+      "jobs": [{
+        "name": "fake", "enabled": True, "tool": "vivado", "vendor": "amd", "family": "artix7",
+        "part": part, "command": executable or [sys.executable, str(self.fake)], "cases": [case],
+      }],
+    }), encoding="utf-8")
+    code = main(["--config", str(config)])
+    result = json.loads((work / "summary.json").read_text(encoding="utf-8"))["results"][0]
+    result["exit_code"] = code
+    return result
+
+  def _good_spec(self, **overrides) -> dict:
+    spec = {
+      "generics": {"g_ram_data_w": 16, "g_ram_depth": 64, "g_ram_latency": 1},
+      "util": UTIL_TEMPLATE.format(luts=0, lutram=0, regs=0, bram=0.5),
+    }
+    spec.update(overrides)
+    return spec
+
+  def test_pass_only_when_results_match(self) -> None:
+    result = self._run(self._good_spec())
+    self.assertEqual(result["status"], "pass", result["problems"])
+    self.assertEqual(result["exit_code"], 0)
+    self.assertEqual(result["tool_version"], "2023.1")
+
+  def test_flip_flop_ram_fails(self) -> None:
+    result = self._run(self._good_spec(util=UTIL_TEMPLATE.format(luts=338, lutram=0, regs=1040, bram=0)))
+    self.assertEqual(result["status"], "fail")
+    self.assertEqual(result["exit_code"], 1)
+
+  def test_wrong_generic_value_fails(self) -> None:
+    result = self._run(self._good_spec(generics={"g_ram_data_w": 16, "g_ram_depth": 0, "g_ram_latency": 1}))
+    self.assertEqual(result["status"], "fail")
+    self.assertTrue(any("g_ram_depth" in p for p in result["problems"]))
+
+  def test_message_limit_reached_fails(self) -> None:
+    extra = ["INFO: [Common 17-14] Message 'Synth 8-3848' appears 100 times and further instances "
+             "of the messages will be disabled."]
+    result = self._run(self._good_spec(extra=extra))
+    self.assertEqual(result["status"], "fail")
+
+  def test_missing_expectation_is_unchecked_not_pass(self) -> None:
+    result = self._run(self._good_spec(), part="xc7z010clg400-1")
+    self.assertEqual(result["status"], "unchecked")
+    self.assertEqual(result["exit_code"], 1)
+
+  def test_missing_tool_is_not_run(self) -> None:
+    result = self._run(self._good_spec(), executable=str(self.root / "no_such_vivado.bat"))
+    self.assertEqual(result["status"], "not-run")
+    self.assertEqual(result["exit_code"], 1)
+
+  def test_retry_only_on_couldnt_read_file_and_recorded(self) -> None:
+    result = self._run(self._good_spec(fail_reads=2))
+    self.assertEqual(result["status"], "pass", result["problems"])
+    self.assertEqual(len(result["retries"]), 2)
+
+  def test_retries_are_capped(self) -> None:
+    result = self._run(self._good_spec(fail_reads=3))
+    self.assertEqual(result["status"], "fail")
+    self.assertEqual(len(result["retries"]), 2)
+
+
+if __name__ == "__main__":
+  unittest.main()

@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+#
+# Synthesis check cases (kind "entity"): the library entity itself is the
+# out-of-context top, with the generics below. Generics are written into the
+# tool script (never on a command line) and read back from the synthesis log.
+# Expected results per vendor are in expected/<vendor>.toml.
+
+[[cases]]
+name = "r_w_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Common-clock simple dual port, 32 x 1024, latency 1."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+[[cases]]
+name = "r_w_32x1024_lat2"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Common-clock simple dual port, 32 x 1024, latency 2."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 2 }
+
+[[cases]]
+name = "r_w_16x64"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Small common-clock simple dual port, 16 x 64."
+generics = { g_ram_data_w = 16, g_ram_depth = 64, g_ram_latency = 1 }
+
+[[cases]]
+name = "r_w_32x1000"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Depth that is not a power of two (storage rounds up to 1024)."
+generics = { g_ram_data_w = 32, g_ram_depth = 1000, g_ram_latency = 1 }
+
+[[cases]]
+name = "r_w_32x1536"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Depth that is not a power of two (storage rounds up to 2048)."
+generics = { g_ram_data_w = 32, g_ram_depth = 1536, g_ram_latency = 1 }
+
+[[cases]]
+name = "cr_cw_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw"
+description = "Dual-clock simple dual port, 32 x 1024, latency 1."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+[[cases]]
+name = "cr_cw_32x1024_lat2"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw"
+description = "Dual-clock simple dual port, 32 x 1024, latency 2."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 2 }
+
+[[cases]]
+name = "r_w_ratio_32to8"
+kind = "entity"
+entity = "lm_mem_ram_r_w_ratio"
+description = "Common-clock, write 32 x 1024, read 8 x 4096."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 8 }
+
+[[cases]]
+name = "r_w_ratio_8to32"
+kind = "entity"
+entity = "lm_mem_ram_r_w_ratio"
+description = "Common-clock, write 8 x 4096, read 32 x 1024."
+generics = { g_ram_a_data_w = 8, g_ram_a_depth = 4096, g_ram_b_data_w = 32 }
+
+[[cases]]
+name = "cr_cw_ratio_32to8"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw_ratio"
+description = "Dual-clock, write 32 x 1024, read 8 x 4096."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 8 }
+
+[[cases]]
+name = "cr_cw_ratio_8to32"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw_ratio"
+description = "Dual-clock, write 8 x 4096, read 32 x 1024."
+generics = { g_ram_a_data_w = 8, g_ram_a_depth = 4096, g_ram_b_data_w = 32 }
+
+[[cases]]
+name = "crw_cr_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_crw_cr"
+description = "Port A read/write, port B read-only, two clocks, latency 1."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+[[cases]]
+name = "crw_cr_32x1024_lat2"
+kind = "entity"
+entity = "lm_mem_ram_crw_cr"
+description = "Port A read/write, port B read-only, two clocks, latency 2."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 2 }
+
+[[cases]]
+name = "fifo_sync_32x16"
+kind = "entity"
+entity = "lm_mem_fifo_sync"
+description = "Synchronous FIFO, library defaults (32 x 16)."
+generics = { g_data_w = 32, g_depth = 16 }
+
+[[cases]]
+name = "fifo_sync_32x1024"
+kind = "entity"
+entity = "lm_mem_fifo_sync"
+description = "Synchronous FIFO, 32 x 1024."
+generics = { g_data_w = 32, g_depth = 1024 }
+
+[[cases]]
+name = "fifo_async_32x16"
+kind = "entity"
+entity = "lm_mem_fifo_async"
+description = "Asynchronous FIFO, 32 x 16."
+generics = { g_data_w = 32, g_depth = 16 }
+
+[[cases]]
+name = "fifo_async_32x1024"
+kind = "entity"
+entity = "lm_mem_fifo_async"
+description = "Asynchronous FIFO, 32 x 1024."
+generics = { g_data_w = 32, g_depth = 1024 }

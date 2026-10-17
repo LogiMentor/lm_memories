@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+#
+# Vivado inference check for the RAM cores, wrappers and FIFOs (issue #3).
+# Expected results: expected/amd.toml. Cases: cases.toml.
+#
+#   python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going
+#
+# Adjust install_dir to the local Vivado installation. Results go to
+# $LM_MEM_BUILD_DIR/vendor_synth, or to lm_memories_build/vendor_synth in the
+# system temporary directory.
+
+[[jobs]]
+name = "vivado-artix7"
+enabled = true
+tool = "vivado"
+vendor = "amd"
+family = "artix7"
+part = "xc7a35tfgg484-2"
+install_dir = "C:/Xilinx/Vivado/2023.1"
+threads = 2
+timeout_seconds = 1800
+cases = [
+  "r_w_32x1024", "r_w_32x1024_lat2", "r_w_16x64", "r_w_32x1000", "r_w_32x1536",
+  "cr_cw_32x1024", "cr_cw_32x1024_lat2",
+  "r_w_ratio_32to8", "r_w_ratio_8to32", "cr_cw_ratio_32to8", "cr_cw_ratio_8to32",
+  "crw_cr_32x1024", "crw_cr_32x1024_lat2",
+  "fifo_sync_32x16", "fifo_sync_32x1024", "fifo_async_32x16", "fifo_async_32x1024",
+]
+
+[[jobs]]
+name = "vivado-kintexuplus"
+enabled = true
+tool = "vivado"
+vendor = "amd"
+family = "kintexuplus"
+part = "xcku3p-ffva676-2-e"
+install_dir = "C:/Xilinx/Vivado/2023.1"
+threads = 2
+timeout_seconds = 1800
+cases = [
+  "r_w_32x1024", "r_w_32x1024_lat2", "r_w_16x64", "r_w_32x1000", "r_w_32x1536",
+  "cr_cw_32x1024", "cr_cw_32x1024_lat2",
+  "r_w_ratio_32to8", "r_w_ratio_8to32", "cr_cw_ratio_32to8", "cr_cw_ratio_8to32",
+  "crw_cr_32x1024", "crw_cr_32x1024_lat2",
+  "fifo_sync_32x16", "fifo_sync_32x1024", "fifo_async_32x16", "fifo_async_32x1024",
+]

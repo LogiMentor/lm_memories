@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
-"""Run local vendor synthesis smoke campaigns for lm_memories."""
+"""Run local vendor synthesis checks for lm_memories.
+
+Sources come from the manifest flow of the job's vendor (synth-amd, ...).
+A case passes only when its results match tools/vendor_synth/expected/;
+the tool exit code alone never makes a pass. Runs are sequential and hold
+the machine-wide EDA lock. Artefacts go outside the repository by default.
+"""
 
 from __future__ import annotations
 
@@ -13,12 +19,16 @@ import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from tools.eda_lock import heavy_tool_lock
+from tools.manifest import load as load_manifest
+
+from . import check
 
 try:
   import tomllib
@@ -27,7 +37,28 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_WORK_ROOT = Path("build/vendor_synth")
+MAX_RETRIES = 2
+MANIFEST_FLOWS = {
+  "amd": "synth-amd", "xilinx": "synth-amd",
+  "intel": "synth-intel", "altera": "synth-intel",
+  "lattice": "synth-lattice",
+  "microchip": "synth-microchip", "microsemi": "synth-microchip",
+}
+MANIFEST_TOOLS = {
+  "vivado": "vivado", "xilinx": "vivado",
+  "quartus": "quartus", "intel": "quartus", "altera": "quartus",
+  "diamond": "diamond", "radiant": "radiant",
+  "libero": "libero", "microchip": "libero", "microsemi": "libero",
+}
+# Message IDs whose limit is always raised, so their counts are real.
+ALWAYS_UNLIMITED = ("Synth 8-6859", "Synth 8-5787", "Synth 8-4767", "Synth 8-3848", "Synth 8-3917")
+
+
+def default_work_root() -> Path:
+  """Build directory outside the repository: $LM_MEM_BUILD_DIR or the system temp."""
+  base = os.environ.get("LM_MEM_BUILD_DIR")
+  root = Path(base) if base else Path(tempfile.gettempdir()) / "lm_memories_build"
+  return root / "vendor_synth"
 MEMORY_KEYWORDS = re.compile(
   r"(ram|bram|uram|m20k|mlab|m10k|ebr|dpram|block memory|distributed)",
   re.IGNORECASE,
@@ -40,26 +71,6 @@ FAILURE_PATTERNS = (
   re.compile(r".*Command failed.*", re.IGNORECASE),
 )
 
-SOURCE_COMMON = ("src/common/lm_mem_pkg.vhd",)
-SOURCE_GENERIC_CRW_CRW = ("src/generic/lm_mem_ram_crw_crw.vhd",)
-SOURCE_GENERIC_R_W = (
-  "src/core/lm_mem_ram_sdp.vhd",
-  "src/generic/lm_mem_ram_r_w.vhd",
-)
-SOURCE_GENERIC_RW_RW = (
-  "src/generic/lm_mem_ram_crw_crw.vhd",
-  "src/generic/lm_mem_ram_rw_rw.vhd",
-)
-SOURCE_INFER_R_W = ("src/inference/lm_mem_ram_r_w_infer.vhd",)
-SOURCE_PRIMITIVES = {
-  "amd": "src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd",
-  "xilinx": "src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd",
-  "intel": "src/primitives/intel/lm_mem_intel_ram_r_w_prim.vhd",
-  "altera": "src/primitives/intel/lm_mem_intel_ram_r_w_prim.vhd",
-  "lattice": "src/primitives/lattice/lm_mem_lattice_ram_r_w_prim.vhd",
-  "microchip": "src/primitives/microchip/lm_mem_microchip_ram_r_w_prim.vhd",
-  "microsemi": "src/primitives/microchip/lm_mem_microchip_ram_r_w_prim.vhd",
-}
 PRIMITIVE_ENTITIES = {
   "amd": "lm_mem_xilinx_ram_r_w_prim",
   "xilinx": "lm_mem_xilinx_ram_r_w_prim",
@@ -115,7 +126,7 @@ BUILTIN_CASES: tuple[dict[str, Any], ...] = (
     "width": 32,
     "depth": 1024,
     "latency": 1,
-    "style": "bram",
+    "style": "block",
   },
   {
     "name": "infer_r_w_distributed_16x64",
@@ -164,6 +175,8 @@ def _load_config(path: Path) -> dict[str, Any]:
 
 def _case_map(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
   cases = {case["name"]: dict(case) for case in BUILTIN_CASES}
+  for case in check.load_cases():
+    cases[case["name"]] = dict(case)
   for case in config.get("cases", []):
     if not isinstance(case, dict) or not case.get("name"):
       raise SystemExit("each custom case must be an object with a name")
@@ -416,6 +429,8 @@ def _tool_command(job: dict[str, Any], default: str, args: list[str], work_dir: 
 
 
 def _top_name(job: dict[str, Any], case: dict[str, Any]) -> str:
+  if case.get("kind") == "entity":
+    return str(case["entity"])
   return "lm_vs_" + _sanitize(_job_name(job)) + "_" + _sanitize(case["name"])
 
 
@@ -674,31 +689,24 @@ def _render_top(job: dict[str, Any], case: dict[str, Any], entity: str) -> str:
 
 
 def _source_files_for(job: dict[str, Any], case: dict[str, Any]) -> list[Path]:
-  kind = str(case["kind"])
-  relative: list[str] = list(SOURCE_COMMON)
-
-  if kind == "generic_r_w":
-    relative.extend(SOURCE_GENERIC_R_W)
-  elif kind == "generic_rw_rw":
-    relative.extend(SOURCE_GENERIC_RW_RW)
-  elif kind == "generic_crw_crw":
-    relative.extend(SOURCE_GENERIC_CRW_CRW)
-  elif kind == "infer_r_w":
-    relative.extend(SOURCE_INFER_R_W)
-  elif kind == "primitive_r_w":
-    vendor = _vendor(job)
-    primitive_source = SOURCE_PRIMITIVES.get(vendor)
-    if primitive_source is None:
-      raise SystemExit(f"{case['name']}: unsupported primitive vendor {vendor}")
-    relative.extend(SOURCE_GENERIC_R_W)
-    relative.append(primitive_source)
-  else:
-    raise SystemExit(f"{case['name']}: unsupported case kind {kind}")
-
-  return [ROOT_DIR / path for path in relative]
+  """Library sources from the manifest flow of the job's vendor."""
+  vendor = _vendor(job)
+  flow = MANIFEST_FLOWS.get(vendor)
+  if flow is None:
+    raise SystemExit(f"{_job_name(job)}: no manifest flow for vendor {vendor}")
+  tool = MANIFEST_TOOLS.get(_tool(job))
+  return [source.path for source in load_manifest().files(flow, tool)]
 
 
-def _vivado_script(job: dict[str, Any], top: str, sources: list[Path], script: Path, reports: Path) -> list[str]:
+def _vivado_script(
+  job: dict[str, Any],
+  top: str,
+  sources: list[Path],
+  script: Path,
+  reports: Path,
+  generics: dict[str, Any] | None = None,
+  unlimited_ids: tuple[str, ...] = ALWAYS_UNLIMITED,
+) -> list[str]:
   part = job.get("part")
   if not part:
     raise SystemExit(f"{_job_name(job)}: Vivado jobs require part")
@@ -706,23 +714,34 @@ def _vivado_script(job: dict[str, Any], top: str, sources: list[Path], script: P
   script_dir = _tcl_path(script.parent)
   source_lines = "\n".join(f"read_vhdl -vhdl2008 {{{_tcl_path(path)}}}" for path in sources)
   thread_line = f"set_param general.maxThreads {threads}\n" if threads >= 2 else ""
+  limit_lines = "\n".join(f"set_msg_config -id {{{msg_id}}} -limit 1000000" for msg_id in unlimited_ids)
+  # Generics go into the script, never through a command line (cmd.exe splits
+  # arguments on '='), and are read back from the log afterwards.
+  generic_args = "".join(
+    f" -generic {{{name}={_tcl_generic(value)}}}" for name, value in (generics or {}).items()
+  )
   text = f"""# SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 {thread_line}set script_dir {{{script_dir}}}
 file mkdir [file join $script_dir reports]
-create_project -force lm_vendor_synth [file join $script_dir project] -part {{{part}}}
-set_property target_language VHDL [current_project]
+catch {{ set_param messaging.defaultLimit 1000000 }}
+{limit_lines}
 {source_lines}
-synth_design -top {top} -part {{{part}}}
-report_utilization -hierarchical -file [file join $script_dir reports utilization_hier.rpt]
+synth_design -mode out_of_context -top {top} -part {{{part}}}{generic_args}
+report_utilization -file {{{_tcl_path(reports / "utilization.rpt")}}}
 catch {{ report_ram_utilization -file {{{_tcl_path(reports / "ram_utilization.rpt")}}} }}
-catch {{ report_synth -file {{{_tcl_path(reports / "synthesis.rpt")}}} }}
-catch {{ report_timing_summary -file [file join $script_dir reports timing_summary.rpt] }}
-write_checkpoint -force [file join $script_dir reports synth.dcp]
 exit
 """
   script.write_text(text, encoding="utf-8")
-  return _tool_command(job, "vivado", ["-mode", "batch", "-source", _tcl_path(script)], script.parent)
+  return _tool_command(job, "vivado", ["-mode", "batch", "-nojournal", "-source", _tcl_path(script)], script.parent)
+
+
+def _tcl_generic(value: Any) -> str:
+  if isinstance(value, bool):
+    return "true" if value else "false"
+  if isinstance(value, str):
+    return '\\"' + value + '\\"'
+  return str(value)
 
 
 def _quartus_script(job: dict[str, Any], top: str, sources: list[Path], script: Path, reports: Path) -> list[str]:
@@ -833,10 +852,17 @@ def _custom_script(job: dict[str, Any], top: str, sources: list[Path], script: P
   return _launcher_command(job, formatted, script.parent)
 
 
-def _tool_script(job: dict[str, Any], top: str, sources: list[Path], script: Path, reports: Path) -> list[str]:
+def _tool_script(
+  job: dict[str, Any],
+  top: str,
+  sources: list[Path],
+  script: Path,
+  reports: Path,
+  generics: dict[str, Any] | None = None,
+) -> list[str]:
   tool = _tool(job)
   if tool in ("vivado", "xilinx"):
-    return _vivado_script(job, top, sources, script, reports)
+    return _vivado_script(job, top, sources, script, reports, generics)
   if tool in ("quartus", "intel", "altera"):
     return _quartus_script(job, top, sources, script, reports)
   if tool == "diamond":
@@ -894,6 +920,45 @@ def _report_files(case_dir: Path) -> list[Path]:
   ]
 
 
+def _executable_available(job: dict[str, Any], default: str) -> bool:
+  exe = _configured_command(job, default)[0]
+  path = Path(exe)
+  if path.is_absolute() or len(path.parts) > 1:
+    return path.exists()
+  return shutil.which(exe) is not None
+
+
+def _default_executable(job: dict[str, Any]) -> str:
+  return {
+    "vivado": "vivado", "xilinx": "vivado",
+    "quartus": "quartus_sh", "intel": "quartus_sh", "altera": "quartus_sh",
+    "diamond": "diamondc", "radiant": "radiantc",
+    "libero": "libero", "microchip": "libero", "microsemi": "libero",
+  }.get(_tool(job), _tool(job))
+
+
+def _evaluate(job: dict[str, Any], case: dict[str, Any], top: str, log_text: str, reports: Path) -> dict[str, Any]:
+  """Compare the results of one run with the expected results."""
+  tool = _tool(job)
+  if tool not in ("vivado", "xilinx"):
+    return {"status": "unchecked", "problems": [f"no result extraction for tool {tool} yet"], "metrics": {}, "log": {}}
+  log = check.parse_vivado_log(log_text, top)
+  util_file = reports / "utilization.rpt"
+  metrics = check.parse_vivado_utilization(util_file.read_text(encoding="utf-8", errors="ignore")) if util_file.is_file() else {}
+  problems: list[str] = []
+  if log["errors"] or not log["synth_ran"] or not util_file.is_file():
+    problems.append("synthesis did not complete: " + "; ".join(log["errors"][:3] or ["no utilization report"]))
+    return {"status": "fail", "problems": problems, "metrics": metrics, "log": log}
+  if case.get("kind") == "entity":
+    problems += check.check_generics(case.get("generics", {}), log["generics"])
+  expectation = check.find_expectation(check.load_expected(_vendor(job)), case["name"], str(job.get("part", "")))
+  if expectation is None:
+    problems.append(f"no expected results for case {case['name']} on {job.get('part')}")
+    return {"status": "unchecked", "problems": problems, "metrics": metrics, "log": log}
+  problems += check.compare(metrics, log, expectation)
+  return {"status": "fail" if problems else "pass", "problems": problems, "metrics": metrics, "log": log}
+
+
 def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool) -> dict[str, Any]:
   job = item.job
   case = item.case
@@ -905,28 +970,57 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool) -> dic
     shutil.rmtree(case_dir)
   reports.mkdir(parents=True, exist_ok=True)
 
-  top_file = case_dir / f"{top}.vhd"
   script_file = case_dir / f"run_{_tool(job)}.tcl"
-  sources = _source_files_for(job, case) + [top_file]
-  top_file.write_text(_render_top(job, case, top), encoding="utf-8")
-  command = _tool_script(job, top, sources, script_file, reports)
+  sources = _source_files_for(job, case)
+  generics: dict[str, Any] = {}
+  if case.get("kind") == "entity":
+    generics = dict(case.get("generics", {}))
+  else:
+    top_file = case_dir / f"{top}.vhd"
+    top_file.write_text(_render_top(job, case, top), encoding="utf-8")
+    sources = sources + [top_file]
+  command = _tool_script(job, top, sources, script_file, reports, generics)
   log_file = case_dir / "run.log"
 
-  status = "dry-run"
-  return_code: int | None = None
-  started_at = dt.datetime.now(dt.timezone.utc).isoformat()
-  completed_at = started_at
+  result: dict[str, Any] = {
+    "job": _job_name(job),
+    "tool": _tool(job),
+    "vendor": _vendor(job),
+    "family": _family(job),
+    "part": job.get("part", job.get("device", "")),
+    "case": case["name"],
+    "case_kind": case["kind"],
+    "top": top,
+    "generics": generics,
+    "work_dir": str(case_dir),
+    "script": str(script_file),
+    "log": str(log_file),
+    "command": command,
+    "return_code": None,
+    "retries": [],
+    "problems": [],
+    "metrics": {},
+    "tool_version": "",
+    "critical_warnings": None,
+    "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+  }
 
   if dry_run:
-    log_file.write_text(
-      "dry run: command was not executed\ncommand: " + " ".join(command) + "\n",
-      encoding="utf-8",
-    )
-  else:
-    env = os.environ.copy()
-    env.update({str(k): str(v) for k, v in job.get("env", {}).items()})
-    timeout = int(job.get("timeout_seconds", 3600))
-    started_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    log_file.write_text("dry run: command was not executed\ncommand: " + " ".join(command) + "\n", encoding="utf-8")
+    result.update(status="dry-run", completed_at=result["started_at"], message="")
+    return result
+
+  if not _executable_available(job, _default_executable(job)):
+    result.update(status="not-run", completed_at=result["started_at"],
+                  message=f"tool not installed: {_configured_command(job, _default_executable(job))[0]}")
+    result["problems"] = [result["message"]]
+    return result
+
+  env = os.environ.copy()
+  env.update({str(k): str(v) for k, v in job.get("env", {}).items()})
+  timeout = int(job.get("timeout_seconds", 3600))
+  status = "fail"
+  for attempt in range(MAX_RETRIES + 1):
     with log_file.open("w", encoding="utf-8", errors="ignore") as handle:
       handle.write("command: " + " ".join(command) + "\n")
       handle.flush()
@@ -942,39 +1036,46 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool) -> dic
             check=False,
             timeout=timeout,
           )
-        return_code = process.returncode
-        status = "pass" if process.returncode == 0 else "fail"
+        result["return_code"] = process.returncode
+        status = "ran"
       except subprocess.TimeoutExpired:
         status = "timeout"
-        return_code = None
         handle.write(f"\ntimeout after {timeout} seconds\n")
-    completed_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    text = log_file.read_text(encoding="utf-8", errors="ignore")
+    if status == "ran" and "couldn't read file" in text and attempt < MAX_RETRIES:
+      line = next(l for l in text.splitlines() if "couldn't read file" in l)
+      result["retries"].append(f"attempt {attempt + 1}: {line.strip()[:200]}")
+      continue
+    break
 
-  reports_found = _report_files(case_dir)
-  failure_message = _failure_message(reports_found)
-  if failure_message and status == "pass":
-    status = "fail"
-  memory_lines = _collect_memory_lines(reports_found)
-  return {
-    "job": _job_name(job),
-    "tool": _tool(job),
-    "vendor": _vendor(job),
-    "family": _family(job),
-    "case": case["name"],
-    "case_kind": case["kind"],
-    "status": status,
-    "return_code": return_code,
-    "top": top,
-    "work_dir": str(case_dir),
-    "script": str(script_file),
-    "log": str(log_file),
-    "command": command,
-    "started_at": started_at,
-    "completed_at": completed_at,
-    "reports": [str(path) for path in reports_found],
-    "message": failure_message,
-    "memory_lines": memory_lines,
-  }
+  result["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+  if status == "timeout":
+    result.update(status="timeout", message=f"timeout after {timeout} seconds", problems=["timeout"])
+    return result
+
+  text = log_file.read_text(encoding="utf-8", errors="ignore")
+  evaluation = _evaluate(job, case, top, text, reports)
+  if result["return_code"] not in (0, None) and evaluation["status"] == "pass":
+    evaluation["status"] = "fail"
+    evaluation["problems"].append(f"tool exit code {result['return_code']}")
+  log = evaluation["log"]
+  result.update(
+    status=evaluation["status"],
+    problems=evaluation["problems"],
+    metrics=evaluation["metrics"],
+    tool_version=log.get("version", ""),
+    critical_warnings=log.get("critical_warnings"),
+    message="; ".join(evaluation["problems"])[:400],
+  )
+  return result
+
+
+def _fmt(value: Any) -> str:
+  if value is None:
+    return "-"
+  if isinstance(value, float) and value.is_integer():
+    return str(int(value))
+  return str(value)
 
 
 def _write_summary(work_root: Path, results: list[dict[str, Any]]) -> None:
@@ -985,23 +1086,42 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]]) -> None:
 
   summary_json.write_text(json.dumps({"results": results}, indent=2) + "\n", encoding="utf-8")
 
+  fields = ["job", "tool", "tool_version", "part", "case", "status", "bram_tiles", "lutram", "uram",
+            "registers", "luts", "critical_warnings", "retries", "message"]
   with summary_csv.open("w", newline="", encoding="utf-8") as handle:
-    writer = csv.DictWriter(handle, fieldnames=["job", "tool", "vendor", "family", "case", "case_kind", "status", "return_code", "work_dir"])
+    writer = csv.DictWriter(handle, fieldnames=fields)
     writer.writeheader()
-    for result in results:
-      writer.writerow({key: result.get(key) for key in writer.fieldnames})
+    for r in results:
+      m = r.get("metrics", {})
+      writer.writerow({
+        "job": r["job"], "tool": r["tool"], "tool_version": r.get("tool_version", ""), "part": r.get("part", ""),
+        "case": r["case"], "status": r["status"], "bram_tiles": m.get("bram_tiles"), "lutram": m.get("lutram"),
+        "uram": m.get("uram"), "registers": m.get("registers"), "luts": m.get("luts"),
+        "critical_warnings": r.get("critical_warnings"), "retries": len(r.get("retries", [])),
+        "message": r.get("message", ""),
+      })
 
+  status_text = {"pass": "pass", "fail": "FAIL", "unchecked": "UNCHECKED (no expected results)",
+                 "not-run": "NOT RUN", "timeout": "TIMEOUT", "dry-run": "dry run"}
   lines = [
     "# Vendor Synthesis Summary",
     "",
-    "| Job | Tool | Case | Status | Return Code | Message |",
-    "| --- | --- | --- | --- | --- | --- |",
+    "| Tool | Part | Case | BRAM tiles | LUTRAM | URAM | Registers | LUTs | CRITICAL WARNINGs | Retries | Result | Notes |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ]
-  for result in results:
+  for r in results:
+    m = r.get("metrics", {})
+    tool = f"{r['tool']} {r.get('tool_version', '')}".strip()
     lines.append(
-      f"| {result['job']} | {result['tool']} | {result['case']} | "
-      f"{result['status']} | {result['return_code']} | {result.get('message', '')} |"
+      f"| {tool} | {r.get('part', '')} | {r['case']} | {_fmt(m.get('bram_tiles'))} | {_fmt(m.get('lutram'))} | "
+      f"{_fmt(m.get('uram'))} | {_fmt(m.get('registers'))} | {_fmt(m.get('luts'))} | "
+      f"{_fmt(r.get('critical_warnings'))} | {len(r.get('retries', []))} | "
+      f"{status_text.get(r['status'], r['status'])} | {r.get('message', '')} |"
     )
+  counts: dict[str, int] = {}
+  for r in results:
+    counts[r["status"]] = counts.get(r["status"], 0) + 1
+  lines += ["", "Totals: " + ", ".join(f"{status_text.get(k, k)}: {v}" for k, v in sorted(counts.items()))]
   summary_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -1049,7 +1169,7 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--dry-run", action="store_true", help="generate scripts and summaries without executing tools")
   parser.add_argument("--list", action="store_true", help="list configured jobs and cases")
   parser.add_argument("--no-clean", action="store_true", help="do not remove previous per-case work directories")
-  parser.add_argument("--keep-going", action="store_true", help="continue after a failed tool run")
+  parser.add_argument("--keep-going", action="store_true", help="continue after a failed case")
   return parser
 
 
@@ -1069,7 +1189,8 @@ def main(argv: list[str] | None = None) -> int:
 
   selected_cases = _selected_cases(cases, set(args.case))
   run_config = config.get("run", {})
-  work_root = args.work_root or Path(run_config.get("work_root", config.get("work_root", DEFAULT_WORK_ROOT)))
+  configured_root = run_config.get("work_root", config.get("work_root"))
+  work_root = args.work_root or (Path(configured_root) if configured_root else default_work_root())
   if not work_root.is_absolute():
     work_root = ROOT_DIR / work_root
 
@@ -1082,9 +1203,10 @@ def main(argv: list[str] | None = None) -> int:
   for item in items:
     result = _run_item(item, work_root, args.dry_run, not args.no_clean)
     results.append(result)
-    if result["status"] in ("fail", "timeout"):
+    print(f"{result['status']:9} {result['job']} {result['case']} {result.get('message', '')}", flush=True)
+    if result["status"] in ("fail", "timeout", "unchecked", "not-run"):
       exit_code = 1
-      if not args.keep_going:
+      if not args.keep_going and result["status"] != "not-run":
         break
 
   _write_summary(work_root, results)

@@ -4,3 +4,18 @@ __pycache__/
 *.py[cod]
 build/
 sim/build/
+
+# Simulator and tool output that must never land in the repository root
+*.o
+*.exe
+*.cf
+vunit_out/
+xsim.dir/
+.Xil/
+xvhdl.log
+xvhdl.pb
+xelab.log
+xelab.pb
+xsim*.jou
+xsim*.log
+vunit_results.xml

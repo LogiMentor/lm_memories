@@ -9,12 +9,13 @@ name = "lm-memories"
 version = "0.1.0"
 description = "Open-source VHDL memory and FIFO library by LogiMentor"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 
 [project.scripts]
 lm_memgen = "tools.lm_memgen.cli:main"
 lm_vendor_synth = "tools.vendor_synth.cli:main"
+lm_manifest = "tools.manifest.cli:main"
 
 [tool.setuptools]
-packages = ["tools", "tools.lm_memgen", "tools.vendor_synth"]
+packages = ["tools", "tools.lm_memgen", "tools.manifest", "tools.vendor_synth"]

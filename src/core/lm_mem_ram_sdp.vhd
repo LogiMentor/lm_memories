@@ -13,9 +13,10 @@
 --  - One process per clock. The storage signal is written only by the write
 --    process, so the core is inferable by vendor tools as block or
 --    distributed RAM. wr_clk_i and rd_clk_i may be the same clock.
---  - The write and read widths may differ by an integer ratio. The storage
---    has the narrower width; narrow word i of a wide access is at bits
---    (i + 1) * W - 1 downto i * W, at narrow address wide_address * ratio + i.
+--  - The write and read widths may differ by a power-of-two ratio. The
+--    storage has the narrower width; narrow word i of a wide access is at bits
+--    (i + 1) * W - 1 downto i * W, at narrow address wide_address & i (the
+--    asymmetric RAM template of the vendor guides, e.g. AMD UG901).
 --  - Read latency is 1 or 2 read-clock cycles. Both output stages are
 --    enabled by enb_i and hold their value while enb_i is low.
 --  - Write is enabled by ena_i and wen_i together.
@@ -69,6 +70,9 @@ architecture a_rtl of lm_mem_ram_sdp is
   constant C_WR_SPAN       : positive := (2 ** f_ceil_log2(g_wr_depth)) * C_WR_WORDS;
   constant C_RD_SPAN       : positive := (2 ** f_ceil_log2(C_RD_DEPTH)) * C_RD_WORDS;
   constant C_STORAGE_DEPTH : positive := f_max(C_WR_SPAN, C_RD_SPAN);
+  -- Low address bits that select a narrow word (0 on the narrow port).
+  constant C_WR_SEL        : natural  := f_sel_a_b(C_WR_WORDS > 1, f_ceil_log2(C_WR_WORDS), 0);
+  constant C_RD_SEL        : natural  := f_sel_a_b(C_RD_WORDS > 1, f_ceil_log2(C_RD_WORDS), 0);
 
   type t_mem is array (0 to C_STORAGE_DEPTH - 1) of std_logic_vector(C_MIN_WIDTH - 1 downto 0);
 
@@ -80,8 +84,8 @@ begin
     report "lm_mem_ram_sdp: read latency must be 1 or 2"
     severity failure;
 
-  assert (C_MAX_WIDTH mod C_MIN_WIDTH) = 0
-    report "lm_mem_ram_sdp: port widths must have an integer ratio"
+  assert ((C_MAX_WIDTH mod C_MIN_WIDTH) = 0) and f_is_power_of_two(C_RATIO)
+    report "lm_mem_ram_sdp: port widths must have a power-of-two ratio"
     severity failure;
 
   assert ((g_wr_depth * g_wr_data_w) mod g_rd_data_w) = 0
@@ -97,26 +101,24 @@ begin
     severity note;
 
   proc_wr : process(wr_clk_i)
-    variable v_base : natural;
   begin
     if rising_edge(wr_clk_i) then
       if (ena_i = '1') and (wen_i = '1') then
-        v_base := to_integer(unsigned(wr_addr_i)) * C_WR_WORDS;
         for i in 0 to C_WR_WORDS - 1 loop
-          s_mem(v_base + i) <= wr_dat_i((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH);
+          s_mem(to_integer(unsigned(wr_addr_i) & to_unsigned(i, C_WR_SEL))) <=
+            wr_dat_i((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH);
         end loop;
       end if;
     end if;
   end process proc_wr;
 
   proc_rd : process(rd_clk_i)
-    variable v_base : natural;
   begin
     if rising_edge(rd_clk_i) then
       if enb_i = '1' then
-        v_base := to_integer(unsigned(rd_addr_i)) * C_RD_WORDS;
         for i in 0 to C_RD_WORDS - 1 loop
-          s_rd_dat((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH) <= s_mem(v_base + i);
+          s_rd_dat((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH) <=
+            s_mem(to_integer(unsigned(rd_addr_i) & to_unsigned(i, C_RD_SEL)));
         end loop;
         s_rd_dat_p <= s_rd_dat;
       end if;

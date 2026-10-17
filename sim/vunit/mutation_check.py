@@ -27,7 +27,7 @@ TDP1W = ROOT_DIR / "src" / "core" / "lm_mem_ram_tdp1w.vhd"
 # (description, file, original text, mutated text, VUnit test patterns)
 MUTATIONS = [
   ("sdp: reversed sub-word order on read", SDP,
-   "<= s_mem(v_base + i);", "<= s_mem(v_base + C_RD_WORDS - 1 - i);",
+   "to_unsigned(i, C_RD_SEL)", "to_unsigned(C_RD_WORDS - 1 - i, C_RD_SEL)",
    ["*sdp.2clk.8to32.lat2*", "*r_w_ratio.8to32.lat2*"]),
   ("sdp: second output stage not gated by enb_i", SDP,
    "        end loop;\n        s_rd_dat_p <= s_rd_dat;\n      end if;",

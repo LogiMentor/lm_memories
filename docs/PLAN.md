@@ -496,8 +496,18 @@ Each phase ends with a report and waits for confirmation.
   `sim/ref/` by the RAM tests.
 - **Two-writer RAMs** (`crw_crw`, `rw_rw`, `crw_cw`) are unchanged until
   phase 3. The manifest still lists the original `lm_mem_ram_crw_crw`.
-- **Mutation check:** six deliberate defects were introduced in the cores one
-  at a time. Each one was detected by the VUnit suite:
+- **Simulator:** `sim/vunit/run.py` uses GHDL unless `VUNIT_SIMULATOR` is
+  set. Without the default, VUnit picks the first simulator on `PATH`, which
+  on the reference machine is Questa. The suite also passes on Questa 2021.1
+  (run with `-p 1`).
+- **Order-independent scoreboard:** the "old data" coverage flag is computed
+  from the write log when the read is resolved, not when it is issued.
+  Otherwise the result depends on whether the simulator runs the read or the
+  write monitor first in the same delta cycle: Questa and GHDL order them
+  differently.
+- **Mutation check** (`python sim/vunit/mutation_check.py`): six deliberate
+  defects were introduced in the cores one at a time. Each one made a test
+  fail at simulation time (not at compile time):
   1. reversed sub-word order;
   2. second output stage not gated by the enable;
   3. write ignoring `ena_i`;

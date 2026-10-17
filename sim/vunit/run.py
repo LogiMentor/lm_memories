@@ -5,7 +5,11 @@
 
 Sources come from the "test-vunit" flow of manifests/lm_memories.toml.
 Output goes to sim/build/vunit, or $LM_MEM_BUILD_DIR/vunit when set.
-The simulator is chosen by VUnit (VUNIT_SIMULATOR, default GHDL).
+The simulator is GHDL (the CI reference) unless VUNIT_SIMULATOR is set, e.g.
+VUNIT_SIMULATOR=modelsim for Questa/ModelSim. VUnit would otherwise pick the
+first simulator found on PATH. With Questa 2021.1 run one test at a time
+(-p 1): parallel runs race for the library lock of the implicit vopt step
+(vsim-1962).
 
   python sim/vunit/run.py              # all configurations
   python sim/vunit/run.py "*cr_cw*"    # a subset
@@ -18,7 +22,9 @@ import os
 import sys
 from pathlib import Path
 
-from vunit import VUnit
+os.environ.setdefault("VUNIT_SIMULATOR", "ghdl")
+
+from vunit import VUnit  # noqa: E402
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT_DIR))

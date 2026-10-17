@@ -77,12 +77,11 @@ architecture a_tb of lm_mem_tb_harness is
     exp   : t_tb_data;
     undef : boolean;
     init  : boolean;
-    old   : boolean;
   end record t_token;
 
   constant C_NO_TOKEN : t_token := (
     valid => false, base => 0, t => 0 ns, exp => (others => '0'),
-    undef => false, init => false, old => false
+    undef => false, init => false
   );
 
   shared variable sv_sb : t_scoreboard;
@@ -313,8 +312,7 @@ begin
           valid => true, base => v_base, t => now,
           exp   => sv_sb.expected(v_base, C_A_WORDS, now),
           undef => sv_sb.undefined(v_base, C_A_WORDS),
-          init  => sv_sb.never_written(v_base, C_A_WORDS),
-          old   => sv_sb.old_data_read(v_base, C_A_WORDS, now)
+          init  => sv_sb.never_written(v_base, C_A_WORDS)
         );
         if g_a_latency = 1 then
           v_out := v_new;
@@ -327,7 +325,7 @@ begin
       wait until falling_edge(s_clk_a);
       if v_have_out then
         sv_sb.push_read(C_PORT_A, v_out.base, C_A_WORDS, v_out.t, v_out.exp, v_out.undef,
-                        v_out.init, v_out.old, s_dout_a, s_rdout_a, "port A");
+                        v_out.init, s_dout_a, s_rdout_a, "port A");
         v_last := s_dout_a;
         v_have_obs := true;
       elsif g_a_reads and v_have_obs then
@@ -367,8 +365,7 @@ begin
           valid => true, base => v_base, t => now,
           exp   => sv_sb.expected(v_base, C_B_WORDS, now),
           undef => sv_sb.undefined(v_base, C_B_WORDS),
-          init  => sv_sb.never_written(v_base, C_B_WORDS),
-          old   => sv_sb.old_data_read(v_base, C_B_WORDS, now)
+          init  => sv_sb.never_written(v_base, C_B_WORDS)
         );
         if g_b_latency = 1 then
           v_out := v_new;
@@ -381,7 +378,7 @@ begin
       wait until falling_edge(s_clk_b);
       if v_have_out then
         sv_sb.push_read(C_PORT_B, v_out.base, C_B_WORDS, v_out.t, v_out.exp, v_out.undef,
-                        v_out.init, v_out.old, s_dout_b, s_rdout_b, "port B");
+                        v_out.init, s_dout_b, s_rdout_b, "port B");
         v_last := s_dout_b;
         v_have_obs := true;
       elsif g_b_reads and v_have_obs then

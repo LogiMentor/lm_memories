@@ -67,7 +67,6 @@ package lm_mem_tb_pkg is
     impure function expected(base : natural; n : positive; t : time) return t_tb_data;
     impure function undefined(base : natural; n : positive) return boolean;
     impure function never_written(base : natural; n : positive) return boolean;
-    impure function old_data_read(base : natural; n : positive; t : time) return boolean;
     procedure push_read(
       port_id : natural;
       base    : natural;
@@ -76,7 +75,6 @@ package lm_mem_tb_pkg is
       exp     : t_tb_data;
       undef   : boolean;
       init    : boolean;
-      old     : boolean;
       dut     : std_logic_vector;
       ref     : std_logic_vector;
       tag   : string
@@ -253,7 +251,6 @@ package body lm_mem_tb_pkg is
       exp     : t_tb_data;
       undef   : boolean;
       init    : boolean;
-      old     : boolean;
       dut     : t_tb_data;
       ref     : t_tb_data;
       width   : natural;
@@ -398,16 +395,6 @@ package body lm_mem_tb_pkg is
       return true;
     end function never_written;
 
-    impure function old_data_read(base : natural; n : positive; t : time) return boolean is
-    begin
-      for i in 0 to n - 1 loop
-        if (base + i < v_n_cells) and (v_cells(base + i).t_last = t) then
-          return true;
-        end if;
-      end loop;
-      return false;
-    end function old_data_read;
-
     procedure push_read(
       port_id : natural;
       base    : natural;
@@ -416,7 +403,6 @@ package body lm_mem_tb_pkg is
       exp     : t_tb_data;
       undef   : boolean;
       init    : boolean;
-      old     : boolean;
       dut     : std_logic_vector;
       ref     : std_logic_vector;
       tag   : string
@@ -445,7 +431,6 @@ package body lm_mem_tb_pkg is
       v_pend(v_slot).exp     := exp;
       v_pend(v_slot).undef   := undef;
       v_pend(v_slot).init    := init;
-      v_pend(v_slot).old     := old;
       v_pend(v_slot).width   := dut'length;
       v_pend(v_slot).dut     := (others => '0');
       v_pend(v_slot).ref     := (others => '0');
@@ -458,6 +443,7 @@ package body lm_mem_tb_pkg is
     procedure resolve(now_t : time; flush : boolean) is
       variable v_ready : boolean;
       variable v_rw    : boolean;
+      variable v_old   : boolean;
       variable v_w     : natural;
     begin
       for i in v_pend'range loop
@@ -470,6 +456,16 @@ package body lm_mem_tb_pkg is
           if v_ready or flush then
             v_pend(i).used := false;
             v_rw := false;
+            v_old := false;
+            -- A write at the same instant as the read: the read returns the
+            -- old data (same port, or common-clock simple dual port). Taken
+            -- from the log, so it does not depend on process order.
+            for j in v_log'range loop
+              if v_log(j).used and (v_log(j).t = v_pend(i).t) and
+                 f_overlap(v_log(j).base, v_log(j).n, v_pend(i).base, v_pend(i).n) then
+                v_old := true;
+              end if;
+            end loop;
             if not v_cross_rdw then
               for j in v_log'range loop
                 if v_log(j).used and (v_log(j).port_id /= v_pend(i).port_id) and
@@ -493,7 +489,7 @@ package body lm_mem_tb_pkg is
               if v_pend(i).init then
                 v_counts.cov_init_read := v_counts.cov_init_read + 1;
               end if;
-              if v_pend(i).old then
+              if v_old then
                 v_counts.cov_rdw_old_data := v_counts.cov_rdw_old_data + 1;
               end if;
               if v_pend(i).dut(v_w - 1 downto 0) /= v_pend(i).exp(v_w - 1 downto 0) then

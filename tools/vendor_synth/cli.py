@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from tools.eda_lock import heavy_tool_lock
+
 try:
   import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
@@ -929,15 +931,17 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool) -> dic
       handle.write("command: " + " ".join(command) + "\n")
       handle.flush()
       try:
-        process = subprocess.run(
-          command,
-          cwd=case_dir,
-          env=env,
-          stdout=handle,
-          stderr=subprocess.STDOUT,
-          check=False,
-          timeout=timeout,
-        )
+        # Machine-wide lock: one heavy EDA run at a time, across sessions.
+        with heavy_tool_lock(f"{_tool(job)} {_job_name(job)} {case['name']}"):
+          process = subprocess.run(
+            command,
+            cwd=case_dir,
+            env=env,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            check=False,
+            timeout=timeout,
+          )
         return_code = process.returncode
         status = "pass" if process.returncode == 0 else "fail"
       except subprocess.TimeoutExpired:

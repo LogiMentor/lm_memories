@@ -22,8 +22,11 @@
 --  - On a common clock, a read of the address written in the same cycle
 --    returns the old data. With two clocks, a read and a write of the same
 --    address less than one slow-clock period apart are undefined.
---  - Addresses beyond the depth are ignored on write; a read of such an
---    address leaves the read registers unchanged.
+--  - Addresses at or beyond the depth (possible only when the depth is not a
+--    power of two): a write never changes an address within the depth; a
+--    read returns undefined data. There is no address comparison in the core:
+--    the storage covers the whole address range, so a non-power-of-two depth
+--    uses the next power of two words.
 --  - Initial content is zero; there is no reset.
 --  - g_simulation is deprecated and ignored.
 -------------------------------------------------------------------------------
@@ -61,9 +64,11 @@ architecture a_rtl of lm_mem_ram_sdp is
   constant C_MAX_WIDTH     : positive := f_max(g_wr_data_w, g_rd_data_w);
   constant C_RATIO         : positive := C_MAX_WIDTH / C_MIN_WIDTH;
   constant C_RD_DEPTH      : positive := (g_wr_depth * g_wr_data_w) / g_rd_data_w;
-  constant C_STORAGE_DEPTH : positive := f_max(g_wr_depth, C_RD_DEPTH);
   constant C_WR_WORDS      : positive := g_wr_data_w / C_MIN_WIDTH;
   constant C_RD_WORDS      : positive := g_rd_data_w / C_MIN_WIDTH;
+  constant C_WR_SPAN       : positive := (2 ** f_ceil_log2(g_wr_depth)) * C_WR_WORDS;
+  constant C_RD_SPAN       : positive := (2 ** f_ceil_log2(C_RD_DEPTH)) * C_RD_WORDS;
+  constant C_STORAGE_DEPTH : positive := f_max(C_WR_SPAN, C_RD_SPAN);
 
   type t_mem is array (0 to C_STORAGE_DEPTH - 1) of std_logic_vector(C_MIN_WIDTH - 1 downto 0);
 
@@ -98,9 +103,7 @@ begin
       if (ena_i = '1') and (wen_i = '1') then
         v_base := to_integer(unsigned(wr_addr_i)) * C_WR_WORDS;
         for i in 0 to C_WR_WORDS - 1 loop
-          if v_base + i < C_STORAGE_DEPTH then
-            s_mem(v_base + i) <= wr_dat_i((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH);
-          end if;
+          s_mem(v_base + i) <= wr_dat_i((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH);
         end loop;
       end if;
     end if;
@@ -113,9 +116,7 @@ begin
       if enb_i = '1' then
         v_base := to_integer(unsigned(rd_addr_i)) * C_RD_WORDS;
         for i in 0 to C_RD_WORDS - 1 loop
-          if v_base + i < C_STORAGE_DEPTH then
-            s_rd_dat((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH) <= s_mem(v_base + i);
-          end if;
+          s_rd_dat((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH) <= s_mem(v_base + i);
         end loop;
         s_rd_dat_p <= s_rd_dat;
       end if;

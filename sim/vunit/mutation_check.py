@@ -40,12 +40,13 @@ MUTATIONS = [
    "    rd_dat_o <= s_rd_dat_p;", "    rd_dat_o <= s_rd_dat;",
    ["*r_w.32x1024.lat2*"]),
   ("tdp1w: port A write-first instead of read-first", TDP1W,
-   "          s_data_rd_a <= s_mem(v_addr);",
-   "          if wen_a_i = '1' then s_data_rd_a <= data_wr_a_i; else s_data_rd_a <= s_mem(v_addr); end if;",
+   "        s_data_rd_a <= s_mem(to_integer(unsigned(addr_a_i)));",
+   "        if wen_a_i = '1' then s_data_rd_a <= data_wr_a_i;"
+   " else s_data_rd_a <= s_mem(to_integer(unsigned(addr_a_i))); end if;",
    ["*tdp1w.1clk.32x1024.lat11*"]),
   ("tdp1w: port B read ignores enb_i", TDP1W,
-   "      if enb_i = '1' then\n        v_addr := to_integer(unsigned(addr_b_i));",
-   "      if true then\n        v_addr := to_integer(unsigned(addr_b_i));",
+   "      if enb_i = '1' then\n        s_data_rd_b <= s_mem(",
+   "      if true then\n        s_data_rd_b <= s_mem(",
    ["*crw_cr.1clk.32x1024.lat1*"]),
 ]
 

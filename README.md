@@ -87,6 +87,31 @@ python -m tools.manifest list --flow sim
 python -m tools.manifest list --flow synth-amd --format tcl
 ```
 
+## Behaviour notes
+
+- `g_simulation` is **deprecated** and has no effect. It is kept in every
+  entity for compatibility; RAM cores report a note about it at the start of
+  simulation. Do not rely on it.
+- Addresses at or beyond the depth (only possible when a depth is not a power
+  of two) are undefined: reads return undefined data, and writes never change
+  an address within the depth. The storage covers the next power of two
+  words.
+- Read during write on the same port, or on a common-clock simple dual-port
+  RAM, returns the old data. Between different ports of a true dual-port RAM,
+  and between ports on different clocks, it is undefined.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for breaking changes.
+
+## Heavy tool runs
+
+Synthesis runs (`tools/vendor_synth`) and the VUnit runner take a
+machine-wide lock file, `lm_eda_heavy_tools.lock`, in the system temporary
+directory. Runs from different sessions on the same machine then wait for each
+other instead of running in parallel. A waiting run prints who holds the lock.
+Set the timeout with `LM_EDA_LOCK_TIMEOUT` (seconds, default 4 hours). A lock
+left by a process that no longer exists is removed automatically; no process
+is ever terminated.
+
 ## Local Vendor Synthesis
 
 Vendor synthesis checks are provided as local scripts rather than hosted CI jobs

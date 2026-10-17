@@ -21,8 +21,11 @@
 --  - A port B read of the address written by port A is undefined when the two
 --    accesses are less than one slow-clock period apart, also with a common
 --    clock.
---  - Addresses beyond the depth are ignored on write; a read of such an
---    address leaves the read registers unchanged.
+--  - Addresses at or beyond the depth (possible only when the depth is not a
+--    power of two): a write never changes an address within the depth; a
+--    read returns undefined data. There is no address comparison in the core:
+--    the storage covers the whole address range, so a non-power-of-two depth
+--    uses the next power of two words.
 --  - Initial content is zero; there is no reset.
 --  - g_simulation is deprecated and ignored.
 -------------------------------------------------------------------------------
@@ -57,7 +60,9 @@ entity lm_mem_ram_tdp1w is
 end entity lm_mem_ram_tdp1w;
 
 architecture a_rtl of lm_mem_ram_tdp1w is
-  type t_mem is array (0 to g_depth - 1) of std_logic_vector(g_data_w - 1 downto 0);
+  constant C_STORAGE_DEPTH : positive := 2 ** f_ceil_log2(g_depth);
+
+  type t_mem is array (0 to C_STORAGE_DEPTH - 1) of std_logic_vector(g_data_w - 1 downto 0);
 
   signal s_mem          : t_mem := (others => (others => '0'));
   signal s_data_rd_a    : std_logic_vector(g_data_w - 1 downto 0);
@@ -82,16 +87,12 @@ begin
     severity note;
 
   proc_port_a : process(clk_a_i)
-    variable v_addr : natural;
   begin
     if rising_edge(clk_a_i) then
       if ena_i = '1' then
-        v_addr := to_integer(unsigned(addr_a_i));
-        if v_addr < g_depth then
-          s_data_rd_a <= s_mem(v_addr);
-          if wen_a_i = '1' then
-            s_mem(v_addr) <= data_wr_a_i;
-          end if;
+        s_data_rd_a <= s_mem(to_integer(unsigned(addr_a_i)));
+        if wen_a_i = '1' then
+          s_mem(to_integer(unsigned(addr_a_i))) <= data_wr_a_i;
         end if;
         s_data_rd_a_p <= s_data_rd_a;
       end if;
@@ -99,14 +100,10 @@ begin
   end process proc_port_a;
 
   proc_port_b : process(clk_b_i)
-    variable v_addr : natural;
   begin
     if rising_edge(clk_b_i) then
       if enb_i = '1' then
-        v_addr := to_integer(unsigned(addr_b_i));
-        if v_addr < g_depth then
-          s_data_rd_b <= s_mem(v_addr);
-        end if;
+        s_data_rd_b <= s_mem(to_integer(unsigned(addr_b_i)));
         s_data_rd_b_p <= s_data_rd_b;
       end if;
     end if;

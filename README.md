@@ -18,7 +18,12 @@ Common packages live in `src/common/`, and FIFO implementations live in
 
 ## Current RTL
 
-- `lm_mem_ram_crw_crw`: generic true dual-port RAM core.
+- `lm_mem_ram_sdp`, `lm_mem_ram_tdp1w`: portable RAM cores (`src/core/`) that
+  vendor tools infer as block or distributed RAM. All one-writer RAMs and the
+  FIFOs are built on them.
+- `lm_mem_ram_crw_crw`: generic true dual-port RAM. Two-writer RAMs
+  (`lm_mem_ram_crw_crw`, `lm_mem_ram_rw_rw`, `lm_mem_ram_crw_cw`) are not
+  inferable yet; see issue #3 and `docs/PLAN.md`.
 - `lm_mem_ram_rw_rw`: common-clock RAM with two read/write ports.
 - `lm_mem_ram_cr_cw`: dual-clock write/read RAM.
 - `lm_mem_ram_cr_cw_ratio`: dual-clock write/read RAM with width ratio.
@@ -59,9 +64,28 @@ bash sim/scripts/run_ghdl.sh
 The scripts analyze current VHDL sources, elaborate available self-checking
 testbenches, and run them with assertion failures enabled.
 
-For commercial simulators, compile files in the same order used by
-`sim/scripts/run_ghdl.py`: common package, generic RAMs, inference RAMs, FIFOs,
-primitive wrapper simulation models, then testbenches.
+The constrained-random testbenches for the RAM cores, the RAM wrappers and the
+FIFO run with VUnit (`pip install vunit_hdl`):
+
+```sh
+python sim/vunit/run.py -p 4
+```
+
+They compare every RAM read with a scoreboard and, cycle by cycle, with a
+frozen copy of the previous RAM model (`sim/ref/`).
+
+### Which files to compile
+
+`manifests/lm_memories.toml` lists the files of each flow (simulation,
+synthesis per vendor, tests) in compile order. Use it instead of globbing the
+source tree. Some entities have several architectures with the same name, one
+per flow, so compiling every file would give the wrong model. Print a flow's
+file list with:
+
+```sh
+python -m tools.manifest list --flow sim
+python -m tools.manifest list --flow synth-amd --format tcl
+```
 
 ## Local Vendor Synthesis
 

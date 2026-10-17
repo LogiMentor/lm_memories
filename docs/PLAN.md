@@ -474,6 +474,37 @@ Each phase ends with a report and waits for confirmation.
 1. Second AMD family: `xcku3p-ffva676-2-e` (section 3.7).
 2. Diamond license renewal: until it is renewed, Lattice is **NOT RUN**.
 
+### 3.10 Phase 1 implementation notes
+
+- **Out-of-range addresses** (only possible when a depth is not a power of
+  two): a write is ignored, as before. A read now leaves the read registers
+  unchanged; the previous model returned zeros. Returning zeros would need a
+  multiplexer after the RAM output, which prevents the output register from
+  being absorbed into the block. The behaviour is documented as undefined, and
+  the tests never use out-of-range addresses.
+- **Unused generics:** `g_ram_a_latency` of the `*_ratio` wrappers belongs to
+  the unused port A output. It is still checked (1 or 2), as before, and
+  otherwise ignored.
+- **Collision warnings for portable cores** are raised by the testbench
+  scoreboard (`sim/vunit/lm_mem_tb_pkg.vhd`), not by the cores (section 3.5).
+- **Common clock in the harness:** one process drives both clock signals, so
+  the two edges fall in the same delta cycle. A concurrent copy
+  (`clk_b <= clk_a`) adds a delta cycle and would make the port B process see
+  port A writes too early.
+- **FIFO:** compared with a scoreboard (data order and content, wide and narrow
+  ports), not with a frozen FIFO copy. The RAM under it is compared with
+  `sim/ref/` by the RAM tests.
+- **Two-writer RAMs** (`crw_crw`, `rw_rw`, `crw_cw`) are unchanged until
+  phase 3. The manifest still lists the original `lm_mem_ram_crw_crw`.
+- **Mutation check:** six deliberate defects were introduced in the cores one
+  at a time. Each one was detected by the VUnit suite:
+  1. reversed sub-word order;
+  2. second output stage not gated by the enable;
+  3. write ignoring `ena_i`;
+  4. latency 2 taken from stage 1;
+  5. write-first instead of read-first on port A;
+  6. port B ignoring `enb_i`.
+
 ## Appendix: how the reproduction was run
 
 For each case, one Vivado batch run in a scratch directory:

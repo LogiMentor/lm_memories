@@ -114,32 +114,46 @@ is ever terminated.
 
 ## Local Vendor Synthesis
 
-Vendor synthesis checks are provided as local scripts rather than hosted CI jobs
-because FPGA tools and licenses must be installed on the developer machine.
+Vendor synthesis checks run as local scripts rather than in hosted CI, because
+the FPGA tools and their licenses must be installed on the developer machine.
 
-The local runner generates synthesizable tops, emits vendor batch scripts, runs
-enabled tool/family jobs, and collects logs and summary files under
-`build/vendor_synth/` by default.
+`tools/vendor_synth` synthesizes each case and compares the results with the
+expected results in `tools/vendor_synth/expected/<vendor>.toml`. Each entry
+gives the number of block RAM tiles, LUTs used as memory, URAM, ceilings on
+registers and logic LUTs, zero CRITICAL WARNINGs, and message IDs that must
+not appear (for example Vivado `Synth 8-6859` multi-driven nets). A case
+passes only when every field matches; the tool exit code alone never makes a
+pass. Other results:
 
-Dry-run the generated vendor project scripts with:
+- `tool-error`: synthesis did not complete.
+- `unchecked`: the case has no expected results.
+- `not-run`: the tool is not installed.
+
+None of them counts as a pass.
 
 ```sh
-python -m tools.vendor_synth --config tools/vendor_synth/local.example.toml --dry-run --include-disabled
+python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going
+python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --evaluate-only   # re-check existing results
 ```
 
-Local jobs should normally point to the vendor executable or batch file. An
-installed tool directory and optional environment setup can also be configured.
-For Vivado on Windows, using the full path to `bin/vivado.bat` is preferred.
+- Cases (`tools/vendor_synth/cases.toml`) synthesize the library entity itself
+  out of context. Generics are written into the tool script, and the values
+  the tool actually used are read back from its log; any difference fails the
+  case.
+- Sources come from the vendor's synthesis flow in the manifest.
+- Message limits are raised so the counts are complete.
+- Vivado's transient `couldn't read file` error is retried at most twice, and
+  the retries are recorded.
+- Runs are sequential and hold the machine-wide lock described above.
+- Results go to `$LM_MEM_BUILD_DIR/vendor_synth`, or to
+  `lm_memories_build/vendor_synth` in the system temporary directory. Each run
+  writes `summary.md`, `summary.csv`, `summary.json`, and
+  `summary_public.json` (no local paths). The checked results are kept in
+  `docs/results/`.
 
-The runner supports `executable`, `install_dir`, optional `setup_script`, and
-advanced `command` launch styles. Vivado jobs use the vendor default thread
-setting when `threads` is unset or `threads <= 1`; set `threads >= 2` only when
-a fixed higher thread count is needed.
-
-Results are written as `summary.json`, `summary.csv`, `summary.md`, and one
-per-case directory containing the generated top, tool script, log, and reports.
-The runner also scans vendor logs for common error text because some Vivado
-failures still return process exit code 0.
+Jobs configure the tool with `executable`, `install_dir`, optional
+`setup_script`, or `command`. On Windows, point Vivado jobs at
+`bin/vivado.bat` or set `install_dir`.
 
 ## lm_memgen Quick Start
 

@@ -10,7 +10,7 @@
 #   uram           exact number of URAM blocks
 #   max_registers  ceiling on flip-flops (a RAM built from flip-flops needs
 #                  depth x width of them)
-#   max_luts       ceiling on LUTs used as logic (optional)
+#   max_luts       ceiling on LUTs used as logic, "LUT as Logic" (optional)
 #   max_critical_warnings, forbidden_messages: from [defaults] unless set
 #
 # Parts: xc7a35tfgg484-2 (7-series), xcku3p-ffva676-2-e (Kintex
@@ -40,11 +40,23 @@ max_luts = 0
 
 [[expect]]
 case = "r_w_16x64"
-parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+parts = ["xc7a35tfgg484-2"]
+# 7-series: one RAMB18, output register absorbed.
 bram_tiles = 0.5
 lutram = 0
 max_registers = 0
 max_luts = 0
+
+[[expect]]
+case = "r_w_16x64"
+parts = ["xcku3p-ffva676-2-e"]
+# UltraScale+: distributed RAM, 2 x RAM64M8 + 1 x RAM64M = 20 LUTs as memory,
+# 16 output flip-flops (asynchronous read + register), 1 LUT for the write
+# enable (ena_i and wen_i).
+bram_tiles = 0
+lutram = 20
+max_registers = 16
+max_luts = 1
 
 [[expect]]
 case = "r_w_32x1000"
@@ -130,9 +142,18 @@ max_luts = 0
 # flags and synchronizers (a flip-flop storage would need 512 or 32768).
 [[expect]]
 case = "fifo_sync_32x16"
-parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
-bram_tiles = 0.5
-lutram = 0
+parts = ["xc7a35tfgg484-2"]
+# Distributed RAM: 5 x RAM32M (6 bits each) + 2 x RAM32X1D = 24 LUTs as memory.
+bram_tiles = 0
+lutram = 24
+max_registers = 120
+
+[[expect]]
+case = "fifo_sync_32x16"
+parts = ["xcku3p-ffva676-2-e"]
+# Distributed RAM: 2 x RAM32M16 (14 bits, 8 LUTs each) + 1 x RAM32M = 20 LUTs as memory.
+bram_tiles = 0
+lutram = 20
 max_registers = 120
 
 [[expect]]
@@ -144,9 +165,18 @@ max_registers = 200
 
 [[expect]]
 case = "fifo_async_32x16"
-parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
-bram_tiles = 0.5
-lutram = 0
+parts = ["xc7a35tfgg484-2"]
+# Distributed RAM: 5 x RAM32M (6 bits each) + 2 x RAM32X1D = 24 LUTs as memory.
+bram_tiles = 0
+lutram = 24
+max_registers = 120
+
+[[expect]]
+case = "fifo_async_32x16"
+parts = ["xcku3p-ffva676-2-e"]
+# Distributed RAM: 2 x RAM32M16 (14 bits, 8 LUTs each) + 1 x RAM32M = 20 LUTs as memory.
+bram_tiles = 0
+lutram = 20
 max_registers = 120
 
 [[expect]]

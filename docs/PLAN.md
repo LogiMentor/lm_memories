@@ -554,6 +554,37 @@ Each phase ends with a report and waits for confirmation.
   5. write-first instead of read-first on port A;
   6. port B ignoring `enb_i`.
 
+### 3.11 Phase 2 notes (Vivado check)
+
+- **Result:** 34 of 34 cases pass on Vivado 2023.1: 17 cases on
+  `xc7a35tfgg484-2` and the same 17 on `xcku3p-ffva676-2-e`. The cases cover
+  32 x 1024 at latency 1 and 2, small RAMs and FIFOs, depths that are not a
+  power of two, mixed width in both directions, and the FIFOs. Every case has
+  0 CRITICAL WARNINGs and no forbidden message (`docs/results/`).
+- **Mixed-width inference was broken in phase 1** and is fixed (`2406a71`). With
+  the narrow index computed as `address * ratio + i`, Vivado reported
+  `Synth 8-4767` ("multiple writes via different ports in same process") and
+  built the RAM from registers. The VUnit suite could not see this, because
+  the behaviour was correct. The core now uses the concatenation
+  `address & i`, as in the asymmetric templates of UG901, and asserts a
+  power-of-two ratio. The original documentation already required one.
+- **Family-dependent results:** small memories (64 x 16, and the 16-word
+  FIFOs) use one RAMB18 or distributed RAM depending on the family. The
+  expected results are therefore per part. Four of them were written after
+  the first measurement, once the cells had been checked to be RAM
+  primitives (`docs/results/README.md`).
+- **Tool status:** `tool-error` (synthesis did not complete) is reported
+  separately from `fail` (results differ from the expected results); neither
+  counts as a pass. Seven runs ended in `tool-error` on the reference machine
+  and passed when run again by hand. The symptoms were unreadable
+  installation files, a broken internal `.Xil` script, and silent stops,
+  while other sessions were running Vivado without the shared lock. The
+  automatic retry still covers only `couldn't read file`.
+- **`--evaluate-only`** checks existing results again with the current
+  expected results without running the tool. It was used to produce the
+  final table from the latest run of every case.
+- **Not covered yet:** two-writer RAMs (phase 3), and other vendors (phase 4).
+
 ## Appendix: how the reproduction was run
 
 For each case, one Vivado batch run in a scratch directory:

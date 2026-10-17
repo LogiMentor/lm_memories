@@ -29,6 +29,15 @@ All notable changes to this project are documented here.
   address range, so a depth that is not a power of two uses the next power of
   two words. For example, a 32 x 1536 `lm_mem_ram_r_w` now uses two RAMB36 on
   7-series. Designs that only use addresses below the depth are not affected.
+- **Width ratios must be a power of two** in `lm_mem_ram_r_w_ratio`,
+  `lm_mem_ram_cr_cw_ratio` and the FIFOs. This was already documented; the
+  core now asserts it, because the asymmetric RAM template (narrow address =
+  wide address & sub-word index) needs it.
+- **`tools/vendor_synth`** passes a case only when its results match
+  `tools/vendor_synth/expected/<vendor>.toml`. Cases without expected results
+  are `unchecked`, and a missing tool is `not-run`. The default output
+  directory is outside the repository. Vivado runs out of context in
+  non-project mode.
 - **Read during write between different ports** of any true dual-port RAM is
   undefined, also with a single clock. Read during write on the same port, and
   on a common-clock simple dual-port RAM, still returns the old data.
@@ -52,5 +61,8 @@ All notable changes to this project are documented here.
 - VUnit testbenches with a collision-aware scoreboard, comparison with a
   frozen copy of the previous RAM model, coverage thresholds, and a mutation
   check (`sim/vunit/`).
+- Vivado inference check (`tools/vendor_synth/vivado_check.toml`) on
+  `xc7a35tfgg484-2` and `xcku3p-ffva676-2-e`, with results in
+  `docs/results/`.
 - `tools/eda_lock.py`: machine-wide lock so that heavy tool runs from
   different sessions on the same machine queue up.

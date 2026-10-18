@@ -264,6 +264,36 @@ lutram = 0
 max_registers = 0
 max_luts = 0
 
+# 36 x 4096 on one clock, UltraScale+ only (measured 2026-10-18). Vivado maps
+# the simple dual port to one URAM288 without any attribute (Synth 8-6794).
+# The true dual-port RAMs (crw_cr on one clock, rw_rw) stay in block RAM:
+# 4 RAMB36E2 of 1K x 36, with LUTs for the output multiplexer.
+
+[[expect]]
+case = "r_w_36x4096"
+parts = ["xcku3p-ffva676-2-e"]
+uram = 1
+bram_tiles = 0
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_cr_36x4096_cc"
+parts = ["xcku3p-ffva676-2-e"]
+bram_tiles = 4
+lutram = 0
+max_registers = 0
+max_luts = 10
+
+[[expect]]
+case = "rw_rw_36x4096"
+parts = ["xcku3p-ffva676-2-e"]
+bram_tiles = 4
+lutram = 0
+max_registers = 0
+max_luts = 12
+
 # Static checks (fallback_check.toml): synthesis must stop at the check.
 # Vivado without synth_design -assert reports "[Synth 8-11323] assigned value
 # '1' out of range" at the line of the constant expect_failure_constant; with

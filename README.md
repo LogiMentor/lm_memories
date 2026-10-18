@@ -117,12 +117,15 @@ python -m tools.manifest list --flow synth-amd --format tcl
   exactly the depth was measured and rejected: it saved no block on 7-series
   or Cyclone V and cost logic, Fmax and Quartus CRITICAL WARNINGs
   (`docs/PLAN.md` section 3.13).
-- On UltraScale+, Vivado may implement a large one-clock memory in URAM
-  without any attribute (`Synth 8-6794`). URAM cannot be initialized from the
-  bitstream, needs output registers for Fmax, and has a different
-  read-during-write behaviour; URAM mappings are not verified by
-  post-synthesis simulation yet. A `g_ram_style` generic is proposed (PLAN
-  3.13) but not implemented.
+- On UltraScale+, Vivado may implement a large one-clock simple dual-port
+  memory in URAM without any attribute (`Synth 8-6794`); for example
+  `lm_mem_ram_r_w` 36 x 4096 becomes one URAM288. URAM cannot be initialized
+  from the bitstream and needs output registers for Fmax. Its behaviour was
+  checked by post-synthesis simulation for that case and matches the
+  documentation (old data on a read during write, latency 1). The true
+  dual-port RAMs of the same size (`lm_mem_ram_crw_cr` on one clock,
+  `lm_mem_ram_rw_rw`) stay in block RAM. A `g_ram_style` generic is proposed
+  (PLAN 3.13) but not implemented.
 - Read during write on the same port, or on a common-clock simple dual-port
   RAM, returns the old data. Between different ports of a true dual-port RAM,
   and between ports on different clocks, it is undefined. This includes

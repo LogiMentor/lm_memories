@@ -96,6 +96,11 @@ RAM_CONFIGS = [
   ram("crw_crw.2clk.16x40.lat21", "lm_mem_ram_crw_crw", TDP2W, a_w=16, depth=40, a_lat=2,
       same_clock=False, a_per=SLOW, hot=16, seed=55),
   ram("rw_rw.16x48", "lm_mem_ram_rw_rw", TDP2W, a_w=16, depth=48, hot=16, seed=56),
+  # 36 x 4096 on one clock: Vivado maps it to URAM on UltraScale+ without an
+  # attribute (Synth 8-6794); checked after synthesis on xcku3p.
+  ram("r_w.36x4096", "lm_mem_ram_r_w", SDP, a_w=36, depth=4096, hot=16, seed=71),
+  ram("crw_cr.1clk.36x4096", "lm_mem_ram_crw_cr", TDP1W, a_w=36, depth=4096, hot=16, seed=72),
+  ram("rw_rw.36x4096", "lm_mem_ram_rw_rw", TDP2W, a_w=36, depth=4096, hot=16, seed=73),
 ]
 
 
@@ -117,3 +122,16 @@ FIFO_CONFIGS = [
   fifo("async.8to32", wr_w=8, rd_w=32, depth=64, seed=47),
   fifo("sync.32to8", dual=False, wr_w=32, rd_w=8, depth=16, seed=48),
 ]
+
+# Post-synthesis configurations (sim/scripts/run_postsynth.py): name -> parts.
+# The two-writer RAMs on both AMD families; the URAM configurations on
+# UltraScale+ only.
+POSTSYNTH_PARTS = {
+  **{name: ("xc7a35tfgg484-2", "xcku3p-ffva676-2-e") for name, g in RAM_CONFIGS if g["g_dut"] in TWO_WRITERS
+     and not name.endswith("36x4096")},
+  "r_w.36x4096": ("xcku3p-ffva676-2-e",),
+  "crw_cr.1clk.36x4096": ("xcku3p-ffva676-2-e",),
+  "rw_rw.36x4096": ("xcku3p-ffva676-2-e",),
+}
+# Synthesized with both clock ports on one clock (a URAM has a single clock).
+POSTSYNTH_COMMON_CLOCK = ("crw_cr.1clk.36x4096",)

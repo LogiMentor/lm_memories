@@ -23,10 +23,11 @@ generated from these files.
   in the same directory with `--case`, and the whole directory was then
   checked with `--evaluate-only` against the final expected results. That
   evaluation produced this file.
-- Result: 52 of 52 pass (26 cases on each part): the 34 single-writer and
-  FIFO cases of phase 2, unchanged after the static checks, and 18
-  two-writer cases. There are 0 CRITICAL WARNINGs in every case, and no RAM
-  is built from flip-flops.
+- Result: 55 of 55 pass (26 cases on `xc7a35tfgg484-2`, 29 on
+  `xcku3p-ffva676-2-e`): the 34 single-writer and FIFO cases of phase 2,
+  unchanged after the static checks, 18 two-writer cases, and 3 cases of
+  36 x 4096 on one clock (URAM check, below). There are 0 CRITICAL WARNINGs
+  in every case, and no RAM is built from flip-flops.
 
 ### Runs that were repeated
 
@@ -145,3 +146,38 @@ Post-synthesis simulation of the two-writer RAMs
   error message). The script retries those at most twice and records each
   retry (6 on `xcku3p-ffva676-2-e`); the others were synthesized when the
   script ran again. A netlist is never taken from a failed run.
+
+## `postsynth_uram_vivado_2023.1_amd.json`
+
+URAM check on `xcku3p-ffva676-2-e`: 36 x 4096 on one clock, where Vivado
+chooses URAM without any attribute.
+
+- Synthesis (`vivado_check.toml`, cases `r_w_36x4096`, `crw_cr_36x4096_cc`,
+  `rw_rw_36x4096`; the `crw_cr` case ties both clock ports to one clock in a
+  generated top):
+  - `lm_mem_ram_r_w`: one URAM288, no LUTs, no registers, 0 CRITICAL
+    WARNINGs, with `INFO: [Synth 8-6794] RAM ("lm_mem_ram_r_w/inst_mem/s_mem_reg")
+    will be automatically implemented using URAM.` The netlist has a single
+    `URAM288` cell with `OREG_A`/`OREG_B` off (latency 1).
+  - `lm_mem_ram_crw_cr` (one clock) and `lm_mem_ram_rw_rw`: **not** URAM.
+    Vivado recognizes the true dual-port template and builds 4 RAMB36E2 of
+    1K x 36 plus an output multiplexer (10 and 12 LUTs), no registers,
+    0 CRITICAL WARNINGs.
+- Post-synthesis (`run_postsynth.py --part xcku3p-ffva676-2-e --config 36x4096`),
+  same harness and scoreboard, GHDL 6.0.0 and xsim 2023.1:
+
+  | Configuration | Netlist | Reads compared | Excluded | RTL and netlist, GHDL and xsim |
+  | --- | --- | --- | --- | --- |
+  | `r_w.36x4096` | 1 URAM288 | 1724 | 0 | 4 x PASS, 0 errors |
+  | `crw_cr.1clk.36x4096` | 4 RAMB36E2 | 3344 | 30 | 4 x PASS, 0 errors |
+  | `rw_rw.36x4096` | 4 RAMB36E2 | 3350 | 77 | 4 x PASS, 0 errors |
+
+- No divergence from the documented behaviour: on the URAM netlist, the 32
+  reads of an address written by the other port in the same cycle return the
+  old data, as specified for a common-clock simple dual-port RAM; latency 1,
+  the output hold while the enable is low (283 checks) and never-written
+  reads (482) match the RTL. This is a check against the UNISIM `URAM288`
+  model, not against hardware.
+- The `crw_cr` synthesis ended three times in `tool-error` (`couldn't read
+  file` for a script Vivado generates under `.Xil`) and passed when the
+  script ran again.

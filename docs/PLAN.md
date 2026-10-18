@@ -645,12 +645,13 @@ Each phase ends with a report and waits for confirmation.
   range` at the line of the `C_ERROR_<CHECK>` constant, whose comment says
   what is wrong. The checks are declared before every declaration that
   depends on them.
-- **Results:** `vivado_check.toml` 52 of 52 (the 34 cases of phase 2 again,
-  after the static checks, plus 18 two-writer cases on both parts: block RAM
-  only, 0 LUTs, 0 registers, 0 CRITICAL WARNINGs); static checks 23 of 23
-  (Vivado with and without `-assert`, Quartus Cyclone V); post-synthesis 44
-  of 44 (11 configurations x 2 parts x GHDL and xsim, RTL and netlist with
-  the same reads compared). Details in `docs/results/README.md`.
+- **Results:** `vivado_check.toml` 55 of 55 (the 34 cases of phase 2 again,
+  after the static checks, 18 two-writer cases on both parts: block RAM
+  only, 0 LUTs, 0 registers, 0 CRITICAL WARNINGs, and 3 URAM-check cases on
+  UltraScale+); static checks 23 of 23 (Vivado with and without `-assert`,
+  Quartus Cyclone V); post-synthesis 44 of 44 (11 configurations x 2 parts x
+  GHDL and xsim, RTL and netlist with the same reads compared) plus 12 of 12
+  for the URAM check (3 configurations on `xcku3p-ffva676-2-e`). Details in `docs/results/README.md`.
 - **Write/write collisions with mixed widths:** the UltraScale+ RAMB36E2
   model corrupts the whole word of both ports, not only the overlap; the
   7-series model corrupts only the overlap. Section 3.5 now makes every cell
@@ -705,9 +706,16 @@ What URAM means for lm_memories:
   mixed width: Vivado only chooses it for one-clock memories;
 - for Fmax the URAM output needs pipeline registers; with latency 1 the
   measured case reached 588 MHz instead of 637 MHz with block RAM;
-- the read-during-write behaviour of URAM differs from block RAM
-  (`NO_CHANGE` only in AMD's own templates), and no URAM mapping has been
-  checked by post-synthesis simulation yet.
+- the read-during-write behaviour of URAM differs from block RAM in AMD's
+  own templates (`NO_CHANGE` only). Checked after this note, before the
+  merge of PR #4: `lm_mem_ram_r_w` 36 x 4096 on `xcku3p-ffva676-2-e` becomes
+  one URAM288 (`Synth 8-6794`), and its netlist passes the harness on GHDL
+  and xsim with the documented behaviour (the 32 cross-port reads during a
+  write return the old data; latency 1; output hold). `lm_mem_ram_crw_cr` on
+  one clock and `lm_mem_ram_rw_rw` of the same size stay in block RAM (4
+  RAMB36E2): Vivado does not use URAM for the true dual-port template. No
+  divergence was found, so no exception and no URAM block in the AMD
+  architecture is needed for now (`docs/results/README.md`).
 
 **Proposal, not implemented: `g_ram_style`.** A generic on every RAM entity
 and FIFO, default `"auto"`, that sets the storage attributes of each tool:

@@ -29,7 +29,7 @@ jobs:
           python -m pip install "vunit_hdl>=4.7,<5"
 
       - name: Check RTL language level (GHDL --std=93c and --std=08)
-        run: python -m tools.manifest check --flow sim --flow test-legacy --flow test-vunit
+        run: python -m tools.manifest check --flow sim --flow synth-intel --flow test-legacy --flow test-vunit
 
       - name: Run existing VHDL tests
         run: python sim/scripts/run_ghdl.py

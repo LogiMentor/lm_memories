@@ -206,4 +206,77 @@ begin
         data_rd_b_o => dout_b_o
       );
   end generate gen_crw_cr;
+
+  gen_crw_crw : if g_dut = "lm_mem_ram_crw_crw" generate
+    inst_dut : entity work.lm_mem_ram_crw_crw
+      generic map(
+        g_ram_a_latency => g_a_latency,
+        g_ram_a_data_w  => g_a_data_w,
+        g_ram_a_depth   => g_a_depth,
+        g_ram_b_latency => g_b_latency,
+        g_ram_b_data_w  => g_b_data_w
+      )
+      port map(
+        clk_a_i     => clk_a_i,
+        clk_b_i     => clk_b_i,
+        ena_i       => ena_i,
+        enb_i       => enb_i,
+        wen_a_i     => wen_a_i,
+        wen_b_i     => wen_b_i,
+        data_wr_a_i => din_a_i,
+        data_wr_b_i => din_b_i,
+        addr_a_i    => addr_a_i,
+        addr_b_i    => addr_b_i,
+        data_rd_a_o => dout_a_o,
+        data_rd_b_o => dout_b_o
+      );
+  end generate gen_crw_crw;
+
+  -- Common clock: port B uses clk_a_i (the harness drives both clocks from
+  -- one process when g_same_clock is set).
+  gen_rw_rw : if g_dut = "lm_mem_ram_rw_rw" generate
+    inst_dut : entity work.lm_mem_ram_rw_rw
+      generic map(
+        g_ram_latency => g_a_latency,
+        g_ram_data_w  => g_a_data_w,
+        g_ram_depth   => g_a_depth
+      )
+      port map(
+        clk_i      => clk_a_i,
+        ena_i      => ena_i,
+        enb_i      => enb_i,
+        wen_a_i    => wen_a_i,
+        wen_b_i    => wen_b_i,
+        wr_dat_a_i => din_a_i,
+        wr_dat_b_i => din_b_i,
+        addr_a_i   => addr_a_i,
+        addr_b_i   => addr_b_i,
+        rd_dat_a_o => dout_a_o,
+        rd_dat_b_o => dout_b_o
+      );
+  end generate gen_rw_rw;
+
+  gen_crw_cw : if g_dut = "lm_mem_ram_crw_cw" generate
+    dout_b_o <= (others => '0');
+
+    inst_dut : entity work.lm_mem_ram_crw_cw
+      generic map(
+        g_ram_latency => g_a_latency,
+        g_ram_data_w  => g_a_data_w,
+        g_ram_depth   => g_a_depth
+      )
+      port map(
+        clk_a_i     => clk_a_i,
+        clk_b_i     => clk_b_i,
+        ena_i       => ena_i,
+        enb_i       => enb_i,
+        wen_a_i     => wen_a_i,
+        wen_b_i     => wen_b_i,
+        data_wr_a_i => din_a_i,
+        data_wr_b_i => din_b_i,
+        addr_a_i    => addr_a_i,
+        addr_b_i    => addr_b_i,
+        data_rd_a_o => dout_a_o
+      );
+  end generate gen_crw_cw;
 end architecture rtl;

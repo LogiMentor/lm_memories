@@ -24,6 +24,8 @@
 --    of never-written data, no read-first case where one is expected, no
 --    masked write, no hold check, no access beyond a non-power-of-two depth,
 --    or too many reads excluded by collisions.
+--  - g_x_on_undef: reads of cells left undefined by a write/write collision
+--    must return 'X' (simulation models only, see lm_mem_tb_pkg).
 --  - Process order: inputs change on falling edges and are sampled on rising
 --    edges; outputs are observed on falling edges; every scoreboard decision
 --    uses the state before the current instant (see lm_mem_tb_pkg).
@@ -52,6 +54,7 @@ entity lm_mem_tb_harness is
     g_b_writes         : boolean  := false;
     g_b_reads          : boolean  := true;
     g_cross_rdw_valid  : boolean  := false;
+    g_x_on_undef       : boolean  := false;
     g_n_cycles         : positive := 2000;
     g_hot_addrs        : positive := 8;
     g_seed             : positive := 1;
@@ -107,7 +110,8 @@ begin
   assert (g_dut = "lm_mem_ram_sdp") or (g_dut = "lm_mem_ram_tdp1w") or
          (g_dut = "lm_mem_ram_r_w") or (g_dut = "lm_mem_ram_cr_cw") or
          (g_dut = "lm_mem_ram_r_w_ratio") or (g_dut = "lm_mem_ram_cr_cw_ratio") or
-         (g_dut = "lm_mem_ram_crw_cr")
+         (g_dut = "lm_mem_ram_crw_cr") or (g_dut = "lm_mem_ram_crw_crw") or
+         (g_dut = "lm_mem_ram_rw_rw") or (g_dut = "lm_mem_ram_crw_cw")
     report "lm_mem_tb_harness: unknown DUT " & g_dut
     severity failure;
 
@@ -210,7 +214,8 @@ begin
       cells           => C_CELLS,
       same_clock      => g_same_clock,
       window          => C_WINDOW,
-      cross_rdw_valid => g_cross_rdw_valid
+      cross_rdw_valid => g_cross_rdw_valid,
+      x_on_undef      => g_x_on_undef
     );
     s_cfg_done <= true;
     wait;

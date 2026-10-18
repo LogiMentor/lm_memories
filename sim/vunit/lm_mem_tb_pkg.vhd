@@ -23,6 +23,10 @@
 --    common-clock simple dual-port RAM, return the old data (read-first).
 --  - An access at or beyond the depth: a write is ignored by the model, a
 --    read is excluded. Both raise a warning and are counted.
+--  - Optionally (x_on_undef), a read of a cell left undefined by a
+--    write/write collision must return 'X' somewhere in the read word. This
+--    checks the collision handling of a simulation model; a netlist never
+--    returns 'X'.
 --
 --  Independence from process order: monitors of different ports may run in
 --  any order within a delta cycle. Every decision therefore uses either the
@@ -85,7 +89,8 @@ package lm_mem_tb_pkg is
       cells           : positive;
       same_clock      : boolean;
       window          : time;
-      cross_rdw_valid : boolean
+      cross_rdw_valid : boolean;
+      x_on_undef      : boolean := false
     );
     procedure write(port_id : natural; base : natural; n : positive; data : std_logic_vector; t : time);
     procedure count_masked_write;
@@ -283,6 +288,7 @@ package body lm_mem_tb_pkg is
     variable v_same_clock : boolean := true;
     variable v_window     : time := 0 ns;
     variable v_cross_rdw  : boolean := false;
+    variable v_x_on_undef : boolean := false;
     variable v_cells      : t_cells_ptr := null;
     variable v_log        : t_log;
     variable v_log_wr     : natural := 0;
@@ -315,7 +321,8 @@ package body lm_mem_tb_pkg is
       cells           : positive;
       same_clock      : boolean;
       window          : time;
-      cross_rdw_valid : boolean
+      cross_rdw_valid : boolean;
+      x_on_undef      : boolean := false
     ) is
     begin
       assert cells <= C_TB_MAX_CELLS
@@ -326,6 +333,7 @@ package body lm_mem_tb_pkg is
       v_same_clock := same_clock;
       v_window     := window;
       v_cross_rdw  := cross_rdw_valid;
+      v_x_on_undef := x_on_undef;
       if v_cells /= null then
         deallocate(v_cells);
       end if;
@@ -517,6 +525,14 @@ package body lm_mem_tb_pkg is
                 severity warning;
             elsif v_rd.undef then
               v_counts.reads_excl_undef := v_counts.reads_excl_undef + 1;
+              if v_x_on_undef and not Is_X(v_pend(i).dut(v_w - 1 downto 0)) then
+                v_counts.errors := v_counts.errors + 1;
+                report "lm_mem_tb_pkg: " & v_pend(i).tag & " read at " & time'image(v_rd.t) &
+                       " cell " & integer'image(v_rd.base) &
+                       ": undefined after a write/write collision, but the DUT returned " &
+                       to_hstring(v_pend(i).dut(v_w - 1 downto 0))
+                  severity error;
+              end if;
             else
               v_counts.reads_checked := v_counts.reads_checked + 1;
               if v_rd.init then

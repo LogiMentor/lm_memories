@@ -16,9 +16,11 @@
 #   tools  = optional; the only tools allowed to read the file set.
 # - [flows.<name>]: ordered list of file sets.
 #
-# Phase 1 note: lm_mem_ram_crw_crw (and rw_rw, crw_cw on top of it) still uses
-# the original single-process description. It becomes a dual-model entity in
-# phase 3 (docs/PLAN.md); until then it is not inferable.
+# lm_mem_ram_crw_crw is a dual-model entity (docs/PLAN.md section 3.1): the
+# entity is in the "core" file set, and each flow picks one architecture,
+# all named a_rtl: crw_crw_sim (simulation reference model), crw_crw_amd
+# (Vivado only), or crw_crw_unsupported (stops synthesis). lm_mem_ram_rw_rw
+# and lm_mem_ram_crw_cw wrap it and follow the same choice.
 
 version = 1
 
@@ -34,12 +36,31 @@ check = "ghdl-93-08"
 files = [
   "src/core/lm_mem_ram_sdp.vhd",
   "src/core/lm_mem_ram_tdp1w.vhd",
+  "src/core/lm_mem_ram_crw_crw_ent.vhd",
 ]
 
-[filesets.crw_crw]
+# Simulation architecture of lm_mem_ram_crw_crw (reference model, uses now).
+[filesets.crw_crw_sim]
 check = "ghdl-93-08"
 files = [
-  "src/generic/lm_mem_ram_crw_crw.vhd",
+  "src/sim/lm_mem_ram_crw_crw_rtl.vhd",
+]
+
+# Vivado architecture of lm_mem_ram_crw_crw (UG901 template, plain shared
+# variable). Verified by synthesis and post-synthesis simulation.
+[filesets.crw_crw_amd]
+check = "target-tool"
+tools = ["vivado"]
+files = [
+  "src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd",
+]
+
+# Fallback architecture: stops elaboration for tools without a validated
+# two-writer architecture.
+[filesets.crw_crw_unsupported]
+check = "ghdl-93-08"
+files = [
+  "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd",
 ]
 
 [filesets.wrappers]
@@ -94,11 +115,23 @@ files = [
   "sim/tb/tb_lm_mem_fifo_async.vhd",
 ]
 
-[filesets.tb_harness]
+[filesets.tb_pkg]
 check = "ghdl-08"
 files = [
   "sim/vunit/lm_mem_tb_pkg.vhd",
+]
+
+# DUT adapter, "rtl" architecture (library entities). The post-synthesis flow
+# replaces it with a generated adapter that instantiates netlists.
+[filesets.tb_dut]
+check = "ghdl-08"
+files = [
   "sim/vunit/lm_mem_tb_dut.vhd",
+]
+
+[filesets.tb_harness]
+check = "ghdl-08"
+files = [
   "sim/vunit/lm_mem_tb_harness.vhd",
 ]
 
@@ -111,27 +144,32 @@ files = [
 
 # Library sources for simulation.
 [flows.sim]
-filesets = ["common", "core", "crw_crw", "wrappers", "inference", "fifo", "primitives"]
+filesets = ["common", "core", "crw_crw_sim", "wrappers", "inference", "fifo", "primitives"]
 
-# Library sources for synthesis, per vendor. They are identical until the
-# vendor-specific two-writer architectures land (phases 3 and 4).
+# Library sources for synthesis, per vendor. Only AMD has a validated
+# two-writer architecture; the others get the fallback.
 [flows.synth-amd]
-filesets = ["common", "core", "crw_crw", "wrappers", "inference", "fifo", "primitives"]
+filesets = ["common", "core", "crw_crw_amd", "wrappers", "inference", "fifo", "primitives"]
 
 [flows.synth-intel]
-filesets = ["common", "core", "crw_crw", "wrappers", "inference", "fifo", "primitives"]
+filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "inference", "fifo", "primitives"]
 
 [flows.synth-lattice]
-filesets = ["common", "core", "crw_crw", "wrappers", "inference", "fifo", "primitives"]
+filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "inference", "fifo", "primitives"]
 
 [flows.synth-microchip]
-filesets = ["common", "core", "crw_crw", "wrappers", "inference", "fifo", "primitives"]
+filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "inference", "fifo", "primitives"]
+
+# The fallback flow, for checking with any tool that synthesis stops
+# (tools/vendor_synth/fallback_check.toml).
+[flows.synth-unsupported]
+filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "inference", "fifo", "primitives"]
 
 # Existing self-checking testbenches (sim/scripts/run_ghdl.py).
 [flows.test-legacy]
-filesets = ["common", "core", "crw_crw", "wrappers", "inference", "fifo", "primitives", "tb_legacy"]
+filesets = ["common", "core", "crw_crw_sim", "wrappers", "inference", "fifo", "primitives", "tb_legacy"]
 
 # New VUnit testbenches (sim/vunit/run.py).
 [flows.test-vunit]
-filesets = ["common", "core", "crw_crw", "wrappers", "inference", "fifo", "primitives",
-            "sim_ref", "tb_harness", "tb_vunit"]
+filesets = ["common", "core", "crw_crw_sim", "wrappers", "inference", "fifo", "primitives",
+            "sim_ref", "tb_pkg", "tb_dut", "tb_harness", "tb_vunit"]

@@ -41,9 +41,18 @@ open(state, "w").write(str(calls + 1))
 spec = eval(open(cfg).read())
 print("****** Vivado v2023.1 (64-bit)")
 if calls < spec.get("fail_reads", 0):
-    print('couldn\'t read file "C:/Xilinx/Vivado/2023.1/scripts/rt/data/x.tcl": No error')
+    kinds = spec.get("fail_kinds", ["read"])
+    kind = kinds[calls % len(kinds)]
+    if kind == "read":
+        print('couldn\'t read file "C:/Xilinx/Vivado/2023.1/scripts/rt/data/x.tcl": No error')
+    elif kind == "rt":
+        print('invalid command name "rt-undefined"')
+    else:
+        print("synth_design failed")
     print("ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
     sys.exit(1)
+os.makedirs(".Xil", exist_ok=True)  # tool scratch, removed after a passing run
+open(os.path.join(".Xil", "junk.tcl"), "w").write("x")
 top = re.search(r"-top (\S+)", script).group(1)
 print("Command: synth_design -mode out_of_context -top " + top)
 print("INFO: [Synth 8-638] synthesizing module '%s' [x.vhd:1]" % top)
@@ -152,11 +161,17 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(result["status"], "pass", result["problems"])
     self.assertEqual(result["exit_code"], 0)
     self.assertEqual(result["tool_version"], "2023.1")
+    # A passing run keeps its log, reports and script only.
+    kept = sorted(p.name for p in Path(result["work_dir"]).iterdir())
+    self.assertNotIn(".Xil", kept)
+    self.assertIn("run.log", kept)
+    self.assertTrue((Path(result["work_dir"]) / "reports" / "utilization.rpt").is_file())
 
   def test_flip_flop_ram_fails(self) -> None:
     result = self._run(self._good_spec(util=UTIL_TEMPLATE.format(luts=338, lutram=0, regs=1040, bram=0)))
     self.assertEqual(result["status"], "fail")
     self.assertEqual(result["exit_code"], 1)
+    self.assertTrue((Path(result["work_dir"]) / ".Xil").is_dir(), "a failing run keeps everything")
 
   def test_wrong_generic_value_fails(self) -> None:
     result = self._run(self._good_spec(generics={"g_ram_data_w": 16, "g_ram_depth": 0, "g_ram_latency": 1}))
@@ -179,10 +194,12 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(result["status"], "not-run")
     self.assertEqual(result["exit_code"], 1)
 
-  def test_retry_only_on_couldnt_read_file_and_recorded(self) -> None:
-    result = self._run(self._good_spec(fail_reads=2))
+  def test_transient_failures_are_retried_and_recorded(self) -> None:
+    result = self._run(self._good_spec(fail_reads=2, fail_kinds=["rt", "silent"]))
     self.assertEqual(result["status"], "pass", result["problems"])
     self.assertEqual(len(result["retries"]), 2)
+    self.assertIn("rt-undefined", result["retries"][0])
+    self.assertIn("silent-stop", result["retries"][1])
 
   def test_evaluate_only_rechecks_without_running(self) -> None:
     first = self._run(self._good_spec())
@@ -201,10 +218,12 @@ class VendorRunTest(unittest.TestCase):
     self.assertNotIn("command", public)
 
   def test_retries_are_capped(self) -> None:
-    result = self._run(self._good_spec(fail_reads=3))
+    result = self._run(self._good_spec(fail_reads=5))
     self.assertEqual(result["status"], "tool-error")
     self.assertEqual(result["exit_code"], 1)
-    self.assertEqual(len(result["retries"]), 2)
+    self.assertEqual(len(result["retries"]), 3, "every failed attempt is recorded")
+    self.assertIn("transient tool failure in all 3 attempts", result["problems"][0])
+    self.assertEqual((self.root / "calls.txt").read_text(), "3")
 
 
 class ExpectedFailureTest(unittest.TestCase):

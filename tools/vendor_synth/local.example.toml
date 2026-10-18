@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 
-# Results go to $LM_MEM_BUILD_DIR/vendor_synth or to the system temporary
-# directory; set [run] work_root to override.
+# Results go to $LM_EDA_WORKDIR/vs (default: lmeda/vs in the system temporary
+# directory); set [run] work_root to override.
 
 [[targets]]
 name = "vivado-zynq7-local"

@@ -19,13 +19,14 @@ import re
 import shlex
 import shutil
 import subprocess
-import tempfile
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from tools.eda_lock import heavy_tool_lock
+from tools.eda_retry import run_with_retries
+from tools.eda_workdir import prune, work_root as work_root_for
 from tools.manifest import load as load_manifest
 
 from . import check
@@ -37,7 +38,6 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-MAX_RETRIES = 2
 MANIFEST_FLOWS = {
   "amd": "synth-amd", "xilinx": "synth-amd",
   "intel": "synth-intel", "altera": "synth-intel",
@@ -55,10 +55,13 @@ ALWAYS_UNLIMITED = ("Synth 8-6859", "Synth 8-5787", "Synth 8-4767", "Synth 8-384
 
 
 def default_work_root() -> Path:
-  """Build directory outside the repository: $LM_MEM_BUILD_DIR or the system temp."""
-  base = os.environ.get("LM_MEM_BUILD_DIR")
-  root = Path(base) if base else Path(tempfile.gettempdir()) / "lm_memories_build"
-  return root / "vendor_synth"
+  """Short build directory outside the repository: $LM_EDA_WORKDIR/vs (tools/eda_workdir.py)."""
+  return work_root_for("vs")
+
+
+# Kept in a case directory after a passing run (prune_case_dir); the rest
+# (projects, tool databases, .Xil) is removed. Enough for --evaluate-only.
+KEEP_AFTER_PASS = ("run.log", "reports", "*.tcl", "*.rpt", "*.summary", "*.vhd")
 MEMORY_KEYWORDS = re.compile(
   r"(ram|bram|uram|m20k|mlab|m10k|ebr|dpram|block memory|distributed)",
   re.IGNORECASE,
@@ -1072,8 +1075,10 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
   env = os.environ.copy()
   env.update({str(k): str(v) for k, v in job.get("env", {}).items()})
   timeout = int(job.get("timeout_seconds", 3600))
-  status = "fail"
-  for attempt in range(MAX_RETRIES + 1):
+  timed_out = False
+
+  def run_once(attempt: int) -> str:
+    nonlocal timed_out
     with log_file.open("w", encoding="utf-8", errors="ignore") as handle:
       handle.write("command: " + " ".join(command) + "\n")
       handle.flush()
@@ -1090,24 +1095,24 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
             timeout=timeout,
           )
         result["return_code"] = process.returncode
-        status = "ran"
       except subprocess.TimeoutExpired:
-        status = "timeout"
+        timed_out = True
         handle.write(f"\ntimeout after {timeout} seconds\n")
-    text = log_file.read_text(encoding="utf-8", errors="ignore")
-    if status == "ran" and "couldn't read file" in text and attempt < MAX_RETRIES:
-      line = next(l for l in text.splitlines() if "couldn't read file" in l)
-      result["retries"].append(f"attempt {attempt + 1}: {line.strip()[:200]}")
-      continue
-    break
+    return "" if timed_out else log_file.read_text(encoding="utf-8", errors="ignore")
+
+  # Shared retry policy (tools/eda_retry.py): every failed attempt is recorded.
+  text, result["retries"], persisted = run_with_retries(run_once)
 
   result["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
-  if status == "timeout":
+  if timed_out:
     result.update(status="timeout", message=f"timeout after {timeout} seconds", problems=["timeout"])
     return result
 
-  text = log_file.read_text(encoding="utf-8", errors="ignore")
   evaluation = _evaluate(job, case, top, text, reports, sources)
+  if persisted:
+    evaluation["status"] = "tool-error"
+    evaluation["problems"].insert(0, f"transient tool failure in all {len(result['retries'])} attempts: "
+                                     + result["retries"][-1])
   # A non-zero exit code is expected when the tool must stop (fallback).
   expected_stop = "stopped" in evaluation["metrics"]
   if result["return_code"] not in (0, None) and evaluation["status"] == "pass" and not expected_stop:
@@ -1238,6 +1243,8 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--dry-run", action="store_true", help="generate scripts and summaries without executing tools")
   parser.add_argument("--list", action="store_true", help="list configured jobs and cases")
   parser.add_argument("--no-clean", action="store_true", help="do not remove previous per-case work directories")
+  parser.add_argument("--keep-work", action="store_true",
+                      help="keep the whole work directory of passing cases (default: keep logs and reports only)")
   parser.add_argument("--keep-going", action="store_true", help="continue after a failed case")
   parser.add_argument("--evaluate-only", action="store_true",
                       help="do not run tools; check the existing results in the work root against the expected results")
@@ -1273,6 +1280,9 @@ def main(argv: list[str] | None = None) -> int:
   exit_code = 0
   for item in items:
     result = _run_item(item, work_root, args.dry_run, not args.no_clean, args.evaluate_only)
+    # A passing run keeps only its logs and reports; a failing one keeps everything.
+    if result["status"] == "pass" and not (args.dry_run or args.evaluate_only or args.keep_work):
+      prune(Path(result["work_dir"]), KEEP_AFTER_PASS)
     results.append(result)
     print(f"{result['status']:9} {result['job']} {result['case']} {result.get('message', '')}", flush=True)
     if result["status"] in ("fail", "tool-error", "timeout", "unchecked", "not-run"):

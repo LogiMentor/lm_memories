@@ -16,7 +16,9 @@ For each part and each two-writer configuration of sim/vunit/configs.py:
    sources, -frelaxed only for that library) and with xsim (precompiled
    UNISIM).
 
-Results: <work>/postsynth/results.json and results.md. Every Vivado run and
+Results: <work>/results.json and results.md, <work> = --work-root or
+$LM_EDA_WORKDIR/ps; after a passing run only the results and the synthesis
+logs and reports stay (--keep-work keeps everything). Every Vivado run and
 every simulation batch holds the machine-wide EDA lock.
 
   python sim/scripts/run_postsynth.py                      # both parts, GHDL and xsim
@@ -41,18 +43,18 @@ sys.path.insert(0, str(ROOT_DIR / "sim" / "vunit"))
 
 from configs import RAM_CONFIGS, TWO_WRITERS  # noqa: E402
 from tools.eda_lock import heavy_tool_lock  # noqa: E402
+from tools.eda_retry import run_with_retries  # noqa: E402
+from tools.eda_workdir import prune, work_root  # noqa: E402
 from tools.manifest import load  # noqa: E402
 from tools.vendor_synth import check  # noqa: E402
 
-BUILD_ROOT = Path(os.environ["LM_MEM_BUILD_DIR"]) if os.environ.get("LM_MEM_BUILD_DIR") else ROOT_DIR / "sim" / "build"
 GHDL = os.environ.get("GHDL", "ghdl")
 PARTS = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+# Kept in each synthesis directory after a passing campaign.
+KEEP_SYNTH = ("synth.json", "vivado.log", "utilization.rpt", "run.tcl")
 ADAPTER_RTL = ROOT_DIR / "sim" / "vunit" / "lm_mem_tb_dut.vhd"
 HARNESS_FILESET = "tb_harness"
 RESULT_RE = re.compile(r"lm_mem_tb_harness \S+ \[[^\]]*\]: (.*)")
-# Vivado failures on the reference machine that are not about the design.
-TRANSIENT_MESSAGES = ("couldn't read file", 'invalid command name "rt-undefined"')
-MAX_RETRIES = 2
 VERDICT_RE = re.compile(r"tb_lm_mem_ram_plain: RESULT (PASS|FAIL)[^\n]*")
 
 
@@ -203,27 +205,24 @@ exit
   log = work / "vivado.log"
   cmd = (["cmd", "/c", str(vivado_dir / "bin" / "vivado.bat")] if os.name == "nt" else
          [str(vivado_dir / "bin" / "vivado")]) + ["-mode", "batch", "-nojournal", "-source", tcl(script)]
-  retries = []
-  for attempt in range(MAX_RETRIES + 1):
+  code = None
+
+  def run_once(attempt: int) -> str:
+    nonlocal code
     log.write_text("", encoding="utf-8")
     with heavy_tool_lock(f"postsynth vivado {part} {key}", kind="synthesis"):
       code = run_logged(cmd, work, log)
-    text = log.read_text(encoding="utf-8", errors="ignore")
-    # Retry only on the known Vivado failures that are not about the design.
-    transient = next((l for l in text.splitlines() if any(m in l for m in TRANSIENT_MESSAGES)), None)
-    # A silent stop: synthesis failed and the only error is the generic one.
-    errors = {l.split("]")[0] for l in text.splitlines() if l.startswith("ERROR: [")}
-    if transient is None and "synth_design failed" in text and errors <= {"ERROR: [Common 17-69"}:
-      transient = "synth_design failed without an error message"
-    if transient is None or attempt == MAX_RETRIES:
-      break
-    retries.append(f"attempt {attempt + 1}: {transient.strip()[:200]}")
+    return log.read_text(encoding="utf-8", errors="ignore")
+
+  # Shared retry policy (tools/eda_retry.py): every failed attempt is recorded.
+  text, retries, persisted = run_with_retries(run_once)
   parsed = check.parse_vivado_log(text, f"lm_ps_{key}")
   util = work / "utilization.rpt"
   metrics = check.parse_vivado_utilization(util.read_text(encoding="utf-8", errors="ignore")) if util.is_file() else {}
-  ok = code == 0 and netlist.is_file() and not parsed["errors"]
-  return {"ok": ok, "netlist": str(netlist), "metrics": metrics, "critical_warnings": parsed["critical_warnings"],
-          "errors": parsed["errors"][:3], "version": parsed["version"], "retries": retries}
+  ok = code == 0 and netlist.is_file() and not parsed["errors"] and not persisted
+  return {"ok": ok, "tool_error": persisted, "netlist": str(netlist), "metrics": metrics,
+          "critical_warnings": parsed["critical_warnings"], "errors": parsed["errors"][:3],
+          "version": parsed["version"], "retries": retries}
 
 
 def unisim_cells(netlists: list[Path]) -> list[str]:
@@ -370,7 +369,10 @@ def main(argv: list[str] | None = None) -> int:
   parser.add_argument("--sim", action="append", choices=("ghdl", "xsim"), help="default: both")
   parser.add_argument("--config", default=".*", help="regular expression on the configuration name")
   parser.add_argument("--vivado-dir", type=Path, default=Path(os.environ.get("LM_VIVADO_DIR", "C:/Xilinx/Vivado/2023.1")))
-  parser.add_argument("--work-root", type=Path, default=BUILD_ROOT / "postsynth")
+  parser.add_argument("--work-root", type=Path, default=work_root("ps"),
+                      help="default: $LM_EDA_WORKDIR/ps (tools/eda_workdir.py)")
+  parser.add_argument("--keep-work", action="store_true",
+                      help="keep netlists and simulation directories after a passing run")
   parser.add_argument("--resynth", action="store_true", help="synthesize again even if a netlist exists")
   args = parser.parse_args(argv)
 
@@ -445,6 +447,14 @@ def main(argv: list[str] | None = None) -> int:
   (root / "results.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
   (root / "results.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
   print("\n".join(lines))
+  # A passing campaign keeps the results and the synthesis logs and reports;
+  # netlists and simulation directories go. A failing one keeps everything.
+  if not failed and not args.keep_work:
+    for part in parts:
+      for synth_dir in sorted((root / part / "synth").glob("*")):
+        prune(synth_dir, KEEP_SYNTH)
+      prune(root / part, ["synth"])
+    prune(root, ["results.json", "results.md", *parts])
   return 1 if failed else 0
 
 

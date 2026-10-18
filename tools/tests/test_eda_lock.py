@@ -19,7 +19,9 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 # Holder in another process. argv: lock path, mode, log path.
 #   wait  - print "ready", hold until stdin closes, release normally;
 #   crash - exit without releasing (os._exit inside the block);
-#   log   - append "start"/"end" lines to the log file around a short hold.
+#   log   - append "start"/"end" lines to the log file around a short hold;
+#   loop  - take and release the lock 8 times, appending "<i>" to the log file
+#           while holding it, printing "ready" after the first.
 HOLDER = r"""
 import os, sys, time
 from pathlib import Path
@@ -31,12 +33,23 @@ with heavy_tool_lock("other run", lock_path=path, poll_s=0.02, log=lambda m: Non
     sys.stdin.read()
   elif mode == "crash":
     os._exit(3)
+  elif mode == "loop":
+    with open(sys.argv[3], "a") as f:
+      f.write("0\n")
+    print("ready", flush=True)
+    time.sleep(0.3)
   else:
     with open(sys.argv[3], "a") as f:
       f.write(f"start {os.getpid()}\n")
     time.sleep(0.2)
     with open(sys.argv[3], "a") as f:
       f.write(f"end {os.getpid()}\n")
+if mode == "loop":
+  for i in range(1, 8):
+    with heavy_tool_lock("other run", lock_path=path, poll_s=0.02, log=lambda m: None):
+      with open(sys.argv[3], "a") as f:
+        f.write(f"{i}\n")
+      time.sleep(0.3)
 """
 
 
@@ -52,12 +65,12 @@ class EdaLockTest(unittest.TestCase):
   def _lock(self, **kwargs):
     return heavy_tool_lock("unit test", lock_path=self.path, log=self.messages.append, **kwargs)
 
-  def _holder(self, *args: str, stdin=None) -> subprocess.Popen:
+  def _holder(self, *args: str, stdin=None, stdout_pipe: bool = False) -> subprocess.Popen:
     env = {k: v for k, v in os.environ.items() if k != TOKEN_ENV}
     env["PYTHONPATH"] = str(ROOT_DIR)
     return subprocess.Popen([sys.executable, "-c", HOLDER, str(self.path), *args],
                             cwd=ROOT_DIR, env=env, stdin=stdin, text=True,
-                            stdout=subprocess.PIPE if stdin else subprocess.DEVNULL)
+                            stdout=subprocess.PIPE if (stdin == subprocess.PIPE or stdout_pipe) else subprocess.DEVNULL)
 
   def test_acquire_and_release(self) -> None:
     with self._lock(timeout_s=1):
@@ -103,6 +116,27 @@ class EdaLockTest(unittest.TestCase):
     for i in range(0, 8, 2):
       self.assertEqual(events[i][0], "start")
       self.assertEqual(events[i + 1], ("end", events[i][1]), f"overlapping holders: {events}")
+
+  def test_waiters_are_served_in_order(self) -> None:
+    log = Path(self.tmp.name) / "loop.log"
+    proc = self._holder("loop", str(log), stdin=subprocess.DEVNULL, stdout_pipe=True)
+    try:
+      self.assertEqual(proc.stdout.readline().strip(), "ready")
+      with self._lock(timeout_s=10, poll_s=0.02):
+        done = log.read_text().split()
+      self.assertLess(len(done), 4, f"a looping holder must not starve a waiter: {done}")
+    finally:
+      proc.wait(timeout=30)
+      proc.stdout.close()
+
+  def test_stale_ticket_is_skipped(self) -> None:
+    stale = self.path.parent / f"{self.path.name}.q.{0:020d}-1-deadbeef"
+    stale.write_text("")
+    os.utime(stale, (1, 1))
+    with self._lock(timeout_s=1, poll_s=0.02):
+      pass
+    self.assertFalse(stale.exists())
+    self.assertEqual(list(self.path.parent.glob(f"{self.path.name}.q.*")), [])
 
   def test_child_with_token_does_not_wait(self) -> None:
     with self._lock(timeout_s=1):

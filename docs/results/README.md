@@ -13,16 +13,20 @@ generated from these files.
 - Tool: Vivado v2023.1 (64-bit), out-of-context synthesis.
 - Parts: `xc7a35tfgg484-2` (7-series) and `xcku3p-ffva676-2-e` (Kintex
   UltraScale+).
-- RTL: commit `2406a71` (`src/` and the manifest are unchanged since then).
+- RTL: commit `3823cef`. The campaign was repeated in phase 3 after the
+  static checks (`9e71869`) and the two-writer RAMs (`072b7c8`); the phase 2
+  run was on `2406a71`.
 - Cases: `tools/vendor_synth/cases.toml`. Expected results:
   `tools/vendor_synth/expected/amd.toml`.
-- Command: `python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going`.
-  On the reference machine the cases were run in groups of five with
-  `--case`, one group after the other. The latest run of every case was then
-  collected in one directory and checked again with `--evaluate-only` against
-  the final expected results. That evaluation produced this file.
-- Result: 34 of 34 pass. There are 0 CRITICAL WARNINGs in every case, and
-  no RAM is built from flip-flops.
+- Command: `python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going`,
+  in one work directory; the cases that ended in `tool-error` were run again
+  in the same directory with `--case`, and the whole directory was then
+  checked with `--evaluate-only` against the final expected results. That
+  evaluation produced this file.
+- Result: 52 of 52 pass (26 cases on each part): the 34 single-writer and
+  FIFO cases of phase 2, unchanged after the static checks, and 18
+  two-writer cases. There are 0 CRITICAL WARNINGs in every case, and no RAM
+  is built from flip-flops.
 
 ### Runs that were repeated
 
@@ -49,6 +53,12 @@ case passed the next time:
 
 The automatic retry covers only `couldn't read file` (at most two retries).
 
+In the phase 3 campaign, four runs ended in `tool-error` on
+`xc7a35tfgg484-2` and passed when run again: `cr_cw_32x1024` (2 tool
+errors), `crw_crw_32to8` (1), `rw_rw_32x1024` (1). No other session was
+running Vivado; the errors are the same unreadable installation files and
+stops without an error message.
+
 ### Expected results set from measurements
 
 Four expected entries were written after the first run, because Vivado
@@ -62,6 +72,12 @@ family:
 
 In each case the cells were checked to be RAM primitives before the values
 were written.
+
+The two-writer expected results (phase 3) were also written after the first
+measurement: every case uses only RAMB36E1/RAMB18E1 (7-series) or
+RAMB36E2/RAMB18E2 (UltraScale+) cells, with 0 LUTs and 0 registers; latency
+2 is absorbed in the block RAM output register. `crw_crw_16x64` uses one
+RAMB18 on both families.
 
 ## `static_checks_2026-10-18.json`
 

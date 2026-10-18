@@ -630,6 +630,17 @@ Each phase ends with a report and waits for confirmation.
   range` at the line of the `C_ERROR_<CHECK>` constant, whose comment says
   what is wrong. The checks are declared before every declaration that
   depends on them.
+- **Results:** `vivado_check.toml` 52 of 52 (the 34 cases of phase 2 again,
+  after the static checks, plus 18 two-writer cases on both parts: block RAM
+  only, 0 LUTs, 0 registers, 0 CRITICAL WARNINGs); static checks 23 of 23
+  (Vivado with and without `-assert`, Quartus Cyclone V); post-synthesis 44
+  of 44 (11 configurations x 2 parts x GHDL and xsim, RTL and netlist with
+  the same reads compared). Details in `docs/results/README.md`.
+- **Write/write collisions with mixed widths:** the UltraScale+ RAMB36E2
+  model corrupts the whole word of both ports, not only the overlap; the
+  7-series model corrupts only the overlap. Section 3.5 now makes every cell
+  of both writes undefined; post-synthesis found this (2 errors on
+  `xcku3p-ffva676-2-e` before the change).
 - **Vivado tool errors on the reference machine:** intermittent `couldn't
   read file` for installation files that exist, `invalid command name
   "rt-undefined"`, both in runs that launch the synthesis helper process

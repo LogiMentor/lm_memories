@@ -186,6 +186,84 @@ bram_tiles = 1
 lutram = 0
 max_registers = 200
 
+# Two-writer RAMs (lm_mem_ram_crw_crw, AMD architecture, and its wrappers).
+# Measured 2026-10-18; every case maps to block RAM primitives only
+# (RAMB36E1/RAMB18E1, RAMB36E2/RAMB18E2), with latency 2 absorbed in the
+# output register.
+
+[[expect]]
+case = "crw_crw_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_32x1024_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_32to8"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_8to32"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_32x1000"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_16x64"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+# One RAMB18 on both families.
+bram_tiles = 0.5
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "rw_rw_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "rw_rw_32x1024_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_cw_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
 # Static checks (fallback_check.toml): synthesis must stop at the check.
 # Vivado without synth_design -assert reports "[Synth 8-11323] assigned value
 # '1' out of range" at the line of the constant expect_failure_constant; with

@@ -68,6 +68,10 @@ All notable changes to this project are documented here.
   `lm_mem_ram_cr_cw_ratio` and the FIFOs. This was already documented; the
   core now asserts it, because the asymmetric RAM template (narrow address =
   wide address & sub-word index) needs it.
+- **Work directories of heavy runs:** `tools/vendor_synth` and
+  `sim/scripts/run_postsynth.py` work under `$LM_EDA_WORKDIR` (default
+  `lmeda` in the system temporary directory), no longer under
+  `$LM_MEM_BUILD_DIR`, and prune passing runs to their logs and reports.
 - **`tools/vendor_synth`** passes a case only when its results match
   `tools/vendor_synth/expected/<vendor>.toml`. Cases without expected results
   are `unchecked`, and a missing tool is `not-run`. The default output

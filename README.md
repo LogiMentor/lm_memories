@@ -111,7 +111,18 @@ python -m tools.manifest list --flow synth-amd --format tcl
 - Addresses at or beyond the depth (only possible when a depth is not a power
   of two) are undefined: reads return undefined data, and writes never change
   an address within the depth. The storage covers the next power of two
-  words.
+  words, so such a depth costs block RAM like the next power of two: for
+  example 32 x 5000 takes 8 RAMB36 on 7-series and 32 M10K on Cyclone V,
+  where a tiled storage would need about 5 and 20 (issue #5). An array of
+  exactly the depth was measured and rejected: it saved no block on 7-series
+  or Cyclone V and cost logic, Fmax and Quartus CRITICAL WARNINGs
+  (`docs/PLAN.md` section 3.13).
+- On UltraScale+, Vivado may implement a large one-clock memory in URAM
+  without any attribute (`Synth 8-6794`). URAM cannot be initialized from the
+  bitstream, needs output registers for Fmax, and has a different
+  read-during-write behaviour; URAM mappings are not verified by
+  post-synthesis simulation yet. A `g_ram_style` generic is proposed (PLAN
+  3.13) but not implemented.
 - Read during write on the same port, or on a common-clock simple dual-port
   RAM, returns the old data. Between different ports of a true dual-port RAM,
   and between ports on different clocks, it is undefined. This includes
@@ -120,7 +131,8 @@ python -m tools.manifest list --flow synth-amd --format tcl
   data.
 - Two writes to the same address from the two ports of a two-writer RAM, in
   the same cycle or less than one period of the slower clock apart, leave
-  the whole word written by each port undefined until the next write to it.
+  every cell of both writes undefined, the whole word written by each port,
+  until the next write to it.
   With mixed widths this includes the parts of the wide word that the narrow
   write did not touch (the UltraScale+ block RAM model corrupts the whole
   word). The simulation model reports every such collision with a warning
@@ -197,14 +209,19 @@ python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --eva
   case.
 - Sources come from the vendor's synthesis flow in the manifest.
 - Message limits are raised so the counts are complete.
-- Vivado's transient `couldn't read file` error is retried at most twice, and
-  the retries are recorded.
+- Tool failures that say nothing about the design are retried at most
+  twice, with one policy for every script (`tools/eda_retry.py`): `couldn't
+  read file`, `invalid command name "rt-undefined"`, and `synth_design
+  failed` without an error message. Every failed attempt is recorded; a
+  failure that persists is a `tool-error`.
 - Runs are sequential and hold the machine-wide lock described above.
-- Results go to `$LM_MEM_BUILD_DIR/vendor_synth`, or to
-  `lm_memories_build/vendor_synth` in the system temporary directory. Each run
-  writes `summary.md`, `summary.csv`, `summary.json`, and
-  `summary_public.json` (no local paths). The checked results are kept in
-  `docs/results/`.
+- Results go to `$LM_EDA_WORKDIR/vs` (default: `lmeda/vs` in the system
+  temporary directory; keep the path short, Vivado fails beyond 260
+  characters on Windows), or to `--work-root`. Each run writes `summary.md`,
+  `summary.csv`, `summary.json`, and `summary_public.json` (no local paths).
+  A passing case keeps only its log, reports and script; a failing one keeps
+  everything (`--keep-work` keeps everything always). The checked results
+  are kept in `docs/results/`.
 
 Jobs configure the tool with `executable`, `install_dir`, optional
 `setup_script`, or `command`. On Windows, point Vivado jobs at

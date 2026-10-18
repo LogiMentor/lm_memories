@@ -332,7 +332,12 @@ Undefined behaviour (excluded from the comparison, but counted):
   overlapping narrow words) where the two clock edges are less than one period
   of the slower clock apart.
 - Two writes to the same address (or overlapping words) on different ports,
-  in the same cycle or within the collision window.
+  in the same cycle or within the collision window. Every cell of both
+  writes becomes undefined: the whole word written by each port, also where a
+  wide and a narrow word only partly overlap. Post-synthesis simulation
+  showed why (section 3.12): after a 32-bit/8-bit collision the UltraScale+
+  RAMB36E2 model corrupts the whole 32-bit word, not only the byte that both
+  writes touch.
 - **Accesses at or beyond the depth** (possible only when a depth is not a
   power of two). A read returns undefined data. A write never changes an
   address within the depth. The cores contain no address comparison: the
@@ -340,7 +345,9 @@ Undefined behaviour (excluded from the comparison, but counted):
   next power of two words. The scoreboard and the simulation models raise a
   warning for these accesses: a write is ignored by the model, and a read is
   excluded from the comparison. Both are counted. This is a **breaking
-  change**: the previous model returned zeros (`CHANGELOG.md`).
+  change**: the previous model returned zeros (`CHANGELOG.md`). The cost of
+  the power-of-two storage was measured after phase 3 and the approach is
+  kept (section 3.13).
 
 How the scoreboard and the models handle collisions:
 
@@ -440,8 +447,11 @@ Confirmed defaults:
 - The script reads the effective value of each generic from the log
   (`Parameter <name> bound to: <value>`). The case fails if it differs from
   the requested value.
-- It retries at most twice, and only on "couldn't read file". Each retry is
-  recorded in the report.
+- Retries follow one policy for every script (`tools/eda_retry.py`): one
+  list of transient signatures (`couldn't read file`, `invalid command name
+  "rt-undefined"`, `synth_design failed` with no error but `[Common 17-69]`),
+  at most two retries, every failed attempt recorded, and `tool-error` if
+  the failure persists. Other failures are never retried.
 - Runs are sequential, one tool process at a time. Each run holds the
   machine-wide lock `lm_eda_heavy_tools.lock` in the system temporary
   directory (`tools/eda_lock.py`, fixed name, not tied to the repo), so
@@ -450,8 +460,13 @@ Confirmed defaults:
   lock is an operating-system lock on the file (`msvcrt.locking` on Windows,
   `flock` elsewhere), released when its holder exits, also after a crash. The
   script never terminates a process it did not start.
-- Logs and artefacts go outside the repo. The default is a folder under the
-  system temporary directory, changed with `--work-root` or `LM_MEM_BUILD_DIR`.
+- Logs and artefacts go outside the repo, under a short work directory
+  (`tools/eda_workdir.py`): `$LM_EDA_WORKDIR`, default `lmeda` in the system
+  temporary directory, with `vs/` for `vendor_synth` and `ps/` for the
+  post-synthesis runner; `--work-root` overrides it. Vivado fails on Windows
+  when the paths it derives under `.Xil` exceed 260 characters. After a
+  passing run only logs, reports and scripts stay; a failing run keeps
+  everything (`--keep-work` keeps everything always).
 - A tool that is not installed is reported as **NOT RUN**, never as pass.
 - Configurations: 32 x 1024, `lm_mem_ram_r_w` 16 x 64, FIFO 32 x 16, plus
   latency 2, ratio 32 -> 8 and 8 -> 32, and FIFO 32 x 1024.
@@ -648,6 +663,74 @@ Each phase ends with a report and waits for confirmation.
   exceeds 260-Byte` with deep work directories (Vivado doubles the path in
   `.Xil`). They are tool errors, never results: a run that did not reach
   elaboration is reported as `tool-error` by the expected-failure check.
+
+### 3.13 Decisions after phase 3
+
+Approved on 2026-10-18.
+
+**Depth that is not a power of two: the storage stays at the next power of
+two (approach 1).** Measured against an array of exactly `g_depth` words
+with a guarded index (approach 2), simple dual port, one clock, registered
+inputs and outputs:
+
+| Part | 32 x 1536 | 32 x 5000 | 36 x 3000 | 18 x 1100 |
+| --- | --- | --- | --- | --- |
+| `xc7a35tfgg484-2`, approach 1 | 2 RAMB36 | 8 | 4 | 1 |
+| `xc7a35tfgg484-2`, approach 2 | 2 (+2 LUT) | 8 (+10 LUT, Fmax 405 -> 334 MHz) | 4 (+3 LUT) | 1 (+3 LUT) |
+| `xcku3p-ffva676-2-e`, approach 1 | 2 | 7.5 | 1 URAM288 | 1 |
+| `xcku3p-ffva676-2-e`, approach 2 | 2 | 6.5 | 3 RAMB36 | 1 |
+| `5CEBA4F23C7`, approach 1 | 7 M10K | 32 | 18 | 4 |
+| `5CEBA4F23C7`, approach 2 | 7 (Fmax 275 -> 227 MHz) | 32 (254 -> 184 MHz) | 18 | 4 |
+
+- Approach 2 saves no block on 7-series and Cyclone V, and one RAMB18 on
+  UltraScale+ (32 x 5000). It costs 2 to 10 LUTs for the guard, Fmax down by
+  up to 17 % (7-series) and 28 % (Cyclone V), and in Quartus one or two
+  CRITICAL WARNINGs per case (`127004`: the generated memory initialization
+  file has the power-of-two depth and is truncated; `332148` for 18 x 1100).
+  The 0-CRITICAL-WARNING rule alone excludes it.
+- Cost of approach 1: a depth that is not a power of two pays for the next
+  power of two words in the tools' own mapping. The theoretical count with a
+  tiled storage is lower (32 x 5000: 5 RAMB36 instead of 8; about 20 M10K
+  instead of 32). Tiling is issue #5, not planned.
+
+**URAM on UltraScale+.** Vivado 2023.1 can map a memory to URAM without any
+attribute: `INFO: [Synth 8-6794] RAM (...) will be automatically implemented
+using URAM` for the 36 x 4096 storage of 36 x 3000 on `xcku3p-ffva676-2-e`.
+The expected results of `vivado_check.toml` are not affected (their
+memories are small), but users get URAM for large one-clock memories.
+What URAM means for lm_memories:
+- no initialization from the bitstream (AMD UG573), so no future
+  `g_init_file` on those memories;
+- one clock for both ports, fixed 72-bit width, 4K depth per block, no
+  mixed width: Vivado only chooses it for one-clock memories;
+- for Fmax the URAM output needs pipeline registers; with latency 1 the
+  measured case reached 588 MHz instead of 637 MHz with block RAM;
+- the read-during-write behaviour of URAM differs from block RAM
+  (`NO_CHANGE` only in AMD's own templates), and no URAM mapping has been
+  checked by post-synthesis simulation yet.
+
+**Proposal, not implemented: `g_ram_style`.** A generic on every RAM entity
+and FIFO, default `"auto"`, that sets the storage attributes of each tool:
+
+| `g_ram_style` | Vivado `ram_style` | Quartus `ramstyle` | Synplify / LSE `syn_ramstyle` |
+| --- | --- | --- | --- |
+| `"auto"` (default) | `"auto"` | not set (empty) | not set |
+| `"block"` | `"block"` | `"M10K"` / `"M9K"` / `"M20K"` per family, or `"no_rw_check"` free | `"block_ram"` |
+| `"distributed"` | `"distributed"` | `"MLAB"` | `"distributed"` |
+| `"ultra"` | `"ultra"` | rejected (static check) | rejected |
+| `"registers"` | `"registers"` | `"logic"` | `"registers"` |
+
+- The value is mapped by functions in `lm_mem_pkg`; each attribute is
+  declared on the storage signal of the cores (and of the vendor
+  architectures), with a globally static value.
+- Open points: whether each tool accepts an empty or `"auto"` value without
+  warnings, the Quartus block name per family, and a static check for
+  combinations the core cannot honour (for example `"ultra"` with two
+  clocks). Each value would need its own expected results.
+
+**Shared EDA lock:** approved in principle (public repository
+`lm-eda-lock`, a CLI for Tcl flows). It is implemented after PR #4 is
+merged, as separate work.
 
 ## Appendix: how the reproduction was run
 

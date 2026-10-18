@@ -26,8 +26,10 @@
 --  - Between the two ports, a read and a write of the same address, or two
 --    writes to the same address, are undefined when the two clock edges are
 --    less than one period of the slower clock apart. This also holds with a
---    common clock (lm_mem_ram_rw_rw). After two colliding writes the content
---    of that address is undefined until the next write to it.
+--    common clock (lm_mem_ram_rw_rw). After two colliding writes, the whole
+--    word written by each port is undefined until the next write to it; with
+--    mixed widths this includes the parts of the wide word that the narrow
+--    write did not touch.
 --  - Both output stages of a port are enabled by its enable and hold their
 --    value while it is low.
 --  - Addresses at or beyond the depth (possible only when the depth is not a

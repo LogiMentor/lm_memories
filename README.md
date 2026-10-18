@@ -111,8 +111,11 @@ python -m tools.manifest list --flow synth-amd --format tcl
   data.
 - Two writes to the same address from the two ports of a two-writer RAM, in
   the same cycle or less than one period of the slower clock apart, leave
-  that address undefined until the next write to it. The simulation model
-  reports every such collision with a warning and returns 'X'.
+  the whole word written by each port undefined until the next write to it.
+  With mixed widths this includes the parts of the wide word that the narrow
+  write did not touch (the UltraScale+ block RAM model corrupts the whole
+  word). The simulation model reports every such collision with a warning
+  and returns 'X'.
 
 ### Wrong generics and unsupported tools stop synthesis
 

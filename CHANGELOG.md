@@ -49,9 +49,11 @@ All notable changes to this project are documented here.
   the list from `manifests/lm_memories.toml`.
 - **Two writes to the same address from both ports** of a two-writer RAM, in
   the same cycle or less than one period of the slower clock apart, leave
-  that address undefined until the next write to it. The simulation model
-  warns and returns 'X' for it, and for a read that collides with an earlier
-  or simultaneous write of the other port (before: a deterministic value).
+  the whole word written by each port undefined until the next write to it,
+  with mixed widths also the untouched parts of the wide word. The simulation
+  model warns and returns 'X' for it, and for a read that collides with an
+  earlier or simultaneous write of the other port (before: a deterministic
+  value).
 - **Addresses at or beyond the depth** (possible only when a depth is not a
   power of two) are now undefined:
   - a read returns undefined data (before: zeros);

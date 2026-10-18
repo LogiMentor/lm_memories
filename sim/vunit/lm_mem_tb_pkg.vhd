@@ -17,8 +17,9 @@
 --    their clock edges are at the same instant (common clock) or less than
 --    the collision window apart (independent clocks).
 --  - Read/write collision: only that read is excluded.
---  - Write/write collision: the colliding cells become undefined; reads of
---    them are excluded until the next write without collision.
+--  - Write/write collision: every cell of both writes becomes undefined (the
+--    whole word of each port, also where the words only partly overlap);
+--    reads of them are excluded until the next write without collision.
 --  - A read and a write at the same instant on the same port, or on a
 --    common-clock simple dual-port RAM, return the old data (read-first).
 --  - An access at or beyond the depth: a write is ignored by the model, a
@@ -355,7 +356,6 @@ package body lm_mem_tb_pkg is
 
     procedure write(port_id : natural; base : natural; n : positive; data : std_logic_vector; t : time) is
       variable v_data : std_logic_vector(data'length - 1 downto 0) := data;
-      variable v_hit  : boolean;
       variable v_any  : boolean := false;
       variable v_c    : natural;
     begin
@@ -367,17 +367,26 @@ package body lm_mem_tb_pkg is
           severity warning;
         return;
       end if;
+      -- Write/write collision: a write of the other port in the window whose
+      -- cells overlap this write. Every cell of both writes becomes undefined,
+      -- not only the overlapping ones: with mixed widths, vendor models
+      -- corrupt the whole word of each port (UltraScale+ RAMB36E2). Cells of
+      -- the earlier write are marked only while that write is still their
+      -- last one. The result is the same whichever write is processed second.
+      for j in v_log'range loop
+        if v_log(j).used and (v_log(j).port_id /= port_id) and
+           f_overlap(v_log(j).base, v_log(j).n, base, n) and f_collide(v_log(j).t, t) then
+          v_any := true;
+          for k in 0 to v_log(j).n - 1 loop
+            v_c := v_log(j).base + k;
+            if (not f_overlap(v_c, 1, base, n)) and (v_cells(v_c).t_last = v_log(j).t) then
+              v_cells(v_c).undef := true;
+            end if;
+          end loop;
+        end if;
+      end loop;
       for i in 0 to n - 1 loop
         v_c := base + i;
-        -- Collision is decided per cell, so the result does not depend on
-        -- which of two colliding writes is processed second.
-        v_hit := false;
-        for j in v_log'range loop
-          if v_log(j).used and (v_log(j).port_id /= port_id) and
-             f_overlap(v_log(j).base, v_log(j).n, v_c, 1) and f_collide(v_log(j).t, t) then
-            v_hit := true;
-          end if;
-        end loop;
         if v_cells(v_c).t_last /= t then
           v_cells(v_c).prev         := v_cells(v_c).cur;
           v_cells(v_c).prev_written := v_cells(v_c).written;
@@ -387,13 +396,12 @@ package body lm_mem_tb_pkg is
         v_cells(v_c).cur(v_cell_w - 1 downto 0) := v_data((i + 1) * v_cell_w - 1 downto i * v_cell_w);
         v_cells(v_c).t_last  := t;
         v_cells(v_c).written := true;
-        v_cells(v_c).undef   := v_hit;
-        v_any := v_any or v_hit;
+        v_cells(v_c).undef   := v_any;
       end loop;
       if v_any then
         v_counts.coll_ww := v_counts.coll_ww + 1;
         report "lm_mem_tb_pkg: write/write collision on cells " & integer'image(base) &
-               " to " & integer'image(base + n - 1) & "; the colliding cells become undefined"
+               " to " & integer'image(base + n - 1) & "; the cells of both writes become undefined"
           severity warning;
       end if;
       v_log(v_log_wr) := (used => true, port_id => port_id, base => base, n => n, t => t);

@@ -347,7 +347,7 @@ How the scoreboard and the models handle collisions:
 | Collision | Effect in the scoreboard |
 | --- | --- |
 | Read/write | Only that read is excluded. The cell keeps the written value. |
-| Write/write | The cell becomes undefined. Reads of that address are excluded until the next valid write to it. |
+| Write/write | Every cell of both writes becomes undefined: the whole word of each port, also where a wide and a narrow word only partly overlap (phase 3: the UltraScale+ RAMB36E2 model corrupts the whole word). Reads of those cells are excluded until the next valid write to them. |
 
 - Each collision raises `assert ... severity warning` and is counted. The
   test report prints the number of collisions and of excluded reads by kind,
@@ -600,8 +600,8 @@ Each phase ends with a report and waits for confirmation.
   decided in one process execution. The collision window is the period of
   the slower clock, measured from the edges (the same as the harness
   window), and equality of instants when the periods are not known yet.
-  Write/write collision: warning, cells 'X' until the next write without
-  collision. Read/write collision: warning; the read returns 'X' when the
+  Write/write collision: warning, every cell of both writes 'X' (whole
+  words) until the next write without collision. Read/write collision: warning; the read returns 'X' when the
   write is at the same instant or earlier, a warning only when it is later
   (the data was already delivered). Accesses beyond the depth: warning, write
   ignored, read 'X'.

@@ -23,8 +23,9 @@
 --    edges. Two accesses from different ports to the same cell collide when
 --    their edges are less than one window apart, or at the same instant
 --    (common clock, or before the periods are known).
---  - Write/write collision: warning; the cell becomes undefined ('X') until
---    the next write to it without collision.
+--  - Write/write collision: warning; every cell of both writes becomes
+--    undefined ('X'), the whole word of each port also where the words only
+--    partly overlap, until the next write to it without collision.
 --  - Read/write collision: warning. A read whose colliding write is at the
 --    same instant or earlier returns 'X' for the colliding cells. A read whose
 --    colliding write comes later was already delivered; it only raises the
@@ -109,6 +110,7 @@ begin
     variable v_base_b   : natural;
     variable v_c        : natural;
     variable v_hit      : boolean;
+    variable v_w        : natural;
 
     impure function f_collide(t : time) return boolean is
     begin
@@ -189,7 +191,27 @@ begin
 
     -- Writes. A read of the other port earlier in the window was already
     -- delivered: warning only.
+    -- Write/write collision: a port B write in the window that overlaps this
+    -- port A write. Every cell of both writes becomes undefined: the whole
+    -- port A word, and the whole port B word of each overlapping cell while
+    -- that B write is still its last one.
     if v_wr_a_on then
+      v_hit := false;
+      for i in 0 to C_A_WORDS - 1 loop
+        v_c := v_base_a + i;
+        if (v_c < C_CELLS) and f_collide(v_wr_t_b(v_c)) then
+          v_hit := true;
+          v_w := (v_c / C_B_WORDS) * C_B_WORDS;
+          for k in 0 to C_B_WORDS - 1 loop
+            if (v_w + k < C_CELLS) and (v_wr_t_b(v_w + k) = v_wr_t_b(v_c)) then
+              v_undef(v_w + k) := true;
+            end if;
+          end loop;
+        end if;
+      end loop;
+      assert not v_hit
+        report "lm_mem_ram_crw_crw: port A and port B writes collide; data undefined"
+        severity warning;
       for i in 0 to C_A_WORDS - 1 loop
         v_c := v_base_a + i;
         if v_c >= C_CELLS then
@@ -197,10 +219,6 @@ begin
             report "lm_mem_ram_crw_crw: port A write beyond the depth; ignored"
             severity warning;
         else
-          v_hit := f_collide(v_wr_t_b(v_c));
-          assert not v_hit
-            report "lm_mem_ram_crw_crw: port A and port B writes collide; data undefined"
-            severity warning;
           assert not f_collide(v_rd_t_b(v_c))
             report "lm_mem_ram_crw_crw: port A write collides with an earlier port B read"
             severity warning;
@@ -212,6 +230,22 @@ begin
     end if;
 
     if v_wr_b_on then
+      v_hit := false;
+      for i in 0 to C_B_WORDS - 1 loop
+        v_c := v_base_b + i;
+        if (v_c < C_CELLS) and f_collide(v_wr_t_a(v_c)) then
+          v_hit := true;
+          v_w := (v_c / C_A_WORDS) * C_A_WORDS;
+          for k in 0 to C_A_WORDS - 1 loop
+            if (v_w + k < C_CELLS) and (v_wr_t_a(v_w + k) = v_wr_t_a(v_c)) then
+              v_undef(v_w + k) := true;
+            end if;
+          end loop;
+        end if;
+      end loop;
+      assert not v_hit
+        report "lm_mem_ram_crw_crw: port A and port B writes collide; data undefined"
+        severity warning;
       for i in 0 to C_B_WORDS - 1 loop
         v_c := v_base_b + i;
         if v_c >= C_CELLS then
@@ -219,10 +253,6 @@ begin
             report "lm_mem_ram_crw_crw: port B write beyond the depth; ignored"
             severity warning;
         else
-          v_hit := f_collide(v_wr_t_a(v_c));
-          assert not v_hit
-            report "lm_mem_ram_crw_crw: port A and port B writes collide; data undefined"
-            severity warning;
           assert not f_collide(v_rd_t_a(v_c))
             report "lm_mem_ram_crw_crw: port B write collides with an earlier port A read"
             severity warning;

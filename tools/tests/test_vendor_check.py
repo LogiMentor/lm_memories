@@ -105,8 +105,9 @@ class VendorRunTest(unittest.TestCase):
     self.fake = self.root / "fake_vivado.py"
     self.fake.write_text(FAKE_VIVADO, encoding="utf-8")
     self.spec = self.root / "spec.txt"
-    self.old_env = {k: os.environ.get(k) for k in ("FAKE_VIVADO", "TEMP", "TMP", "TMPDIR")}
+    self.old_env = {k: os.environ.get(k) for k in ("FAKE_VIVADO", "TEMP", "TMP", "TMPDIR", "LM_EDA_MIN_FREE_MB_SYNTH")}
     os.environ["FAKE_VIVADO"] = str(self.spec)
+    os.environ["LM_EDA_MIN_FREE_MB_SYNTH"] = "0"  # fake tools: no memory wait
     lockdir = self.root / "lockdir"
     lockdir.mkdir()
     for key in ("TEMP", "TMP", "TMPDIR"):

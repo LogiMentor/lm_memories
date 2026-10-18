@@ -6,6 +6,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import tools.eda_lock
 
 from tools.vendor_synth.cli import main
 
@@ -341,7 +344,10 @@ cases = ["infer_r_w_bram_32x1024"]
         encoding="utf-8",
       )
 
-      result = main(["--config", str(config)])
+      # Private lock: a unit test must not queue behind real EDA runs.
+      with mock.patch.object(tools.eda_lock, "default_lock_path", lambda: root / "test.lock"), \
+           mock.patch.dict(os.environ, {"LM_EDA_MIN_FREE_MB_SYNTH": "0"}):
+        result = main(["--config", str(config)])
 
       summary = json.loads((work / "summary.json").read_text(encoding="utf-8"))
       self.assertEqual(result, 1)

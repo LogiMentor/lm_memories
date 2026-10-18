@@ -175,7 +175,7 @@ def main() -> None:
   if listing:
     vu.main()
   else:
-    with heavy_tool_lock(f"VUnit {os.environ['VUNIT_SIMULATOR']}: {' '.join(argv) or 'all tests'}"):
+    with heavy_tool_lock(f"VUnit {os.environ['VUNIT_SIMULATOR']}: {' '.join(argv) or 'all tests'}", kind="simulation"):
       vu.main()
 
 

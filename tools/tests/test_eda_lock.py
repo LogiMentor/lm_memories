@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.eda_lock import TOKEN_ENV, LockTimeout, heavy_tool_lock
+from tools.eda_lock import TOKEN_ENV, LockTimeout, MemoryTimeout, free_physical_mb, heavy_tool_lock
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -27,7 +27,7 @@ import os, sys, time
 from pathlib import Path
 from tools.eda_lock import heavy_tool_lock
 path, mode = Path(sys.argv[1]), sys.argv[2]
-with heavy_tool_lock("other run", lock_path=path, poll_s=0.02, log=lambda m: None):
+with heavy_tool_lock("other run", lock_path=path, poll_s=0.02, log=lambda m: None, free_mb=lambda: 1e9):
   if mode == "wait":
     print("ready", flush=True)
     sys.stdin.read()
@@ -46,7 +46,7 @@ with heavy_tool_lock("other run", lock_path=path, poll_s=0.02, log=lambda m: Non
       f.write(f"end {os.getpid()}\n")
 if mode == "loop":
   for i in range(1, 8):
-    with heavy_tool_lock("other run", lock_path=path, poll_s=0.02, log=lambda m: None):
+    with heavy_tool_lock("other run", lock_path=path, poll_s=0.02, log=lambda m: None, free_mb=lambda: 1e9):
       with open(sys.argv[3], "a") as f:
         f.write(f"{i}\n")
       time.sleep(0.3)
@@ -63,6 +63,7 @@ class EdaLockTest(unittest.TestCase):
     self.tmp.cleanup()
 
   def _lock(self, **kwargs):
+    kwargs.setdefault("free_mb", lambda: 1e9)  # plenty of memory unless a test says otherwise
     return heavy_tool_lock("unit test", lock_path=self.path, log=self.messages.append, **kwargs)
 
   def _holder(self, *args: str, stdin=None, stdout_pipe: bool = False) -> subprocess.Popen:
@@ -137,6 +138,57 @@ class EdaLockTest(unittest.TestCase):
       pass
     self.assertFalse(stale.exists())
     self.assertEqual(list(self.path.parent.glob(f"{self.path.name}.q.*")), [])
+
+  def _env(self, **values: str):
+    from unittest import mock
+    return mock.patch.dict(os.environ, values)
+
+  def test_waits_for_memory_with_the_lock_held(self) -> None:
+    readings = iter([1000.0, 3000.0, 9000.0])
+    seen_while_waiting = []
+
+    def free() -> float:
+      if self.path.read_text(encoding="utf-8"):
+        seen_while_waiting.append(json.loads(self.path.read_text(encoding="utf-8")).get("state"))
+      return next(readings)
+
+    with self._env(LM_EDA_MIN_FREE_MB_SYNTH="8192"):
+      with self._lock(timeout_s=1, poll_s=0.01, kind="synthesis", free_mb=free):
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["state"], "running")
+    waiting = [m for m in self.messages if "waiting for memory" in m]
+    self.assertEqual(len(waiting), 1, self.messages)
+    self.assertIn("1000 MB free, 8192 MB required for a synthesis run (LM_EDA_MIN_FREE_MB_SYNTH)", waiting[0])
+    self.assertEqual(seen_while_waiting[0], "waiting for free memory")
+
+  def test_memory_timeout_releases_the_lock(self) -> None:
+    with self._env(LM_EDA_MIN_FREE_MB_SIM="2048", LM_EDA_MEMORY_TIMEOUT="0.2"):
+      with self.assertRaises(MemoryTimeout) as ctx:
+        with self._lock(timeout_s=1, poll_s=0.02, kind="simulation", free_mb=lambda: 500.0):
+          self.fail("the block must not run without enough memory")
+    self.assertIn("500 MB of physical memory free, 2048 MB required for a simulation run", str(ctx.exception))
+    self.assertNotIn(TOKEN_ENV, os.environ)
+    with self._lock(timeout_s=1, poll_s=0.02):
+      pass
+
+  def test_kind_selects_the_threshold(self) -> None:
+    with self._env(LM_EDA_MIN_FREE_MB_SYNTH="8192", LM_EDA_MIN_FREE_MB_SIM="2048"):
+      with self._lock(timeout_s=1, poll_s=0.01, kind="simulation", free_mb=lambda: 4000.0):
+        pass
+    self.assertFalse(any("waiting for memory" in m for m in self.messages))
+    with self.assertRaises(ValueError):
+      with self._lock(kind="place and route"):
+        pass
+
+  def test_unreadable_memory_does_not_block(self) -> None:
+    with self._lock(timeout_s=1, poll_s=0.01, free_mb=lambda: None):
+      pass
+    self.assertTrue(any("cannot be read" in m for m in self.messages))
+
+  def test_free_memory_is_readable_here(self) -> None:
+    free = free_physical_mb()
+    if sys.platform == "win32" or sys.platform.startswith("linux"):
+      self.assertIsNotNone(free)
+      self.assertGreater(free, 0)
 
   def test_child_with_token_does_not_wait(self) -> None:
     with self._lock(timeout_s=1):

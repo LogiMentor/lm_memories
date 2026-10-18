@@ -110,7 +110,15 @@ directory. Runs from different sessions on the same machine then wait for each
 other instead of running in parallel. A waiting run prints who holds the lock.
 Set the timeout with `LM_EDA_LOCK_TIMEOUT` (seconds, default 4 hours). The
 lock is an operating-system lock on that file, so it is released when its
-holder exits, also after a crash; no process is ever terminated.
+holder exits, also after a crash; no process is ever terminated. Waiting runs
+are served in order of arrival.
+
+Once a run holds the lock, it also waits until enough physical memory is
+free before it starts its tool: 8 GB for synthesis (`LM_EDA_MIN_FREE_MB_SYNTH`,
+in MB) and 2 GB for simulation (`LM_EDA_MIN_FREE_MB_SIM`). The timeout is
+`LM_EDA_MEMORY_TIMEOUT` (seconds, default 4 hours). Tools started by other
+projects do not take this lock; the memory check keeps a run from starting
+while they fill the memory.
 
 ## Local Vendor Synthesis
 

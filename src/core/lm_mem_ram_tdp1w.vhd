@@ -60,6 +60,18 @@ entity lm_mem_ram_tdp1w is
 end entity lm_mem_ram_tdp1w;
 
 architecture a_rtl of lm_mem_ram_tdp1w is
+  -- Static checks (lm_mem_pkg): elaboration stops at the line of the first
+  -- failing check, with its message where assertions are evaluated.
+  constant C_OK_A_LATENCY  : boolean := (g_a_latency = 1) or (g_a_latency = 2);
+  constant C_OK_B_LATENCY  : boolean := (g_b_latency = 1) or (g_b_latency = 2);
+  constant C_OK_INIT       : boolean := g_init_file = "";
+  constant C_MSG_A_LATENCY : string  := "lm_mem_ram_tdp1w: port A latency must be 1 or 2";
+  constant C_MSG_B_LATENCY : string  := "lm_mem_ram_tdp1w: port B latency must be 1 or 2";
+  constant C_MSG_INIT      : string  := "lm_mem_ram_tdp1w: initialization files are reserved for a future import step";
+  constant C_ERROR_A_LATENCY_NOT_1_OR_2    : t_static_check := f_static_check(C_OK_A_LATENCY, C_MSG_A_LATENCY);  -- ERROR: g_a_latency must be 1 or 2
+  constant C_ERROR_B_LATENCY_NOT_1_OR_2    : t_static_check := f_static_check(C_OK_B_LATENCY, C_MSG_B_LATENCY);  -- ERROR: g_b_latency must be 1 or 2
+  constant C_ERROR_INIT_FILE_NOT_SUPPORTED : t_static_check := f_static_check(C_OK_INIT, C_MSG_INIT);  -- ERROR: g_init_file must be ""
+
   constant C_STORAGE_DEPTH : positive := 2 ** f_ceil_log2(g_depth);
 
   type t_mem is array (0 to C_STORAGE_DEPTH - 1) of std_logic_vector(g_data_w - 1 downto 0);
@@ -70,18 +82,6 @@ architecture a_rtl of lm_mem_ram_tdp1w is
   signal s_data_rd_b    : std_logic_vector(g_data_w - 1 downto 0);
   signal s_data_rd_b_p  : std_logic_vector(g_data_w - 1 downto 0);
 begin
-  assert (g_a_latency = 1) or (g_a_latency = 2)
-    report "lm_mem_ram_tdp1w: port A latency must be 1 or 2"
-    severity failure;
-
-  assert (g_b_latency = 1) or (g_b_latency = 2)
-    report "lm_mem_ram_tdp1w: port B latency must be 1 or 2"
-    severity failure;
-
-  assert g_init_file = ""
-    report "lm_mem_ram_tdp1w: initialization files are reserved for a future import step"
-    severity failure;
-
   assert false
     report "lm_mem_ram_tdp1w: g_simulation is deprecated and ignored"
     severity note;

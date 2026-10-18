@@ -64,6 +64,22 @@ architecture a_rtl of lm_mem_ram_sdp is
   constant C_MIN_WIDTH     : positive := f_min(g_wr_data_w, g_rd_data_w);
   constant C_MAX_WIDTH     : positive := f_max(g_wr_data_w, g_rd_data_w);
   constant C_RATIO         : positive := C_MAX_WIDTH / C_MIN_WIDTH;
+
+  -- Static checks (lm_mem_pkg): elaboration stops at the line of the first
+  -- failing check, with its message where assertions are evaluated.
+  constant C_OK_LATENCY  : boolean := (g_rd_latency = 1) or (g_rd_latency = 2);
+  constant C_OK_RATIO    : boolean := ((C_MAX_WIDTH mod C_MIN_WIDTH) = 0) and f_is_power_of_two(C_RATIO);
+  constant C_OK_DEPTH    : boolean := ((g_wr_depth * g_wr_data_w) mod g_rd_data_w) = 0;
+  constant C_OK_INIT     : boolean := g_init_file = "";
+  constant C_MSG_LATENCY : string  := "lm_mem_ram_sdp: read latency must be 1 or 2";
+  constant C_MSG_RATIO   : string  := "lm_mem_ram_sdp: port widths must have a power-of-two ratio";
+  constant C_MSG_DEPTH   : string  := "lm_mem_ram_sdp: read depth must resolve to an integer";
+  constant C_MSG_INIT    : string  := "lm_mem_ram_sdp: initialization files are reserved for a future import step";
+  constant C_ERROR_RD_LATENCY_NOT_1_OR_2   : t_static_check := f_static_check(C_OK_LATENCY, C_MSG_LATENCY);  -- ERROR: g_rd_latency must be 1 or 2
+  constant C_ERROR_WIDTH_RATIO_NOT_POW2    : t_static_check := f_static_check(C_OK_RATIO, C_MSG_RATIO);  -- ERROR: port width ratio must be a power of two
+  constant C_ERROR_RD_DEPTH_NOT_INTEGER    : t_static_check := f_static_check(C_OK_DEPTH, C_MSG_DEPTH);  -- ERROR: g_wr_depth * g_wr_data_w / g_rd_data_w must be an integer
+  constant C_ERROR_INIT_FILE_NOT_SUPPORTED : t_static_check := f_static_check(C_OK_INIT, C_MSG_INIT);  -- ERROR: g_init_file must be ""
+
   constant C_RD_DEPTH      : positive := (g_wr_depth * g_wr_data_w) / g_rd_data_w;
   constant C_WR_WORDS      : positive := g_wr_data_w / C_MIN_WIDTH;
   constant C_RD_WORDS      : positive := g_rd_data_w / C_MIN_WIDTH;
@@ -80,22 +96,6 @@ architecture a_rtl of lm_mem_ram_sdp is
   signal s_rd_dat   : std_logic_vector(g_rd_data_w - 1 downto 0);
   signal s_rd_dat_p : std_logic_vector(g_rd_data_w - 1 downto 0);
 begin
-  assert (g_rd_latency = 1) or (g_rd_latency = 2)
-    report "lm_mem_ram_sdp: read latency must be 1 or 2"
-    severity failure;
-
-  assert ((C_MAX_WIDTH mod C_MIN_WIDTH) = 0) and f_is_power_of_two(C_RATIO)
-    report "lm_mem_ram_sdp: port widths must have a power-of-two ratio"
-    severity failure;
-
-  assert ((g_wr_depth * g_wr_data_w) mod g_rd_data_w) = 0
-    report "lm_mem_ram_sdp: read depth must resolve to an integer"
-    severity failure;
-
-  assert g_init_file = ""
-    report "lm_mem_ram_sdp: initialization files are reserved for a future import step"
-    severity failure;
-
   assert false
     report "lm_mem_ram_sdp: g_simulation is deprecated and ignored"
     severity note;

@@ -27,6 +27,20 @@ package lm_mem_pkg is
   function f_bin2gray(a : std_logic_vector) return std_logic_vector;
   function f_gray2bin(a : std_logic_vector) return std_logic_vector;
   function f_vector_or(slv : std_logic_vector) return std_logic;
+
+  -- Static checks. Every check of a generic is a pair, an assertion and a
+  -- constant outside its range, written as:
+  --   constant C_MSG_<CHECK>   : string := "<message>";
+  --   constant C_ERROR_<CHECK> : t_static_check := f_static_check(<ok>, C_MSG_<CHECK>);  -- <explanation>
+  -- f_static_check asserts ok with the message (severity failure), so
+  -- simulators and tools that evaluate assertions stop with it. It then
+  -- returns 1, outside the range of t_static_check, so elaboration stops
+  -- also in tools that ignore assertions: AMD Vivado without
+  -- synth_design -assert reports "[Synth 8-11323] assigned value '1' out of
+  -- range" at the line of the constant. Keep each C_ERROR declaration on one
+  -- line, with its comment, and before the declarations that depend on it.
+  subtype t_static_check is natural range 0 to 0;
+  function f_static_check(ok : boolean; msg : string) return natural;
 end package lm_mem_pkg;
 
 package body lm_mem_pkg is
@@ -80,6 +94,17 @@ package body lm_mem_pkg is
 
     return v_result;
   end function f_is_power_of_two;
+
+  function f_static_check(ok : boolean; msg : string) return natural is
+    variable v_result : natural := 1;
+  begin
+    assert ok report msg severity failure;
+    if ok then
+      v_result := 0;
+    end if;
+
+    return v_result;
+  end function f_static_check;
 
   function f_sel_a_b(sel : boolean; a, b : integer) return integer is
     variable v_result : integer := b;

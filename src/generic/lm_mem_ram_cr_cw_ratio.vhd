@@ -41,11 +41,12 @@ entity lm_mem_ram_cr_cw_ratio is
 end entity lm_mem_ram_cr_cw_ratio;
 
 architecture a_rtl of lm_mem_ram_cr_cw_ratio is
+  -- Static checks (lm_mem_pkg): elaboration stops at the line of the first
+  -- failing check, with its message where assertions are evaluated.
+  constant C_OK_A_LATENCY  : boolean := (g_ram_a_latency = 1) or (g_ram_a_latency = 2);
+  constant C_MSG_A_LATENCY : string  := "lm_mem_ram_cr_cw_ratio: port A latency must be 1 or 2";
+  constant C_ERROR_A_LATENCY_NOT_1_OR_2 : t_static_check := f_static_check(C_OK_A_LATENCY, C_MSG_A_LATENCY);  -- ERROR: g_ram_a_latency must be 1 or 2 (unused port A output, checked for compatibility)
 begin
-  assert (g_ram_a_latency = 1) or (g_ram_a_latency = 2)
-    report "lm_mem_ram_cr_cw_ratio: port A latency must be 1 or 2"
-    severity failure;
-
   inst_mem : entity work.lm_mem_ram_sdp
     generic map(
       g_wr_data_w  => g_ram_a_data_w,

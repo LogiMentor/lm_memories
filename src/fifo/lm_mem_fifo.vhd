@@ -54,6 +54,25 @@ architecture a_rtl of lm_mem_fifo is
   constant C_WR_ADD_BW  : natural := f_ceil_log2(g_wr_depth);
   constant C_MINWIDTH   : integer := f_min(g_wr_data_w, g_rd_data_w);
   constant C_MAXWIDTH   : integer := f_max(g_wr_data_w, g_rd_data_w);
+
+  -- Static checks (lm_mem_pkg): elaboration stops at the line of the first
+  -- failing check, with its message where assertions are evaluated.
+  constant C_OK_DEPTH_POW2  : boolean := f_is_power_of_two(g_wr_depth);
+  constant C_OK_LATENCY     : boolean := (g_rd_latency = 1) or (g_rd_latency = 2);
+  constant C_OK_RATIO       : boolean := (C_MAXWIDTH mod C_MINWIDTH) = 0;
+  constant C_OK_RD_DEPTH    : boolean := ((g_wr_depth * g_wr_data_w) mod g_rd_data_w) = 0;
+  constant C_OK_FWFT        : boolean := (not g_fwft) or (g_rd_latency = 1);
+  constant C_MSG_DEPTH_POW2 : string  := "lm_mem_fifo: g_wr_depth must be a power of two";
+  constant C_MSG_LATENCY    : string  := "lm_mem_fifo: g_rd_latency must be 1 or 2";
+  constant C_MSG_RATIO      : string  := "lm_mem_fifo: read/write widths must have an integer ratio";
+  constant C_MSG_RD_DEPTH   : string  := "lm_mem_fifo: read depth must resolve to an integer";
+  constant C_MSG_FWFT       : string  := "lm_mem_fifo: FWFT shall be used only with read latency 1";
+  constant C_ERROR_WR_DEPTH_NOT_POW2     : t_static_check := f_static_check(C_OK_DEPTH_POW2, C_MSG_DEPTH_POW2);  -- ERROR: g_wr_depth must be a power of two
+  constant C_ERROR_RD_LATENCY_NOT_1_OR_2 : t_static_check := f_static_check(C_OK_LATENCY, C_MSG_LATENCY);  -- ERROR: g_rd_latency must be 1 or 2
+  constant C_ERROR_WIDTH_RATIO_NOT_INT   : t_static_check := f_static_check(C_OK_RATIO, C_MSG_RATIO);  -- ERROR: read and write widths must have an integer ratio
+  constant C_ERROR_RD_DEPTH_NOT_INTEGER  : t_static_check := f_static_check(C_OK_RD_DEPTH, C_MSG_RD_DEPTH);  -- ERROR: g_wr_depth * g_wr_data_w / g_rd_data_w must be an integer
+  constant C_ERROR_FWFT_NEEDS_LATENCY_1  : t_static_check := f_static_check(C_OK_FWFT, C_MSG_FWFT);  -- ERROR: g_fwft requires g_rd_latency = 1
+
   constant C_RATIO      : integer := C_MAXWIDTH / C_MINWIDTH;
   constant C_DIFF       : integer := f_ceil_log2(C_MAXWIDTH / C_MINWIDTH);
   constant C_RD_DEPTH   : integer := f_sel_a_b(g_wr_data_w > g_rd_data_w, g_wr_depth * C_RATIO, g_wr_depth / C_RATIO);
@@ -95,28 +114,6 @@ architecture a_rtl of lm_mem_fifo is
   signal s_wadd_gray_r       : unsigned(C_ADD_BW_MAX downto 0) := (others => '0');
   signal s_radd_gray_r       : unsigned(C_ADD_BW_MAX downto 0) := (others => '0');
 begin
-  assert f_is_power_of_two(g_wr_depth)
-    report "lm_mem_fifo: g_wr_depth must be a power of two"
-    severity failure;
-
-  assert (g_rd_latency = 1) or (g_rd_latency = 2)
-    report "lm_mem_fifo: g_rd_latency must be 1 or 2"
-    severity failure;
-
-  assert (C_MAXWIDTH mod C_MINWIDTH) = 0
-    report "lm_mem_fifo: read/write widths must have an integer ratio"
-    severity failure;
-
-  assert (g_wr_depth * g_wr_data_w) mod g_rd_data_w = 0
-    report "lm_mem_fifo: read depth must resolve to an integer"
-    severity failure;
-
-  gen_fwft_latency_check : if g_fwft generate
-    assert g_rd_latency = 1
-      report "lm_mem_fifo: FWFT shall be used only with read latency 1"
-      severity failure;
-  end generate gen_fwft_latency_check;
-
   inst_dpram : entity work.lm_mem_ram_cr_cw_ratio
     generic map(
       g_ram_a_latency => g_rd_latency,

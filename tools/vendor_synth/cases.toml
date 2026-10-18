@@ -124,3 +124,137 @@ kind = "entity"
 entity = "lm_mem_fifo_async"
 description = "Asynchronous FIFO, 32 x 1024."
 generics = { g_data_w = 32, g_depth = 1024 }
+
+# Two writers: dual-model entity lm_mem_ram_crw_crw and its wrappers.
+
+[[cases]]
+name = "crw_crw_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "True dual port, two writers, two clocks, 32 x 1024, latency 1."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 32, g_ram_a_latency = 1, g_ram_b_latency = 1 }
+
+[[cases]]
+name = "crw_crw_32x1024_lat2"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "True dual port, two writers, 32 x 1024, latency 2 on both ports."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 32, g_ram_a_latency = 2, g_ram_b_latency = 2 }
+
+[[cases]]
+name = "crw_crw_32to8"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "True dual port, two writers, port A 32 x 1024, port B 8 bits."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 8, g_ram_a_latency = 1, g_ram_b_latency = 1 }
+
+[[cases]]
+name = "crw_crw_8to32"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "True dual port, two writers, port A 8 x 4096, port B 32 bits."
+generics = { g_ram_a_data_w = 8, g_ram_a_depth = 4096, g_ram_b_data_w = 32, g_ram_a_latency = 1, g_ram_b_latency = 1 }
+
+[[cases]]
+name = "crw_crw_32x1000"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "True dual port, two writers, depth that is not a power of two."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1000, g_ram_b_data_w = 32, g_ram_a_latency = 1, g_ram_b_latency = 1 }
+
+[[cases]]
+name = "crw_crw_16x64"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "Small true dual port, two writers, 16 x 64."
+generics = { g_ram_a_data_w = 16, g_ram_a_depth = 64, g_ram_b_data_w = 16, g_ram_a_latency = 1, g_ram_b_latency = 1 }
+
+[[cases]]
+name = "rw_rw_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_rw_rw"
+description = "Common-clock true dual port, two writers, 32 x 1024, latency 1."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+[[cases]]
+name = "rw_rw_32x1024_lat2"
+kind = "entity"
+entity = "lm_mem_ram_rw_rw"
+description = "Common-clock true dual port, two writers, 32 x 1024, latency 2."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 2 }
+
+[[cases]]
+name = "crw_cw_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_crw_cw"
+description = "Port A read/write, port B write only, two clocks, 32 x 1024."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+# Fallback architecture (src/vendor/unsupported): synthesis must stop. Used by
+# fallback_check.toml with the synth-unsupported flow.
+
+[[cases]]
+name = "fallback_crw_crw_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "Fallback architecture: synthesis must stop with the fallback message."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 32, g_ram_a_latency = 1, g_ram_b_latency = 1 }
+
+[[cases]]
+name = "fallback_rw_rw_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_rw_rw"
+description = "Fallback architecture through lm_mem_ram_rw_rw: synthesis must stop."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+[[cases]]
+name = "fallback_crw_cw_32x1024"
+kind = "entity"
+entity = "lm_mem_ram_crw_cw"
+description = "Fallback architecture through lm_mem_ram_crw_cw: synthesis must stop."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+# Wrong generics: synthesis must stop at the static check (assertion plus a
+# constant outside its range, lm_mem_pkg). Expected results name the check.
+
+[[cases]]
+name = "bad_r_w_latency3"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Wrong generic: read latency 3."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 3 }
+
+[[cases]]
+name = "bad_r_w_ratio_24to8"
+kind = "entity"
+entity = "lm_mem_ram_r_w_ratio"
+description = "Wrong generics: width ratio 3 (not a power of two)."
+generics = { g_ram_a_data_w = 24, g_ram_a_depth = 1024, g_ram_b_data_w = 8 }
+
+[[cases]]
+name = "bad_crw_cr_latency3"
+kind = "entity"
+entity = "lm_mem_ram_crw_cr"
+description = "Wrong generic: latency 3 on the one-writer true dual port."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 3 }
+
+[[cases]]
+name = "bad_crw_crw_latency3"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "Wrong generic: port B latency 3 on the two-writer RAM."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 32, g_ram_a_latency = 1, g_ram_b_latency = 3 }
+
+[[cases]]
+name = "bad_crw_crw_ratio_24to8"
+kind = "entity"
+entity = "lm_mem_ram_crw_crw"
+description = "Wrong generics: width ratio 3 on the two-writer RAM."
+generics = { g_ram_a_data_w = 24, g_ram_a_depth = 1024, g_ram_b_data_w = 8, g_ram_a_latency = 1, g_ram_b_latency = 1 }
+
+[[cases]]
+name = "bad_fifo_sync_depth24"
+kind = "entity"
+entity = "lm_mem_fifo_sync"
+description = "Wrong generic: FIFO depth 24 (not a power of two)."
+generics = { g_data_w = 32, g_depth = 24 }

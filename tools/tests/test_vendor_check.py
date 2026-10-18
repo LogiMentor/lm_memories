@@ -207,5 +207,102 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(len(result["retries"]), 2)
 
 
+class ExpectedFailureTest(unittest.TestCase):
+  EXPECT = {"expect_failure": ["no validated two-writer RAM architecture"],
+            "expect_failure_constant": "C_LM_MEM_TDP_NOT_SUPPORTED"}
+  SOURCE = ("library ieee;\n"
+            "architecture a_rtl of e is\n"
+            "  constant C_OK : boolean := false;\n"
+            "  constant C_LM_MEM_TDP_NOT_SUPPORTED : t_static_check := f_static_check(C_OK);  -- ERROR: why\n"
+            "begin\n"
+            "end architecture;\n")
+
+  def setUp(self) -> None:
+    self.tmp = tempfile.TemporaryDirectory()
+    self.src = Path(self.tmp.name) / "fallback.vhd"
+    self.src.write_text(self.SOURCE, encoding="utf-8")
+    self.other = Path(self.tmp.name) / "other.vhd"
+    self.other.write_text(self.SOURCE, encoding="utf-8")
+
+  def tearDown(self) -> None:
+    self.tmp.cleanup()
+
+  def _range_error(self, path: Path, line: int) -> str:
+    return (f"Command: synth_design -top e\n"
+            f"ERROR: [Synth 8-11323] assigned value '1' out of range [{path.as_posix()}:{line}]\n"
+            f"ERROR: [Synth 8-285] failed synthesizing module 'e' [{path.as_posix()}:2]\n"
+            f"ERROR: [Common 17-69] Command failed: Vivado Synthesis failed\n")
+
+  def test_vivado_range_error_at_the_constant_passes(self) -> None:
+    problems, facts = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src])
+    self.assertEqual(problems, [])
+    self.assertEqual(facts["check_lines"], [f"{self.src.as_posix()}:4"])
+    self.assertIn("Synth 8-11323", facts["fallback_messages"][0])
+
+  def test_vivado_range_error_elsewhere_fails(self) -> None:
+    for log in (self._range_error(self.src, 3), self._range_error(self.other, 4)):
+      problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])
+      self.assertEqual(len(problems), 1, problems)
+      self.assertIn("names the failing check", problems[0])
+
+  def test_tool_failure_before_elaboration_is_not_elaborated(self) -> None:
+    log = ("Command: synth_design -top e -assert\n"
+           "ERROR: [Common 17-680] Path length exceeds 260-Byte maximum allowed by Windows: C:/x\n"
+           "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed\n")
+    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])
+    self.assertTrue(problems)
+    self.assertFalse(facts["elaborated"])
+    _, facts = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src])
+    self.assertTrue(facts["elaborated"])
+
+  def test_missing_constant_in_sources_fails(self) -> None:
+    problems, _ = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [])
+    self.assertTrue(any("not found in the compiled sources" in p for p in problems))
+
+  def test_vivado_stop_with_fallback_message_passes(self) -> None:
+    log = ('Command: synth_design -top lm_mem_ram_crw_crw\n'
+           'ERROR: [Synth 8-63] RTL assertion: "lm_mem_ram_crw_crw: no validated two-writer RAM architecture '
+           'for this tool." [x.vhd:31]\n'
+           'ERROR: [Common 17-69] Command failed: Synthesis failed\n')
+    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])
+    self.assertEqual(problems, [])
+    self.assertTrue(facts["stopped"])
+    self.assertEqual(len(facts["fallback_messages"]), 1)
+
+  def test_completed_synthesis_fails(self) -> None:
+    log = "Command: synth_design\nsynth_design completed successfully\n"
+    problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])
+    self.assertEqual(len(problems), 2)
+
+  def test_quartus_stop_with_constant_message_passes(self) -> None:
+    log = ('Error (10405): VHDL error at x.vhd(30): value "1" is out of target constraint range (0 to 0) '
+           'for C_LM_MEM_TDP_NOT_SUPPORTED\n'
+           'Error: Quartus Prime Analysis & Synthesis was unsuccessful. 1 error, 0 warnings\n')
+    problems, facts = check.check_expected_failure("quartus", log, self.EXPECT, [self.src])
+    self.assertEqual(problems, [])
+    self.assertEqual(len(facts["errors"]), 2)
+
+  def test_stop_without_fallback_message_fails(self) -> None:
+    log = "Error (12006): Node instance inst instantiates undefined entity foo\n"
+    problems, _ = check.check_expected_failure("quartus", log, self.EXPECT, [self.src])
+    self.assertEqual(len(problems), 1)
+    self.assertIn("names the failing check", problems[0])
+
+  def test_quartus_success_fails(self) -> None:
+    log = "Info: Quartus Prime Analysis & Synthesis was successful. 0 errors, 3 warnings\n"
+    problems, _ = check.check_expected_failure("quartus", log, self.EXPECT, [self.src])
+    self.assertIn("synthesis completed", problems[0])
+
+  def test_every_expected_constant_exists_in_its_flow(self) -> None:
+    from tools.manifest import load
+    sources = {flow: [s.path for s in load().files(flow)] for flow in ("synth-amd", "synth-intel", "synth-unsupported")}
+    for vendor, flows in (("amd", ("synth-amd", "synth-unsupported")), ("intel", ("synth-intel",))):
+      for entry in check.load_expected(vendor)["expect"]:
+        name = entry.get("expect_failure_constant")
+        if name:
+          found = [p for flow in flows for p in check.locate_constant(name, sources[flow])]
+          self.assertTrue(found, f"{vendor} {entry['case']}: {name} not declared in {flows}")
+
+
 if __name__ == "__main__":
   unittest.main()

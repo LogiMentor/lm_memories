@@ -691,7 +691,8 @@ def _render_top(job: dict[str, Any], case: dict[str, Any], entity: str) -> str:
 def _source_files_for(job: dict[str, Any], case: dict[str, Any]) -> list[Path]:
   """Library sources from the manifest flow of the job's vendor."""
   vendor = _vendor(job)
-  flow = MANIFEST_FLOWS.get(vendor)
+  # manifest_flow: e.g. "synth-unsupported", to check the fallback with any tool.
+  flow = job.get("manifest_flow") or MANIFEST_FLOWS.get(vendor)
   if flow is None:
     raise SystemExit(f"{_job_name(job)}: no manifest flow for vendor {vendor}")
   tool = MANIFEST_TOOLS.get(_tool(job))
@@ -717,6 +718,8 @@ def _vivado_script(
   limit_lines = "\n".join(f"set_msg_config -id {{{msg_id}}} -limit 1000000" for msg_id in unlimited_ids)
   # Generics go into the script, never through a command line (cmd.exe splits
   # arguments on '='), and are read back from the log afterwards.
+  # assert = true: Vivado evaluates VHDL assertions (synth_design -assert).
+  assert_arg = " -assert" if job.get("assert") else ""
   generic_args = "".join(
     f" -generic {{{name}={_tcl_generic(value)}}}" for name, value in (generics or {}).items()
   )
@@ -727,7 +730,7 @@ file mkdir [file join $script_dir reports]
 catch {{ set_param messaging.defaultLimit 1000000 }}
 {limit_lines}
 {source_lines}
-synth_design -mode out_of_context -top {top} -part {{{part}}}{generic_args}
+synth_design -mode out_of_context -top {top} -part {{{part}}}{generic_args}{assert_arg}
 report_utilization -file {{{_tcl_path(reports / "utilization.rpt")}}}
 catch {{ report_ram_utilization -file {{{_tcl_path(reports / "ram_utilization.rpt")}}} }}
 exit
@@ -744,7 +747,22 @@ def _tcl_generic(value: Any) -> str:
   return str(value)
 
 
-def _quartus_script(job: dict[str, Any], top: str, sources: list[Path], script: Path, reports: Path) -> list[str]:
+def _quartus_generic(value: Any) -> str:
+  if isinstance(value, bool):
+    return "true" if value else "false"
+  if isinstance(value, str):
+    return '"\\"' + value + '\\""'
+  return str(value)
+
+
+def _quartus_script(
+  job: dict[str, Any],
+  top: str,
+  sources: list[Path],
+  script: Path,
+  reports: Path,
+  generics: dict[str, Any] | None = None,
+) -> list[str]:
   family = job.get("family")
   if not family:
     raise SystemExit(f"{_job_name(job)}: Quartus jobs require family")
@@ -752,6 +770,12 @@ def _quartus_script(job: dict[str, Any], top: str, sources: list[Path], script: 
   project = _sanitize(_job_name(job)) + "_" + top
   source_lines = "\n".join(f"set_global_assignment -name VHDL_FILE {{{_tcl_path(path)}}}" for path in sources)
   device_line = f"set_global_assignment -name DEVICE {{{device}}}\n" if device else ""
+  # Generics go into the script, as for Vivado.
+  parameter_lines = "".join(
+    f"set_parameter -name {name} {_quartus_generic(value)}\n" for name, value in (generics or {}).items()
+  )
+  # quartus_flow: "map" (Analysis & Synthesis, the default) or "compile".
+  run_line = "execute_module -tool map" if job.get("quartus_flow", "map") == "map" else "execute_flow -compile"
   text = f"""# SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 load_package flow
@@ -760,7 +784,7 @@ set_global_assignment -name FAMILY {{{family}}}
 {device_line}set_global_assignment -name TOP_LEVEL_ENTITY {top}
 set_global_assignment -name VHDL_INPUT_VERSION VHDL_2008
 {source_lines}
-execute_flow -compile
+{parameter_lines}{run_line}
 project_close
 """
   script.write_text(text, encoding="utf-8")
@@ -864,7 +888,7 @@ def _tool_script(
   if tool in ("vivado", "xilinx"):
     return _vivado_script(job, top, sources, script, reports, generics)
   if tool in ("quartus", "intel", "altera"):
-    return _quartus_script(job, top, sources, script, reports)
+    return _quartus_script(job, top, sources, script, reports, generics)
   if tool == "diamond":
     return _diamond_script(job, top, sources, script, reports)
   if tool == "radiant":
@@ -937,9 +961,24 @@ def _default_executable(job: dict[str, Any]) -> str:
   }.get(_tool(job), _tool(job))
 
 
-def _evaluate(job: dict[str, Any], case: dict[str, Any], top: str, log_text: str, reports: Path) -> dict[str, Any]:
+def _evaluate(
+  job: dict[str, Any],
+  case: dict[str, Any],
+  top: str,
+  log_text: str,
+  reports: Path,
+  sources: list[Path] | None = None,
+) -> dict[str, Any]:
   """Compare the results of one run with the expected results."""
   tool = _tool(job)
+  part = str(job.get("part") or job.get("device") or "")
+  expectation = check.find_expectation(check.load_expected(_vendor(job)), case["name"], part)
+  if expectation is not None and ("expect_failure" in expectation or "expect_failure_constant" in expectation):
+    problems, facts = check.check_expected_failure(tool, log_text, expectation, sources)
+    log = check.parse_vivado_log(log_text, top) if tool in ("vivado", "xilinx") else {}
+    # A tool that stopped before elaborating the design says nothing about the check.
+    status = "pass" if not problems else ("fail" if facts["elaborated"] else "tool-error")
+    return {"status": status, "problems": problems, "metrics": facts, "log": log}
   if tool not in ("vivado", "xilinx"):
     return {"status": "unchecked", "problems": [f"no result extraction for tool {tool} yet"], "metrics": {}, "log": {}}
   log = check.parse_vivado_log(log_text, top)
@@ -951,9 +990,8 @@ def _evaluate(job: dict[str, Any], case: dict[str, Any], top: str, log_text: str
     return {"status": "tool-error", "problems": problems, "metrics": metrics, "log": log}
   if case.get("kind") == "entity":
     problems += check.check_generics(case.get("generics", {}), log["generics"])
-  expectation = check.find_expectation(check.load_expected(_vendor(job)), case["name"], str(job.get("part", "")))
   if expectation is None:
-    problems.append(f"no expected results for case {case['name']} on {job.get('part')}")
+    problems.append(f"no expected results for case {case['name']} on {part}")
     return {"status": "unchecked", "problems": problems, "metrics": metrics, "log": log}
   problems += check.compare(metrics, log, expectation)
   return {"status": "fail" if problems else "pass", "problems": problems, "metrics": metrics, "log": log}
@@ -1016,7 +1054,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
       result.update(status="not-run", completed_at=result["started_at"], message="no previous run to evaluate")
       result["problems"] = [result["message"]]
       return result
-    evaluation = _evaluate(job, case, top, log_file.read_text(encoding="utf-8", errors="ignore"), reports)
+    evaluation = _evaluate(job, case, top, log_file.read_text(encoding="utf-8", errors="ignore"), reports, sources)
     log = evaluation["log"]
     result.update(
       status=evaluation["status"], problems=evaluation["problems"], metrics=evaluation["metrics"],
@@ -1041,7 +1079,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
       handle.flush()
       try:
         # Machine-wide lock: one heavy EDA run at a time, across sessions.
-        with heavy_tool_lock(f"{_tool(job)} {_job_name(job)} {case['name']}"):
+        with heavy_tool_lock(f"{_tool(job)} {_job_name(job)} {case['name']}", kind="synthesis"):
           process = subprocess.run(
             command,
             cwd=case_dir,
@@ -1069,8 +1107,10 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     return result
 
   text = log_file.read_text(encoding="utf-8", errors="ignore")
-  evaluation = _evaluate(job, case, top, text, reports)
-  if result["return_code"] not in (0, None) and evaluation["status"] == "pass":
+  evaluation = _evaluate(job, case, top, text, reports, sources)
+  # A non-zero exit code is expected when the tool must stop (fallback).
+  expected_stop = "stopped" in evaluation["metrics"]
+  if result["return_code"] not in (0, None) and evaluation["status"] == "pass" and not expected_stop:
     evaluation["status"] = "fail"
     evaluation["problems"].append(f"tool exit code {result['return_code']}")
   log = evaluation["log"]

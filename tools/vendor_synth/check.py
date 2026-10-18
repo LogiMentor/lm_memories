@@ -168,3 +168,87 @@ def compare(metrics: dict[str, Any], log: dict[str, Any], expectation: dict[str,
   if log["limited_messages"]:
     problems.append("message limit reached for " + ", ".join(log["limited_messages"]) + "; counts are not complete")
   return problems
+
+
+_VIVADO_RANGE_RE = re.compile(r"Synth 8-11323\].*\[(?P<path>[^\]]+):(?P<line>\d+)\]")
+
+
+def locate_constant(name: str, sources: list[Path]) -> list[tuple[Path, int, int]]:
+  """Declarations of a VHDL constant: (file, first line, last line), 1-based."""
+  found = []
+  decl = re.compile(r"^\s*constant\s+" + re.escape(name) + r"\s*:", re.IGNORECASE)
+  for path in sources:
+    try:
+      lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+      continue
+    for i, line in enumerate(lines):
+      if decl.match(line):
+        last = i
+        while ";" not in lines[last].split("--")[0] and last + 1 < len(lines):
+          last += 1
+        found.append((path, i + 1, last + 1))
+  return found
+
+
+def _same_file(reported: str, path: Path) -> bool:
+  a = reported.replace("\\", "/").lower()
+  b = path.as_posix().lower()
+  return a.endswith(b) or b.endswith(a)
+
+
+def check_expected_failure(
+  tool: str,
+  log_text: str,
+  expectation: dict[str, Any],
+  sources: list[Path] | None = None,
+) -> tuple[list[str], dict[str, Any]]:
+  """Expected result "synthesis stops with this message".
+
+  Passes only when synthesis did not complete and a tool message names the
+  failing check. Accepted messages:
+  - a line with one of the texts in expect_failure (the assertion message,
+    printed by Quartus, and by Vivado with synth_design -assert);
+  - for expect_failure_constant: a line with the constant name, or a Vivado
+    "[Synth 8-11323] ... out of range" error at the file and line where that
+    constant is declared (Vivado without -assert).
+  Returns (problems, facts); facts holds the tool's actual messages.
+  """
+  raw = expectation.get("expect_failure", [])
+  wanted = [str(raw)] if isinstance(raw, str) else [str(item) for item in raw]
+  constant = expectation.get("expect_failure_constant")
+  places = locate_constant(constant, sources or []) if constant else []
+  if constant:
+    wanted.append(str(constant))
+  lines = [line for line in log_text.splitlines() if not line.startswith("#")]
+  if tool in ("quartus", "intel", "altera"):
+    errors = [line.strip() for line in lines if line.lstrip().startswith("Error")]
+    completed = any("Analysis & Synthesis was successful" in line for line in lines)
+  else:
+    errors = [line for line in lines if line.startswith("ERROR:")]
+    completed = any("synth_design completed successfully" in line for line in lines)
+
+  def names_the_check(line: str) -> bool:
+    if any(text in line for text in wanted):
+      return True
+    match = _VIVADO_RANGE_RE.search(line)
+    return bool(match) and any(_same_file(match["path"], path) and first <= int(match["line"]) <= last
+                               for path, first, last in places)
+
+  carrying = [line.strip() for line in lines if names_the_check(line)]
+  problems = []
+  if constant and not places:
+    problems.append(f"constant {constant} not found in the compiled sources")
+  if completed:
+    problems.append("synthesis completed, but it was expected to stop")
+  if not carrying:
+    where = [f"{p.as_posix()}:{a}" for p, a, _ in places]
+    problems.append("no tool message names the failing check (expected: " + " or ".join(repr(t) for t in wanted)
+                    + (f", or Synth 8-11323 at {', '.join(where)}" if where else "") + ")")
+  # Did the tool reach the design at all? If not, its stop says nothing about the check.
+  markers = ("Elaborating entity", "Error (10652)") if tool in ("quartus", "intel", "altera") else (
+    "synthesizing module", "RTL assertion", "Synth 8-11323")
+  elaborated = bool(carrying) or any(marker in line for line in lines for marker in markers)
+  facts = {"stopped": not completed, "elaborated": elaborated, "fallback_messages": carrying[:3], "errors": errors[:5],
+           "check_lines": [f"{p.as_posix()}:{a}" for p, a, _ in places]}
+  return problems, facts

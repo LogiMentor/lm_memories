@@ -7,10 +7,13 @@ sessions on the same machine queue up instead of running in parallel. The
 lock is a file with a fixed name in the system temporary directory, not tied
 to any repository, so other projects can use the same file to queue with us.
 
-- The lock file holds JSON describing the holder (pid, host, user, purpose,
-  command, start time); a waiting process prints it.
-- A lock left by a process that no longer exists on this host is stale and
-  is removed. No process is ever terminated.
+- The lock is an operating-system lock on that file (msvcrt.locking on
+  Windows, flock elsewhere). The operating system releases it when the holder
+  exits, also after a crash, so there is no stale-lock cleanup and no window
+  where two waiters can both take it. No process is ever terminated.
+- The file holds JSON describing the holder (pid, host, user, purpose,
+  command, start time); a waiting process prints it. The file itself is never
+  deleted.
 - Timeout: argument, or LM_EDA_LOCK_TIMEOUT (seconds), default 4 hours.
 - Child processes of the holder inherit LM_EDA_LOCK_TOKEN and do not wait
   for the lock their parent already holds.
@@ -35,6 +38,9 @@ LOCK_NAME = "lm_eda_heavy_tools.lock"
 TOKEN_ENV = "LM_EDA_LOCK_TOKEN"
 TIMEOUT_ENV = "LM_EDA_LOCK_TIMEOUT"
 DEFAULT_TIMEOUT_S = 4 * 3600.0
+# Windows locks are mandatory: lock one byte far past the holder record, so
+# waiters can still read the record.
+_WIN_LOCK_OFFSET = 1 << 30
 
 
 class LockTimeout(TimeoutError):
@@ -45,39 +51,42 @@ def default_lock_path() -> Path:
   return Path(tempfile.gettempdir()) / LOCK_NAME
 
 
-def _pid_alive(pid: int) -> bool:
-  """True if a process with this pid exists on this host. Never signals it."""
-  if pid <= 0:
-    return False
+def _try_lock(fd: int) -> bool:
   if sys.platform == "win32":
-    import ctypes
-    from ctypes import wintypes
+    import msvcrt
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.OpenProcess.restype = wintypes.HANDLE
-    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
-    kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
-    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
-    process_query_limited_information = 0x1000
-    still_active = 259
-    error_access_denied = 5
-    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
-    if not handle:
-      return ctypes.get_last_error() == error_access_denied
+    os.lseek(fd, _WIN_LOCK_OFFSET, os.SEEK_SET)
     try:
-      code = wintypes.DWORD()
-      if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
-        return True
-      return code.value == still_active
-    finally:
-      kernel32.CloseHandle(handle)
-  try:
-    os.kill(pid, 0)  # POSIX: signal 0 only checks existence.
-  except ProcessLookupError:
-    return False
-  except PermissionError:
+      msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+    except OSError:
+      return False
     return True
+  import fcntl
+
+  try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+  except BlockingIOError:
+    return False
   return True
+
+
+def _unlock(fd: int) -> None:
+  if sys.platform == "win32":
+    import msvcrt
+
+    os.lseek(fd, _WIN_LOCK_OFFSET, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+  else:
+    import fcntl
+
+    fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+def _write_record(fd: int, record: dict | None) -> None:
+  os.ftruncate(fd, 0)
+  if record is not None:
+    os.lseek(fd, 0, os.SEEK_SET)
+    os.write(fd, json.dumps(record).encode("utf-8"))
 
 
 def _read_holder(path: Path) -> dict | None:
@@ -126,43 +135,30 @@ def heavy_tool_lock(
   }
   deadline = time.monotonic() + timeout_s
   announced = False
-  while True:
-    try:
-      fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError:
+  fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o666)
+  try:
+    while not _try_lock(fd):
       holder = _read_holder(path)
-      if holder and holder.get("host") == info["host"] and not _pid_alive(int(holder.get("pid", -1))):
-        log(f"[eda-lock] removing stale lock {path}: {describe(holder)} (process no longer exists)")
-        try:
-          path.unlink()
-        except FileNotFoundError:
-          pass
-        continue
       if time.monotonic() >= deadline:
         raise LockTimeout(f"[eda-lock] gave up after {timeout_s:.0f} s waiting for {path}, held by {describe(holder)}")
       if not announced:
         log(f"[eda-lock] waiting for {path}, held by {describe(holder)}")
         announced = True
       time.sleep(min(poll_s, max(0.05, deadline - time.monotonic())))
-      continue
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-      json.dump(info, handle)
-    break
+    _write_record(fd, info)
 
-  log(f"[eda-lock] acquired {path} for '{purpose}'")
-  previous = os.environ.get(TOKEN_ENV)
-  os.environ[TOKEN_ENV] = token
-  try:
-    yield path
+    log(f"[eda-lock] acquired {path} for '{purpose}'")
+    previous = os.environ.get(TOKEN_ENV)
+    os.environ[TOKEN_ENV] = token
+    try:
+      yield path
+    finally:
+      if previous is None:
+        os.environ.pop(TOKEN_ENV, None)
+      else:
+        os.environ[TOKEN_ENV] = previous
+      _write_record(fd, None)
+      _unlock(fd)
+      log(f"[eda-lock] released {path}")
   finally:
-    if previous is None:
-      os.environ.pop(TOKEN_ENV, None)
-    else:
-      os.environ[TOKEN_ENV] = previous
-    holder = _read_holder(path)
-    if holder and holder.get("token") == token:
-      try:
-        path.unlink()
-      except FileNotFoundError:
-        pass
-    log(f"[eda-lock] released {path}")
+    os.close(fd)

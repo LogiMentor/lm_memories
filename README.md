@@ -108,9 +108,9 @@ Synthesis runs (`tools/vendor_synth`) and the VUnit runner take a
 machine-wide lock file, `lm_eda_heavy_tools.lock`, in the system temporary
 directory. Runs from different sessions on the same machine then wait for each
 other instead of running in parallel. A waiting run prints who holds the lock.
-Set the timeout with `LM_EDA_LOCK_TIMEOUT` (seconds, default 4 hours). A lock
-left by a process that no longer exists is removed automatically; no process
-is ever terminated.
+Set the timeout with `LM_EDA_LOCK_TIMEOUT` (seconds, default 4 hours). The
+lock is an operating-system lock on that file, so it is released when its
+holder exits, also after a crash; no process is ever terminated.
 
 ## Local Vendor Synthesis
 

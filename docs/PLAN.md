@@ -446,9 +446,10 @@ Confirmed defaults:
   machine-wide lock `lm_eda_heavy_tools.lock` in the system temporary
   directory (`tools/eda_lock.py`, fixed name, not tied to the repo), so
   sessions on the same machine queue up. The timeout is set with
-  `LM_EDA_LOCK_TIMEOUT`, and a waiting run prints who holds the lock. A
-  stale lock is removed only if its process no longer exists. The script never
-  terminates a process it did not start.
+  `LM_EDA_LOCK_TIMEOUT`, and a waiting run prints who holds the lock. The
+  lock is an operating-system lock on the file (`msvcrt.locking` on Windows,
+  `flock` elsewhere), released when its holder exits, also after a crash. The
+  script never terminates a process it did not start.
 - Logs and artefacts go outside the repo. The default is a folder under the
   system temporary directory, changed with `--work-root` or `LM_MEM_BUILD_DIR`.
 - A tool that is not installed is reported as **NOT RUN**, never as pass.

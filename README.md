@@ -81,6 +81,15 @@ python sim/vunit/run.py -p 4
 They compare every RAM read with a scoreboard and, cycle by cycle, with a
 frozen copy of the previous RAM model (`sim/ref/`).
 
+The two-writer RAMs are also simulated after synthesis on AMD: Vivado writes
+a functional netlist of each configuration (`write_vhdl -mode funcsim`), and
+the same harness and scoreboard run on it with GHDL (UNISIM analyzed from the
+Vivado sources) and with xsim:
+
+```sh
+python sim/scripts/run_postsynth.py      # needs Vivado; xc7a35t and xcku3p, GHDL and xsim
+```
+
 ### Which files to compile
 
 `manifests/lm_memories.toml` lists the files of each flow (simulation,
@@ -142,9 +151,9 @@ See [`CHANGELOG.md`](CHANGELOG.md) for breaking changes.
 
 ## Heavy tool runs
 
-Synthesis runs (`tools/vendor_synth`) and the VUnit runner take a
-machine-wide lock file, `lm_eda_heavy_tools.lock`, in the system temporary
-directory. Runs from different sessions on the same machine then wait for
+Synthesis runs (`tools/vendor_synth`), the VUnit runner and the
+post-synthesis runner take a machine-wide lock file,
+`lm_eda_heavy_tools.lock`, in the system temporary directory. Runs from different sessions on the same machine then wait for
 each other instead of running in parallel. A waiting run prints who holds the lock.
 Set the timeout with `LM_EDA_LOCK_TIMEOUT` (seconds, default 4 hours). The
 lock is an operating-system lock on that file, so it is released when its

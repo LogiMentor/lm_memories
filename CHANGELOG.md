@@ -18,8 +18,10 @@ All notable changes to this project are documented here.
   flip-flops, where it used 65,568 flip-flops before.
   The two-writer RAMs (`lm_mem_ram_crw_crw`, `lm_mem_ram_rw_rw`,
   `lm_mem_ram_crw_cw`) have a Vivado-only architecture of
-  `lm_mem_ram_crw_crw` (UG901 true dual-port template). Its inference check
-  and post-synthesis simulation are in progress (issue #3, phase 3).
+  `lm_mem_ram_crw_crw` (UG901 true dual-port template). Vivado 2023.1 maps
+  every checked configuration to block RAM only, on `xc7a35tfgg484-2` and
+  `xcku3p-ffva676-2-e`, and the netlists pass the same tests as the RTL
+  (post-synthesis simulation, `docs/results/`).
 
 ### Breaking changes
 
@@ -101,6 +103,11 @@ All notable changes to this project are documented here.
 - `tools/eda_lock.py`: machine-wide lock so that heavy tool runs from
   different sessions on the same machine queue up, served in order of
   arrival.
+- Post-synthesis simulation of the two-writer RAMs on AMD
+  (`sim/scripts/run_postsynth.py`): the same harness and scoreboard on Vivado
+  funcsim netlists, with GHDL (UNISIM) and xsim, RTL and netlist side by side.
+  Plain top-level `sim/vunit/tb_lm_mem_ram_plain.vhd` for simulators without
+  VUnit.
 - Static-check cases in `tools/vendor_synth` (`fallback_check.toml` for
   Vivado with and without `-assert`, `quartus_check.toml`): the fallback and
   wrong generics must stop synthesis at the right check. A case can expect a

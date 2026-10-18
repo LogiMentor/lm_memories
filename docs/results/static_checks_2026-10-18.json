@@ -1,0 +1,814 @@
+{
+ "results": [
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_crw_crw_32x1024",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_rw_rw_32x1024",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_rw_rw' [src/generic/lm_mem_ram_rw_rw.vhd:41]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_crw_cw_32x1024",
+   "top": "lm_mem_ram_crw_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_cw' [src/generic/lm_mem_ram_crw_cw.vhd:41]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_latency3",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:78]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:78]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:63]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w' [src/generic/lm_mem_ram_r_w.vhd:39]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:78",
+     "src/fifo/lm_mem_fifo.vhd:71"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_ratio_24to8",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 24,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:79]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:79]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:63]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_ratio' [src/generic/lm_mem_ram_r_w_ratio.vhd:42]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:79"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_crw_cr_latency3",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_tdp1w.vhd:71]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_tdp1w.vhd:71]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_tdp1w' [src/core/lm_mem_ram_tdp1w.vhd:62]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_cr' [src/generic/lm_mem_ram_crw_cr.vhd:41]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_tdp1w.vhd:71",
+     "src/generic/lm_mem_ram_r_w_ratio.vhd:47",
+     "src/generic/lm_mem_ram_cr_cw_ratio.vhd:48"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_fifo_sync_depth24",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 24
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/fifo/lm_mem_fifo.vhd:70]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/fifo/lm_mem_fifo.vhd:70]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [src/fifo/lm_mem_fifo.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo_sync' [src/fifo/lm_mem_fifo_sync.vhd:45]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:70"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_crw_crw_32x1024",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 2,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_rw_rw_32x1024",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_rw_rw' [src/generic/lm_mem_ram_rw_rw.vhd:41]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_crw_cw_32x1024",
+   "top": "lm_mem_ram_crw_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_cw' [src/generic/lm_mem_ram_crw_cw.vhd:41]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_latency3",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: read latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: read latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/core/lm_mem_ram_sdp.vhd:78]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:63]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w' [src/generic/lm_mem_ram_r_w.vhd:39]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:78",
+     "src/fifo/lm_mem_fifo.vhd:71"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 1,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_ratio_24to8",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 24,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: port widths must have a power-of-two ratio\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: port widths must have a power-of-two ratio\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/core/lm_mem_ram_sdp.vhd:79]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:63]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_ratio' [src/generic/lm_mem_ram_r_w_ratio.vhd:42]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:79"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_crw_cr_latency3",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_tdp1w: port A latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_tdp1w: port A latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/core/lm_mem_ram_tdp1w.vhd:71]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_tdp1w' [src/core/lm_mem_ram_tdp1w.vhd:62]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_cr' [src/generic/lm_mem_ram_crw_cr.vhd:41]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_tdp1w.vhd:71",
+     "src/generic/lm_mem_ram_r_w_ratio.vhd:47",
+     "src/generic/lm_mem_ram_cr_cw_ratio.vhd:48"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 1,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_fifo_sync_depth24",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 24
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_fifo: g_wr_depth must be a power of two\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_fifo: g_wr_depth must be a power of two\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/fifo/lm_mem_fifo.vhd:70]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [src/fifo/lm_mem_fifo.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo_sync' [src/fifo/lm_mem_fifo_sync.vhd:45]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:70"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_crw_crw_latency3",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:52]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:52]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:34]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_tdp1w.vhd:72",
+     "src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:52"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "vivado",
+   "tool_version": "2023.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_crw_crw_ratio_24to8",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 24,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:53]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:34]",
+     "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:79",
+     "src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:53"
+    ]
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "quartus",
+   "tool_version": "",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "crw_crw_32x1024",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) Line: 101"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" Line: 36",
+     "Error (12153): Can't elaborate top-level user hierarchy",
+     "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 3 errors, 2 warnings",
+     "Error: Peak virtual memory: 4877 megabytes"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "quartus",
+   "tool_version": "",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "rw_rw_32x1024",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) Line: 101"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" Line: 36",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_crw_crw:inst_mem\" Line: 43",
+     "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 3 errors, 4 warnings",
+     "Error: Peak virtual memory: 4877 megabytes"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "quartus",
+   "tool_version": "",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "crw_cw_32x1024",
+   "top": "lm_mem_ram_crw_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) Line: 101"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" Line: 36",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_crw_crw:inst_mem\" Line: 43",
+     "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 3 errors, 4 warnings",
+     "Error: Peak virtual memory: 4877 megabytes"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ]
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "quartus",
+   "tool_version": "",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_r_w_latency3",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: read latency must be 1 or 2\" (FAILURE or ERROR) Line: 101"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: read latency must be 1 or 2\" (FAILURE or ERROR) Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(78):  failed to elaborate call to subprogram \"f_static_check\" Line: 78",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_sdp:inst_mem\" Line: 41",
+     "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 3 errors, 4 warnings",
+     "Error: Peak virtual memory: 4877 megabytes"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:78",
+     "src/fifo/lm_mem_fifo.vhd:71"
+    ]
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "quartus",
+   "tool_version": "",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_r_w_ratio_24to8",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 24,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: port widths must have a power-of-two ratio\" (FAILURE or ERROR) Line: 101"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: port widths must have a power-of-two ratio\" (FAILURE or ERROR) Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(79):  failed to elaborate call to subprogram \"f_static_check\" Line: 79",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_sdp:inst_mem\" Line: 49",
+     "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 3 errors, 4 warnings",
+     "Error: Peak virtual memory: 4877 megabytes"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:79"
+    ]
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "quartus",
+   "tool_version": "",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_crw_cr_latency3",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_tdp1w: port A latency must be 1 or 2\" (FAILURE or ERROR) Line: 101"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_tdp1w: port A latency must be 1 or 2\" (FAILURE or ERROR) Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_tdp1w.vhd(71):  failed to elaborate call to subprogram \"f_static_check\" Line: 71",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_tdp1w:inst_mem\" Line: 43",
+     "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 3 errors, 4 warnings",
+     "Error: Peak virtual memory: 4877 megabytes"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_tdp1w.vhd:71",
+     "src/generic/lm_mem_ram_r_w_ratio.vhd:47",
+     "src/generic/lm_mem_ram_cr_cw_ratio.vhd:48"
+    ]
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": []
+  },
+  {
+   "tool": "quartus",
+   "tool_version": "",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_fifo_sync_depth24",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 24
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_fifo: g_wr_depth must be a power of two\" (FAILURE or ERROR) Line: 101"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_fifo: g_wr_depth must be a power of two\" (FAILURE or ERROR) Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_fifo.vhd(70):  failed to elaborate call to subprogram \"f_static_check\" Line: 70",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_fifo:inst_fifo\" Line: 47",
+     "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 3 errors, 2 warnings",
+     "Error: Peak virtual memory: 4877 megabytes"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:70"
+    ]
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": []
+  }
+ ]
+}

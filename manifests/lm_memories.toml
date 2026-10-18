@@ -135,6 +135,14 @@ files = [
   "sim/vunit/lm_mem_tb_harness.vhd",
 ]
 
+# Top-level for simulators without VUnit (xsim): one configuration per run,
+# set with generics.
+[filesets.tb_plain]
+check = "ghdl-08"
+files = [
+  "sim/vunit/tb_lm_mem_ram_plain.vhd",
+]
+
 [filesets.tb_vunit]
 check = "vunit"
 files = [
@@ -173,3 +181,9 @@ filesets = ["common", "core", "crw_crw_sim", "wrappers", "inference", "fifo", "p
 [flows.test-vunit]
 filesets = ["common", "core", "crw_crw_sim", "wrappers", "inference", "fifo", "primitives",
             "sim_ref", "tb_pkg", "tb_dut", "tb_harness", "tb_vunit"]
+
+# Post-synthesis simulation (sim/scripts/run_postsynth.py): the harness on
+# netlists. The script compiles the vendor simulation library, the netlists
+# and the generated DUT adapter before the "tb_harness" file set.
+[flows.test-postsynth]
+filesets = ["common", "sim_ref", "tb_pkg", "tb_harness", "tb_plain"]

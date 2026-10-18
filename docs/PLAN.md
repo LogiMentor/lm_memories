@@ -586,6 +586,58 @@ Each phase ends with a report and waits for confirmation.
   final table from the latest run of every case.
 - **Not covered yet:** two-writer RAMs (phase 3), and other vendors (phase 4).
 
+### 3.12 Phase 3 notes (two-writer RAMs on AMD)
+
+- **Layout:** `lm_mem_ram_crw_crw` has its entity in
+  `src/core/lm_mem_ram_crw_crw_ent.vhd` and three architectures, all named
+  `a_rtl` (coding style), picked by the manifest: `src/sim/` (simulation
+  reference model), `src/vendor/amd/` (Vivado, UG901 true dual-port
+  read-first template with a plain shared variable, asymmetric addressing
+  `address & i`) and `src/vendor/unsupported/` (fallback for every other
+  synthesis flow). `lm_mem_ram_rw_rw` and `lm_mem_ram_crw_cw` are unchanged
+  wrappers.
+- **Simulation architecture:** one process for both clocks, so collisions are
+  decided in one process execution. The collision window is the period of
+  the slower clock, measured from the edges (the same as the harness
+  window), and equality of instants when the periods are not known yet.
+  Write/write collision: warning, cells 'X' until the next write without
+  collision. Read/write collision: warning; the read returns 'X' when the
+  write is at the same instant or earlier, a warning only when it is later
+  (the data was already delivered). Accesses beyond the depth: warning, write
+  ignored, read 'X'.
+- **Harness:** `g_x_on_undef` checks that a read of a cell undefined by a
+  write/write collision returns 'X' (simulation models only). Without it, a
+  model that forgets the undefined state could not be caught, because those
+  reads are excluded from the comparison. Two-writer configurations: 11 (one
+  and two clocks, mixed width both ways, latencies 1/1 to 2/2, depths 40 and
+  48).
+- **Mutation check:** six more defects in the simulation architecture, all
+  detected (12/12 in total). The check now works on a copy of `src/`, `sim/`,
+  `manifests/` and `tools/`, and fails if `src/` changed. Not covered by
+  design: the data returned for an excluded read.
+- **Static checks** (`f_static_check` in `lm_mem_pkg`): Vivado 2023.1 ignores
+  VHDL assertions unless `synth_design -assert` is used. Probes on
+  `xc7a35tfgg484-2`: without `-assert`, no form stops synthesis or prints its
+  text (architecture, entity statement part, process, function used for a
+  constant, if-generate, severity error and failure, concatenated message,
+  static `false`); with `-assert`, every form stops with
+  `[Synth 8-63] RTL assertion: "<text>"`. Before this change the fallback
+  and every parameter check of the cores were silently ignored by Vivado
+  (the fallback produced an empty module). Each check is now a constant of
+  subtype `natural range 0 to 0` computed by a function that asserts the
+  message: simulators and Vivado with `-assert` print the message; Vivado
+  without `-assert` stops with `[Synth 8-11323] assigned value '1' out of
+  range` at the line of the `C_ERROR_<CHECK>` constant, whose comment says
+  what is wrong. The checks are declared before every declaration that
+  depends on them.
+- **Vivado tool errors on the reference machine:** intermittent `couldn't
+  read file` for installation files that exist, `invalid command name
+  "rt-undefined"`, both in runs that launch the synthesis helper process
+  (also with `general.maxThreads 1`), and `[Common 17-680] Path length
+  exceeds 260-Byte` with deep work directories (Vivado doubles the path in
+  `.Xil`). They are tool errors, never results: a run that did not reach
+  elaboration is reported as `tool-error` by the expected-failure check.
+
 ## Appendix: how the reproduction was run
 
 For each case, one Vivado batch run in a scratch directory:

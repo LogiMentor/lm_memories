@@ -21,14 +21,21 @@ Common packages live in `src/common/`, and FIFO implementations live in
 - `lm_mem_ram_sdp`, `lm_mem_ram_tdp1w`: portable RAM cores (`src/core/`) that
   vendor tools infer as block or distributed RAM. All one-writer RAMs and the
   FIFOs are built on them.
-- `lm_mem_ram_crw_crw`: generic true dual-port RAM. Two-writer RAMs
-  (`lm_mem_ram_crw_crw`, `lm_mem_ram_rw_rw`, `lm_mem_ram_crw_cw`) are not
-  inferable yet; see issue #3 and `docs/PLAN.md`.
-- `lm_mem_ram_rw_rw`: common-clock RAM with two read/write ports.
+- `lm_mem_ram_crw_crw`: true dual-port RAM with two writers, two clocks and
+  mixed width. It has one entity (`src/core/lm_mem_ram_crw_crw_ent.vhd`) and
+  one architecture per flow, chosen by the file manifest: a simulation model
+  (`src/sim/`), a Vivado architecture (`src/vendor/amd/`), and a fallback
+  (`src/vendor/unsupported/`) that **stops synthesis** with an explicit
+  message. Only AMD Vivado has a validated two-writer architecture so far;
+  with other tools, `lm_mem_ram_crw_crw`, `lm_mem_ram_rw_rw` and
+  `lm_mem_ram_crw_cw` do not synthesize.
+- `lm_mem_ram_rw_rw`: common-clock RAM with two read/write ports (wraps
+  `lm_mem_ram_crw_crw`).
 - `lm_mem_ram_cr_cw`: dual-clock write/read RAM.
 - `lm_mem_ram_cr_cw_ratio`: dual-clock write/read RAM with width ratio.
 - `lm_mem_ram_crw_cr`: dual-clock read/write plus read RAM.
-- `lm_mem_ram_crw_cw`: dual-clock read/write plus write RAM.
+- `lm_mem_ram_crw_cw`: dual-clock read/write plus write RAM (wraps
+  `lm_mem_ram_crw_crw`).
 - `lm_mem_ram_r_w`: common-clock write/read RAM.
 - `lm_mem_ram_r_w_ratio`: common-clock write/read RAM with width ratio.
 - `lm_mem_fifo`: configurable FIFO core with common-clock and dual-clock modes.
@@ -98,7 +105,35 @@ python -m tools.manifest list --flow synth-amd --format tcl
   words.
 - Read during write on the same port, or on a common-clock simple dual-port
   RAM, returns the old data. Between different ports of a true dual-port RAM,
-  and between ports on different clocks, it is undefined.
+  and between ports on different clocks, it is undefined. This includes
+  `lm_mem_ram_rw_rw`, although it has a single clock: a read on one port of
+  the address written by the other port in the same cycle returns undefined
+  data.
+- Two writes to the same address from the two ports of a two-writer RAM, in
+  the same cycle or less than one period of the slower clock apart, leave
+  that address undefined until the next write to it. The simulation model
+  reports every such collision with a warning and returns 'X'.
+
+### Wrong generics and unsupported tools stop synthesis
+
+Every check of a generic (latency, width ratio, depth, FIFO options), and the
+fallback of the two-writer RAMs for tools without a validated architecture,
+is a static check (`f_static_check` in `lm_mem_pkg`): an assertion with an
+explicit message, plus a constant outside its range for tools that ignore
+assertions. Simulation, synthesis and elaboration all stop.
+
+**Vivado users: add `-assert` to `synth_design`.** By default Vivado 2023.1
+ignores VHDL assertions. Measured on `xc7a35tfgg484-2`, all of these are
+ignored without `-assert` and stop synthesis with their text with it,
+for severity error and failure: assertions in the architecture, in the
+entity statement part, in a process, in a function used for a constant, in
+an `if ... generate`, also with a concatenated message.
+
+- With `-assert`: `ERROR: [Synth 8-63] RTL assertion: "lm_mem_ram_sdp: read
+  latency must be 1 or 2"`.
+- Without `-assert`, synthesis still stops, at the constant:
+  `ERROR: [Synth 8-11323] assigned value '1' out of range [.../lm_mem_ram_sdp.vhd:<line>]`.
+  The line holds `C_ERROR_<CHECK>`, and its comment says what is wrong.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for breaking changes.
 
@@ -106,8 +141,8 @@ See [`CHANGELOG.md`](CHANGELOG.md) for breaking changes.
 
 Synthesis runs (`tools/vendor_synth`) and the VUnit runner take a
 machine-wide lock file, `lm_eda_heavy_tools.lock`, in the system temporary
-directory. Runs from different sessions on the same machine then wait for each
-other instead of running in parallel. A waiting run prints who holds the lock.
+directory. Runs from different sessions on the same machine then wait for
+each other instead of running in parallel. A waiting run prints who holds the lock.
 Set the timeout with `LM_EDA_LOCK_TIMEOUT` (seconds, default 4 hours). The
 lock is an operating-system lock on that file, so it is released when its
 holder exits, also after a crash; no process is ever terminated. Waiting runs

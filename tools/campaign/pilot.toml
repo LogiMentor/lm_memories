@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+#
+# Pilot of the AMD campaign (tools/campaign/run_amd.sh, pilot.py): a short
+# run that checks, on the real tools, the corrections that only real tools
+# can show before the campaigns start.
+#
+# - pilot-artix7: r_w_32x1024 must pass with exit code 0 through the
+#   Windows launcher; the wrong generics must stop with exit code 1
+#   (launcher with "call"); bad_r_w_infer_no_vendor needs the empty string to
+#   reach Vivado as an empty string.
+# - pilot-artix7-assert: the same stops with synth_design -assert.
+# r_w_32x1024 is also the base of the 1000-for-1024 check (pilot.py).
+
+[[jobs]]
+name = "pilot-artix7"
+enabled = true
+tool = "vivado"
+vendor = "amd"
+family = "artix7"
+part = "xc7a35tfgg484-2"
+install_dir = "C:/Xilinx/Vivado/2023.1"
+manifest_flow = "synth-unsupported"
+threads = 2
+timeout_seconds = 1800
+cases = ["r_w_32x1024", "bad_ccd_resync_levels1", "bad_r_w_infer_no_vendor", "bad_fifo_almost_empty_15"]
+
+[[jobs]]
+name = "pilot-artix7-assert"
+enabled = true
+tool = "vivado"
+vendor = "amd"
+family = "artix7"
+part = "xc7a35tfgg484-2"
+install_dir = "C:/Xilinx/Vivado/2023.1"
+manifest_flow = "synth-unsupported"
+assert = true
+threads = 2
+timeout_seconds = 1800
+cases = ["bad_ccd_resync_levels1", "bad_r_w_infer_no_vendor"]

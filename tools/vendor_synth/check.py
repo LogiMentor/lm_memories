@@ -64,6 +64,8 @@ def normalize_generic(value: Any) -> str:
 def _same_generic(requested: str, reported: str, vhdl_type: str) -> bool:
   if requested == reported:
     return True
+  if requested == "(null)" and reported == "":
+    return True  # an empty string, printed as nothing
   if vhdl_type.lower() in ("bool", "boolean"):
     truthy = {"TRUE", "1"}
     return (requested.upper() in truthy) == (reported.upper() in truthy)

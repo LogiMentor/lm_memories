@@ -823,6 +823,25 @@ Left for phase 4 and later, not changed now:
   during write of URAM are checked on the UNISIM model only.
 - **Hardware:** no entity is checked on a board.
 
+The campaigns behind `docs/results/` run with `tools/campaign/run_amd.sh`:
+a pilot on the real tools first (exit codes through the launcher, string
+generics, a generic changed in the Vivado script, the old code against the
+new static checks), then every campaign in sequence under the lock, with
+the summary in `<campaign root>/summary.md`.
+
+### 3.15 Cross-cutting work (other LogiMentor repositories)
+
+- **Shared EDA lock** (`lm-eda-lock`): section 3.13, after the merge of PR #4.
+- **`vivado.bat` without `call`:** a Windows batch file that runs
+  `vivado.bat` without `call` never gets control back, so the lines after
+  it (`exit /b %ERRORLEVEL%`) do not run and the caller sees an exit code
+  that is not Vivado's: measured with Vivado 2023.1, 0 or 123 after a failed
+  `synth_design`, 1 with `call` or when `vivado.bat` is run directly. Fixed
+  here in the launcher of `tools/vendor_synth`. To check in the scripts of
+  the other LogiMentor repositories that start Vivado (or any `.bat` tool,
+  such as `xsim.bat` and `settings64.bat`) from a batch file and use its
+  exit code.
+
 ## Appendix: how the reproduction was run
 
 For each case, one Vivado batch run in a scratch directory:

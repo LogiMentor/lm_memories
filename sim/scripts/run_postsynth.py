@@ -43,6 +43,7 @@ sys.path.insert(0, str(ROOT_DIR / "sim" / "vunit"))
 
 from configs import POSTSYNTH_COMMON_CLOCK, POSTSYNTH_PARTS, RAM_CONFIGS  # noqa: E402
 from tools.eda_lock import heavy_tool_lock  # noqa: E402
+from tools.eda_proc import run_tool  # noqa: E402
 from tools.eda_retry import run_with_retries  # noqa: E402
 from tools.eda_workdir import prune, work_root  # noqa: E402
 from tools.manifest import load  # noqa: E402
@@ -185,11 +186,24 @@ begin
 """
 
 
+# Exit code recorded for a tool stopped by the timeout of run_logged.
+TIMEOUT_RC = -1
+
+
 def run_logged(cmd: list[str], cwd: Path, log: Path, timeout: int = 7200) -> int:
+  """Run a tool with its output appended to log; TIMEOUT_RC after a timeout.
+
+  On a timeout the whole process tree of the tool is stopped first
+  (tools/eda_proc.py), so the caller releases the EDA lock after the tool.
+  """
   with log.open("a", encoding="utf-8", errors="ignore") as handle:
     handle.write("$ " + " ".join(cmd) + "\n")
     handle.flush()
-    return subprocess.run(cmd, cwd=cwd, stdout=handle, stderr=subprocess.STDOUT, timeout=timeout).returncode
+    try:
+      return run_tool(cmd, cwd=cwd, stdout=handle, stderr=subprocess.STDOUT, timeout=timeout)
+    except subprocess.TimeoutExpired:
+      handle.write(f"\ntimeout after {timeout} seconds: the tool was stopped\n")
+      return TIMEOUT_RC
 
 
 def synthesize(vivado_dir: Path, part: str, key: str, g: dict, work: Path, common_clock: bool = False) -> dict:

@@ -7,9 +7,11 @@
   beyond 260 characters on Windows ([Common 17-680]).
 - Each script has its own subdirectory: work_root("vs") for vendor_synth,
   work_root("ps") for the post-synthesis runner.
-- After a successful run the scripts prune their work directories: logs,
-  reports and generated scripts stay, tool databases, projects, netlists and
-  simulation libraries are removed. After a failed run nothing is removed.
+- After a successful run the scripts prune their work directories: logs
+  (of every attempt), reports, run records and generated scripts stay, tool
+  databases, projects, netlists and simulation libraries are removed. After
+  a failed run nothing is removed. Campaign runs (--campaign) are never
+  pruned; they are archived instead (tools/eda_archive.py).
 """
 
 from __future__ import annotations

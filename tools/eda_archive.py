@@ -31,7 +31,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ARCHIVE_ENV = "LM_EDA_ARCHIVE_DIR"
 # Directory names and file patterns left out: compiled libraries and caches.
-ARCHIVE_SKIP_DIRS = (".Xil", "xsim.dir", "unisim", "vunit_lib", "__pycache__")
+ARCHIVE_SKIP_DIRS = (".Xil", "xsim.dir", "unisim", "vunit_lib", "libraries", "__pycache__")
 ARCHIVE_SKIP_FILES = ("*.o", "*.cf", "*.exe", "*.dcp", "*.pb", "*.wdb", "*.lock")
 
 

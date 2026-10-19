@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+#
+# Quartus check on Cyclone V (issue #3). Until an Intel two-writer
+# architecture is validated, the expected result for the two-writer RAMs is
+# that Analysis & Synthesis stops with the fallback message
+# (expected/intel.toml). The bad_* cases check that a wrong generic stops
+# Analysis & Synthesis.
+#
+#   python -m tools.vendor_synth --config tools/vendor_synth/quartus_check.toml --keep-going
+
+[[jobs]]
+name = "quartus-cyclonev"
+enabled = true
+tool = "quartus"
+vendor = "intel"
+family = "Cyclone V"
+device = "5CEBA4F23C7"
+install_dir = "C:/intelFPGA_lite/23.1std/quartus"
+quartus_flow = "map"
+timeout_seconds = 1800
+cases = [
+  "crw_crw_32x1024", "rw_rw_32x1024", "crw_cw_32x1024",
+  "bad_r_w_latency3", "bad_r_w_ratio_24to8", "bad_crw_cr_latency3", "bad_fifo_sync_depth24",
+  "bad_ccd_resync_levels1", "bad_fifo_almost_full_0", "bad_fifo_almost_empty_15",
+  "bad_r_w_infer_latency3",
+]
+# Not here: bad_r_w_infer_no_vendor and bad_xilinx_prim_no_family. Quartus
+# cannot set an empty string parameter ('set_parameter -name g_vendor ""':
+# "Missing <value> for g_vendor assignment"), so those checks are covered by
+# Vivado (fallback_check.toml) and GHDL (tools/tests/test_static_checks.py).

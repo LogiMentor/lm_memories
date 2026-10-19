@@ -8,6 +8,7 @@
 -------------------------------------------------------------------------------
 -- Description:
 --  Dual-clock RAM wrapper with one read/write port and one read-only port.
+--  Implemented on lm_mem_ram_tdp1w.
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -39,15 +40,14 @@ end entity lm_mem_ram_crw_cr;
 
 architecture a_rtl of lm_mem_ram_crw_cr is
 begin
-  inst_mem : entity work.lm_mem_ram_crw_crw
+  inst_mem : entity work.lm_mem_ram_tdp1w
     generic map(
-      g_ram_a_latency => g_ram_latency,
-      g_ram_a_data_w  => g_ram_data_w,
-      g_ram_a_depth   => g_ram_depth,
-      g_ram_b_latency => g_ram_latency,
-      g_ram_b_data_w  => g_ram_data_w,
-      g_init_file     => g_init_file,
-      g_simulation    => g_simulation
+      g_data_w     => g_ram_data_w,
+      g_depth      => g_ram_depth,
+      g_a_latency  => g_ram_latency,
+      g_b_latency  => g_ram_latency,
+      g_init_file  => g_init_file,
+      g_simulation => g_simulation
     )
     port map(
       clk_a_i     => clk_a_i,
@@ -55,9 +55,7 @@ begin
       ena_i       => ena_i,
       enb_i       => enb_i,
       wen_a_i     => wen_a_i,
-      wen_b_i     => '0',
       data_wr_a_i => data_wr_a_i,
-      data_wr_b_i => (others => '0'),
       addr_a_i    => addr_a_i,
       addr_b_i    => addr_b_i,
       data_rd_a_o => data_rd_a_o,

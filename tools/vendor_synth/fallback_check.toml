@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+#
+# Static checks with Vivado (expected/amd.toml):
+# - fallback_*: the synth-unsupported flow compiles
+#   src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd, and synthesis must stop;
+# - bad_*: a wrong generic must stop synthesis at its check.
+# Two jobs, each accepting only its own evidence (tools/vendor_synth/check.py):
+# Vivado defaults (assertions ignored): "ERROR: [Synth 8-11323] ... out of
+# range" at the line of the constant; synth_design -assert: "ERROR: [Synth
+# 8-63] RTL assertion" with the message. Both also need "synth_design failed",
+# a non-zero exit code and the module of the check elaborated. The Quartus
+# side is quartus_check.toml.
+#
+#   python -m tools.vendor_synth --config tools/vendor_synth/fallback_check.toml --keep-going
+
+[[jobs]]
+name = "vivado-artix7-checks"
+enabled = true
+tool = "vivado"
+vendor = "amd"
+family = "artix7"
+part = "xc7a35tfgg484-2"
+install_dir = "C:/Xilinx/Vivado/2023.1"
+manifest_flow = "synth-unsupported"
+threads = 2
+timeout_seconds = 1800
+cases = [
+  "fallback_crw_crw_32x1024", "fallback_rw_rw_32x1024", "fallback_crw_cw_32x1024",
+  "bad_r_w_latency3", "bad_r_w_ratio_24to8", "bad_crw_cr_latency3", "bad_fifo_sync_depth24",
+  "bad_ccd_resync_levels1", "bad_fifo_almost_full_0", "bad_fifo_almost_empty_15",
+  "bad_r_w_infer_latency3", "bad_r_w_infer_no_vendor", "bad_xilinx_prim_no_family",
+]
+
+[[jobs]]
+name = "vivado-artix7-checks-assert"
+enabled = true
+tool = "vivado"
+vendor = "amd"
+family = "artix7"
+part = "xc7a35tfgg484-2"
+install_dir = "C:/Xilinx/Vivado/2023.1"
+manifest_flow = "synth-unsupported"
+assert = true
+threads = 2
+timeout_seconds = 1800
+cases = [
+  "fallback_crw_crw_32x1024", "fallback_rw_rw_32x1024", "fallback_crw_cw_32x1024",
+  "bad_r_w_latency3", "bad_r_w_ratio_24to8", "bad_crw_cr_latency3", "bad_fifo_sync_depth24",
+  "bad_ccd_resync_levels1", "bad_fifo_almost_full_0", "bad_fifo_almost_empty_15",
+  "bad_r_w_infer_latency3", "bad_r_w_infer_no_vendor", "bad_xilinx_prim_no_family",
+]
+
+# The AMD two-writer architecture with wrong generics (flow synth-amd).
+[[jobs]]
+name = "vivado-artix7-amd-checks"
+enabled = true
+tool = "vivado"
+vendor = "amd"
+family = "artix7"
+part = "xc7a35tfgg484-2"
+install_dir = "C:/Xilinx/Vivado/2023.1"
+threads = 2
+timeout_seconds = 1800
+cases = ["bad_crw_crw_latency3", "bad_crw_crw_ratio_24to8"]

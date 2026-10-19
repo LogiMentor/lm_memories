@@ -6,6 +6,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import tools.eda_lock
 
 from tools.vendor_synth.cli import main
 
@@ -46,6 +49,10 @@ class VendorSynthTests(unittest.TestCase):
       top = Path(summary["results"][0]["work_dir"]) / (summary["results"][0]["top"] + ".vhd")
       self.assertIn("read_vhdl -vhdl2008", script)
       self.assertIn("lm_mem_ram_r_w_infer", top.read_text(encoding="utf-8"))
+      # Vivado 2023.1 exits with 0 after a failed synth_design in a -source
+      # script (campaign pilot of 2026-10-19): the script exits with 1 itself.
+      self.assertIn("if {[catch {synth_design -mode out_of_context", script)
+      self.assertIn("  exit 1\n}", script)
 
   def test_vivado_threads_one_uses_default_thread_setting(self):
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -221,6 +228,8 @@ cases = ["infer_r_w_bram_32x1024"]
         self.assertEqual(command[-1], str(launcher))
         self.assertIn(str(executable), text)
         self.assertNotIn("settings64", text)
+        # The exit code of a .bat tool reaches the caller only through "call".
+        self.assertIn(f'call "{executable}"', text)
       else:
         self.assertEqual(command[0], str(executable))
 
@@ -341,11 +350,14 @@ cases = ["infer_r_w_bram_32x1024"]
         encoding="utf-8",
       )
 
-      result = main(["--config", str(config)])
+      # Private lock: a unit test must not queue behind real EDA runs.
+      with mock.patch.object(tools.eda_lock, "default_lock_path", lambda: root / "test.lock"), \
+           mock.patch.dict(os.environ, {"LM_EDA_MIN_FREE_MB_SYNTH": "0"}):
+        result = main(["--config", str(config)])
 
       summary = json.loads((work / "summary.json").read_text(encoding="utf-8"))
       self.assertEqual(result, 1)
-      self.assertEqual(summary["results"][0]["status"], "fail")
+      self.assertEqual(summary["results"][0]["status"], "tool-error")
       self.assertIn("Vivado Synthesis failed", summary["results"][0]["message"])
 
 

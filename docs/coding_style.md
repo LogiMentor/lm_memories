@@ -33,6 +33,10 @@ This file is the VHDL coding style reference for `lm_memories`.
 - File names match entity or package names.
 - Keep one synthesizable entity per RTL file.
 - Put entity and architecture, or package and package body, in the same file.
+  Exception: a dual-model entity (`lm_mem_ram_crw_crw`) has its entity in
+  `src/core/<name>_ent.vhd` and one architecture file per flow
+  (`src/sim/`, `src/vendor/<vendor>/`), all with the same architecture name;
+  the file manifest selects one.
 - Recommended maximum line length is 120 to 140 characters.
 
 ## Language

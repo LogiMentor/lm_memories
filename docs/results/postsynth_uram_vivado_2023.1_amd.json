@@ -1,0 +1,308 @@
+{
+ "tool": "Vivado 2023.1 (synthesis, write_vhdl -mode funcsim); simulation as listed per simulator",
+ "configs": [
+  "r_w.36x4096",
+  "crw_cr.1clk.36x4096",
+  "rw_rw.36x4096"
+ ],
+ "rtl": {
+  "ghdl": {
+   "simulator": "GHDL 6.0.0 (tarball) [Dunoon edition]",
+   "results": {
+    "r_w.36x4096": {
+     "verdict": "PASS",
+     "counts": {
+      "writes": 827,
+      "writes_masked": 141,
+      "writes_beyond_depth": 0,
+      "reads": 1724,
+      "checked": 1724,
+      "excluded_rw": 0,
+      "excluded_undefined": 0,
+      "excluded_beyond_depth": 0,
+      "collisions_rw": 0,
+      "collisions_ww": 0,
+      "init_reads": 482,
+      "old_data_reads": 32,
+      "hold_checks": 283,
+      "errors": 0
+     }
+    },
+    "crw_cr.1clk.36x4096": {
+     "verdict": "PASS",
+     "counts": {
+      "writes": 860,
+      "writes_masked": 157,
+      "writes_beyond_depth": 0,
+      "reads": 3374,
+      "checked": 3344,
+      "excluded_rw": 30,
+      "excluded_undefined": 0,
+      "excluded_beyond_depth": 0,
+      "collisions_rw": 30,
+      "collisions_ww": 0,
+      "init_reads": 907,
+      "old_data_reads": 860,
+      "hold_checks": 639,
+      "errors": 0
+     }
+    },
+    "rw_rw.36x4096": {
+     "verdict": "PASS",
+     "counts": {
+      "writes": 1719,
+      "writes_masked": 295,
+      "writes_beyond_depth": 0,
+      "reads": 3427,
+      "checked": 3350,
+      "excluded_rw": 55,
+      "excluded_undefined": 22,
+      "excluded_beyond_depth": 0,
+      "collisions_rw": 55,
+      "collisions_ww": 11,
+      "init_reads": 832,
+      "old_data_reads": 1686,
+      "hold_checks": 585,
+      "errors": 0
+     }
+    }
+   }
+  },
+  "xsim": {
+   "simulator": "xsim 2023.1",
+   "results": {
+    "r_w.36x4096": {
+     "verdict": "PASS",
+     "counts": {
+      "writes": 827,
+      "writes_masked": 141,
+      "writes_beyond_depth": 0,
+      "reads": 1724,
+      "checked": 1724,
+      "excluded_rw": 0,
+      "excluded_undefined": 0,
+      "excluded_beyond_depth": 0,
+      "collisions_rw": 0,
+      "collisions_ww": 0,
+      "init_reads": 482,
+      "old_data_reads": 32,
+      "hold_checks": 283,
+      "errors": 0
+     }
+    },
+    "crw_cr.1clk.36x4096": {
+     "verdict": "PASS",
+     "counts": {
+      "writes": 860,
+      "writes_masked": 157,
+      "writes_beyond_depth": 0,
+      "reads": 3374,
+      "checked": 3344,
+      "excluded_rw": 30,
+      "excluded_undefined": 0,
+      "excluded_beyond_depth": 0,
+      "collisions_rw": 30,
+      "collisions_ww": 0,
+      "init_reads": 907,
+      "old_data_reads": 860,
+      "hold_checks": 639,
+      "errors": 0
+     }
+    },
+    "rw_rw.36x4096": {
+     "verdict": "PASS",
+     "counts": {
+      "writes": 1719,
+      "writes_masked": 295,
+      "writes_beyond_depth": 0,
+      "reads": 3427,
+      "checked": 3350,
+      "excluded_rw": 55,
+      "excluded_undefined": 22,
+      "excluded_beyond_depth": 0,
+      "collisions_rw": 55,
+      "collisions_ww": 11,
+      "init_reads": 832,
+      "old_data_reads": 1686,
+      "hold_checks": 585,
+      "errors": 0
+     }
+    }
+   }
+  }
+ },
+ "parts": {
+  "xcku3p-ffva676-2-e": {
+   "synthesis": {
+    "r_w_36x4096_36_l11": {
+     "ok": true,
+     "metrics": {
+      "luts": 0.0,
+      "luts_logic": 0.0,
+      "lutram": 0.0,
+      "registers": 0.0,
+      "bram_tiles": 0.0,
+      "uram": 1.0
+     },
+     "critical_warnings": 0,
+     "retries": 1,
+     "synth_8_6794": true
+    },
+    "crw_cr_36x4096_36_l11_cc": {
+     "ok": true,
+     "metrics": {
+      "luts": 10.0,
+      "luts_logic": 10.0,
+      "lutram": 0.0,
+      "registers": 0.0,
+      "bram_tiles": 4.0,
+      "uram": 0.0
+     },
+     "critical_warnings": 0,
+     "retries": 0,
+     "synth_8_6794": false
+    },
+    "rw_rw_36x4096_36_l11": {
+     "ok": true,
+     "metrics": {
+      "luts": 12.0,
+      "luts_logic": 12.0,
+      "lutram": 0.0,
+      "registers": 0.0,
+      "bram_tiles": 4.0,
+      "uram": 0.0
+     },
+     "critical_warnings": 0,
+     "retries": 1,
+     "synth_8_6794": false
+    }
+   },
+   "netlist": {
+    "ghdl": {
+     "simulator": "GHDL 6.0.0 (tarball) [Dunoon edition]",
+     "results": {
+      "r_w.36x4096": {
+       "verdict": "PASS",
+       "counts": {
+        "writes": 827,
+        "writes_masked": 141,
+        "writes_beyond_depth": 0,
+        "reads": 1724,
+        "checked": 1724,
+        "excluded_rw": 0,
+        "excluded_undefined": 0,
+        "excluded_beyond_depth": 0,
+        "collisions_rw": 0,
+        "collisions_ww": 0,
+        "init_reads": 482,
+        "old_data_reads": 32,
+        "hold_checks": 283,
+        "errors": 0
+       }
+      },
+      "crw_cr.1clk.36x4096": {
+       "verdict": "PASS",
+       "counts": {
+        "writes": 860,
+        "writes_masked": 157,
+        "writes_beyond_depth": 0,
+        "reads": 3374,
+        "checked": 3344,
+        "excluded_rw": 30,
+        "excluded_undefined": 0,
+        "excluded_beyond_depth": 0,
+        "collisions_rw": 30,
+        "collisions_ww": 0,
+        "init_reads": 907,
+        "old_data_reads": 860,
+        "hold_checks": 639,
+        "errors": 0
+       }
+      },
+      "rw_rw.36x4096": {
+       "verdict": "PASS",
+       "counts": {
+        "writes": 1719,
+        "writes_masked": 295,
+        "writes_beyond_depth": 0,
+        "reads": 3427,
+        "checked": 3350,
+        "excluded_rw": 55,
+        "excluded_undefined": 22,
+        "excluded_beyond_depth": 0,
+        "collisions_rw": 55,
+        "collisions_ww": 11,
+        "init_reads": 832,
+        "old_data_reads": 1686,
+        "hold_checks": 585,
+        "errors": 0
+       }
+      }
+     }
+    },
+    "xsim": {
+     "simulator": "xsim 2023.1",
+     "results": {
+      "r_w.36x4096": {
+       "verdict": "PASS",
+       "counts": {
+        "writes": 827,
+        "writes_masked": 141,
+        "writes_beyond_depth": 0,
+        "reads": 1724,
+        "checked": 1724,
+        "excluded_rw": 0,
+        "excluded_undefined": 0,
+        "excluded_beyond_depth": 0,
+        "collisions_rw": 0,
+        "collisions_ww": 0,
+        "init_reads": 482,
+        "old_data_reads": 32,
+        "hold_checks": 283,
+        "errors": 0
+       }
+      },
+      "crw_cr.1clk.36x4096": {
+       "verdict": "PASS",
+       "counts": {
+        "writes": 860,
+        "writes_masked": 157,
+        "writes_beyond_depth": 0,
+        "reads": 3374,
+        "checked": 3344,
+        "excluded_rw": 30,
+        "excluded_undefined": 0,
+        "excluded_beyond_depth": 0,
+        "collisions_rw": 30,
+        "collisions_ww": 0,
+        "init_reads": 907,
+        "old_data_reads": 860,
+        "hold_checks": 639,
+        "errors": 0
+       }
+      },
+      "rw_rw.36x4096": {
+       "verdict": "PASS",
+       "counts": {
+        "writes": 1719,
+        "writes_masked": 295,
+        "writes_beyond_depth": 0,
+        "reads": 3427,
+        "checked": 3350,
+        "excluded_rw": 55,
+        "excluded_undefined": 22,
+        "excluded_beyond_depth": 0,
+        "collisions_rw": 55,
+        "collisions_ww": 11,
+        "init_reads": 832,
+        "old_data_reads": 1686,
+        "hold_checks": 585,
+        "errors": 0
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

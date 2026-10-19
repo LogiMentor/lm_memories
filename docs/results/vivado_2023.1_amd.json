@@ -1,0 +1,1446 @@
+{
+  "results": [
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "r_w_32x1024",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "r_w_32x1024_lat2",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "r_w_16x64",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 16,
+        "g_ram_depth": 64,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 0.5,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "r_w_32x1000",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1000,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "r_w_32x1536",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1536,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 2.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "cr_cw_32x1024",
+      "top": "lm_mem_ram_cr_cw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "cr_cw_32x1024_lat2",
+      "top": "lm_mem_ram_cr_cw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "r_w_ratio_32to8",
+      "top": "lm_mem_ram_r_w_ratio",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 8
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "r_w_ratio_8to32",
+      "top": "lm_mem_ram_r_w_ratio",
+      "generics": {
+        "g_ram_a_data_w": 8,
+        "g_ram_a_depth": 4096,
+        "g_ram_b_data_w": 32
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "cr_cw_ratio_32to8",
+      "top": "lm_mem_ram_cr_cw_ratio",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 8
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "cr_cw_ratio_8to32",
+      "top": "lm_mem_ram_cr_cw_ratio",
+      "generics": {
+        "g_ram_a_data_w": 8,
+        "g_ram_a_depth": 4096,
+        "g_ram_b_data_w": 32
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_cr_32x1024",
+      "top": "lm_mem_ram_crw_cr",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_cr_32x1024_lat2",
+      "top": "lm_mem_ram_crw_cr",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "fifo_sync_32x16",
+      "top": "lm_mem_fifo_sync",
+      "generics": {
+        "g_data_w": 32,
+        "g_depth": 16
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 49.0,
+        "luts_logic": 25.0,
+        "lutram": 24.0,
+        "registers": 47.0,
+        "bram_tiles": 0.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "fifo_sync_32x1024",
+      "top": "lm_mem_fifo_sync",
+      "generics": {
+        "g_data_w": 32,
+        "g_depth": 1024
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 56.0,
+        "luts_logic": 56.0,
+        "lutram": 0.0,
+        "registers": 27.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "fifo_async_32x16",
+      "top": "lm_mem_fifo_async",
+      "generics": {
+        "g_data_w": 32,
+        "g_depth": 16
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 63.0,
+        "luts_logic": 39.0,
+        "lutram": 24.0,
+        "registers": 75.0,
+        "bram_tiles": 0.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "fifo_async_32x1024",
+      "top": "lm_mem_fifo_async",
+      "generics": {
+        "g_data_w": 32,
+        "g_depth": 1024
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 99.0,
+        "luts_logic": 99.0,
+        "lutram": 0.0,
+        "registers": 91.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_crw_32x1024",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 32,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_crw_32x1024_lat2",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 32,
+        "g_ram_a_latency": 2,
+        "g_ram_b_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_crw_32to8",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 8,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_crw_8to32",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 8,
+        "g_ram_a_depth": 4096,
+        "g_ram_b_data_w": 32,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_crw_32x1000",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1000,
+        "g_ram_b_data_w": 32,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_crw_16x64",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 16,
+        "g_ram_a_depth": 64,
+        "g_ram_b_data_w": 16,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 0.5,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "rw_rw_32x1024",
+      "top": "lm_mem_ram_rw_rw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "rw_rw_32x1024_lat2",
+      "top": "lm_mem_ram_rw_rw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "artix7",
+      "part": "xc7a35tfgg484-2",
+      "case": "crw_cw_32x1024",
+      "top": "lm_mem_ram_crw_cw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "r_w_32x1024",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "r_w_32x1024_lat2",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "r_w_16x64",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 16,
+        "g_ram_depth": 64,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 21.0,
+        "luts_logic": 1.0,
+        "lutram": 20.0,
+        "registers": 16.0,
+        "bram_tiles": 0.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "r_w_32x1000",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1000,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "r_w_32x1536",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1536,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 2.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "cr_cw_32x1024",
+      "top": "lm_mem_ram_cr_cw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "cr_cw_32x1024_lat2",
+      "top": "lm_mem_ram_cr_cw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "r_w_ratio_32to8",
+      "top": "lm_mem_ram_r_w_ratio",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 8
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "r_w_ratio_8to32",
+      "top": "lm_mem_ram_r_w_ratio",
+      "generics": {
+        "g_ram_a_data_w": 8,
+        "g_ram_a_depth": 4096,
+        "g_ram_b_data_w": 32
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "cr_cw_ratio_32to8",
+      "top": "lm_mem_ram_cr_cw_ratio",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 8
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "cr_cw_ratio_8to32",
+      "top": "lm_mem_ram_cr_cw_ratio",
+      "generics": {
+        "g_ram_a_data_w": 8,
+        "g_ram_a_depth": 4096,
+        "g_ram_b_data_w": 32
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_cr_32x1024",
+      "top": "lm_mem_ram_crw_cr",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_cr_32x1024_lat2",
+      "top": "lm_mem_ram_crw_cr",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "fifo_sync_32x16",
+      "top": "lm_mem_fifo_sync",
+      "generics": {
+        "g_data_w": 32,
+        "g_depth": 16
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 45.0,
+        "luts_logic": 25.0,
+        "lutram": 20.0,
+        "registers": 47.0,
+        "bram_tiles": 0.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "fifo_sync_32x1024",
+      "top": "lm_mem_fifo_sync",
+      "generics": {
+        "g_data_w": 32,
+        "g_depth": 1024
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 54.0,
+        "luts_logic": 54.0,
+        "lutram": 0.0,
+        "registers": 27.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "fifo_async_32x16",
+      "top": "lm_mem_fifo_async",
+      "generics": {
+        "g_data_w": 32,
+        "g_depth": 16
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 56.0,
+        "luts_logic": 36.0,
+        "lutram": 20.0,
+        "registers": 75.0,
+        "bram_tiles": 0.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "fifo_async_32x1024",
+      "top": "lm_mem_fifo_async",
+      "generics": {
+        "g_data_w": 32,
+        "g_depth": 1024
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 99.0,
+        "luts_logic": 99.0,
+        "lutram": 0.0,
+        "registers": 91.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_crw_32x1024",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 32,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_crw_32x1024_lat2",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 32,
+        "g_ram_a_latency": 2,
+        "g_ram_b_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_crw_32to8",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1024,
+        "g_ram_b_data_w": 8,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_crw_8to32",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 8,
+        "g_ram_a_depth": 4096,
+        "g_ram_b_data_w": 32,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_crw_32x1000",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 32,
+        "g_ram_a_depth": 1000,
+        "g_ram_b_data_w": 32,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_crw_16x64",
+      "top": "lm_mem_ram_crw_crw",
+      "generics": {
+        "g_ram_a_data_w": 16,
+        "g_ram_a_depth": 64,
+        "g_ram_b_data_w": 16,
+        "g_ram_a_latency": 1,
+        "g_ram_b_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 0.5,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "rw_rw_32x1024",
+      "top": "lm_mem_ram_rw_rw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "rw_rw_32x1024_lat2",
+      "top": "lm_mem_ram_rw_rw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 2
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_cw_32x1024",
+      "top": "lm_mem_ram_crw_cw",
+      "generics": {
+        "g_ram_data_w": 32,
+        "g_ram_depth": 1024,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 1.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "crw_cr_36x4096_cc",
+      "top": "lm_vs_vivado_kintexuplus_crw_cr_36x4096_cc",
+      "generics": {},
+      "status": "pass",
+      "metrics": {
+        "luts": 10.0,
+        "luts_logic": 10.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 4.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "r_w_36x4096",
+      "top": "lm_mem_ram_r_w",
+      "generics": {
+        "g_ram_data_w": 36,
+        "g_ram_depth": 4096,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 0.0,
+        "luts_logic": 0.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 0.0,
+        "uram": 1.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    },
+    {
+      "tool": "vivado",
+      "tool_version": "2023.1",
+      "vendor": "amd",
+      "family": "kintexuplus",
+      "part": "xcku3p-ffva676-2-e",
+      "case": "rw_rw_36x4096",
+      "top": "lm_mem_ram_rw_rw",
+      "generics": {
+        "g_ram_data_w": 36,
+        "g_ram_depth": 4096,
+        "g_ram_latency": 1
+      },
+      "status": "pass",
+      "metrics": {
+        "luts": 12.0,
+        "luts_logic": 12.0,
+        "lutram": 0.0,
+        "registers": 0.0,
+        "bram_tiles": 4.0,
+        "uram": 0.0
+      },
+      "critical_warnings": 0,
+      "retries": 0,
+      "problems": []
+    }
+  ]
+}

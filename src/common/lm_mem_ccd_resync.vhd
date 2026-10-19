@@ -15,6 +15,8 @@
 library ieee;
 use ieee.std_logic_1164.all;
 
+use work.lm_mem_pkg.all;
+
 entity lm_mem_ccd_resync is
   generic(
     g_meta_levels : positive := 2
@@ -27,11 +29,14 @@ entity lm_mem_ccd_resync is
 end entity lm_mem_ccd_resync;
 
 architecture a_rtl of lm_mem_ccd_resync is
+  -- Static check (lm_mem_pkg): elaboration stops at this line, with its
+  -- message where assertions are evaluated.
+  constant C_OK_META_LEVELS  : boolean := g_meta_levels >= 2;
+  constant C_MSG_META_LEVELS : string  := "lm_mem_ccd_resync: g_meta_levels must be at least 2";
+  constant C_ERROR_META_LEVELS_BELOW_2 : t_static_check := f_static_check(C_OK_META_LEVELS, C_MSG_META_LEVELS);  -- ERROR: g_meta_levels must be at least 2
+
   signal s_din_meta : std_logic_vector(g_meta_levels - 1 downto 0);
 begin
-  assert g_meta_levels >= 2
-    report "lm_mem_ccd_resync: g_meta_levels must be at least 2"
-    severity failure;
 
   proc_resync : process(clk_i)
   begin

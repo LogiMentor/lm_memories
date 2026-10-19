@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
-"""Run local vendor synthesis smoke campaigns for lm_memories."""
+"""Run local vendor synthesis checks for lm_memories.
+
+Sources come from the manifest flow of the job's vendor (synth-amd, ...).
+A case passes only when its results match tools/vendor_synth/expected/;
+the tool exit code alone never makes a pass. Runs are sequential and hold
+the machine-wide EDA lock. Artefacts go outside the repository by default.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +24,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from tools.eda_archive import archive_campaign
+from tools.eda_lock import heavy_tool_lock
+from tools.eda_proc import run_tool
+from tools.eda_provenance import provenance, same_inputs
+from tools.eda_retry import retry_reason, run_with_retries
+from tools.eda_workdir import prune, work_root as work_root_for
+from tools.manifest import load as load_manifest
+
+from . import check
+
 try:
   import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
@@ -25,7 +41,35 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_WORK_ROOT = Path("build/vendor_synth")
+MANIFEST_FLOWS = {
+  "amd": "synth-amd", "xilinx": "synth-amd",
+  "intel": "synth-intel", "altera": "synth-intel",
+  "lattice": "synth-lattice",
+  "microchip": "synth-microchip", "microsemi": "synth-microchip",
+}
+MANIFEST_TOOLS = {
+  "vivado": "vivado", "xilinx": "vivado",
+  "quartus": "quartus", "intel": "quartus", "altera": "quartus",
+  "diamond": "diamond", "radiant": "radiant",
+  "libero": "libero", "microchip": "libero", "microsemi": "libero",
+}
+# Message IDs whose limit is always raised, so their counts are real.
+ALWAYS_UNLIMITED = ("Synth 8-6859", "Synth 8-5787", "Synth 8-4767", "Synth 8-3848", "Synth 8-3917")
+
+
+def default_work_root() -> Path:
+  """Short build directory outside the repository: $LM_EDA_WORKDIR/vs (tools/eda_workdir.py)."""
+  return work_root_for("vs")
+
+
+# Kept in a case directory after a passing run (prune_case_dir); the rest
+# (projects, tool databases, .Xil) is removed. Enough for --evaluate-only.
+KEEP_AFTER_PASS = ("*.log", "run.json", "reports", "*.tcl", "*.rpt", "*.summary", "*.vhd")
+# Record of a real run next to its log: provenance, times, exit code, retries.
+# --evaluate-only needs it and refuses a run made from other inputs.
+RUN_RECORD = "run.json"
+# Generated tops whose generics are read back from the inner library entity.
+GENERICS_MODULE = {"crw_cr_common_clock": "lm_mem_ram_crw_cr"}
 MEMORY_KEYWORDS = re.compile(
   r"(ram|bram|uram|m20k|mlab|m10k|ebr|dpram|block memory|distributed)",
   re.IGNORECASE,
@@ -38,26 +82,6 @@ FAILURE_PATTERNS = (
   re.compile(r".*Command failed.*", re.IGNORECASE),
 )
 
-SOURCE_COMMON = ("src/common/lm_mem_pkg.vhd",)
-SOURCE_GENERIC_CRW_CRW = ("src/generic/lm_mem_ram_crw_crw.vhd",)
-SOURCE_GENERIC_R_W = (
-  "src/generic/lm_mem_ram_crw_crw.vhd",
-  "src/generic/lm_mem_ram_r_w.vhd",
-)
-SOURCE_GENERIC_RW_RW = (
-  "src/generic/lm_mem_ram_crw_crw.vhd",
-  "src/generic/lm_mem_ram_rw_rw.vhd",
-)
-SOURCE_INFER_R_W = ("src/inference/lm_mem_ram_r_w_infer.vhd",)
-SOURCE_PRIMITIVES = {
-  "amd": "src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd",
-  "xilinx": "src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd",
-  "intel": "src/primitives/intel/lm_mem_intel_ram_r_w_prim.vhd",
-  "altera": "src/primitives/intel/lm_mem_intel_ram_r_w_prim.vhd",
-  "lattice": "src/primitives/lattice/lm_mem_lattice_ram_r_w_prim.vhd",
-  "microchip": "src/primitives/microchip/lm_mem_microchip_ram_r_w_prim.vhd",
-  "microsemi": "src/primitives/microchip/lm_mem_microchip_ram_r_w_prim.vhd",
-}
 PRIMITIVE_ENTITIES = {
   "amd": "lm_mem_xilinx_ram_r_w_prim",
   "xilinx": "lm_mem_xilinx_ram_r_w_prim",
@@ -113,7 +137,7 @@ BUILTIN_CASES: tuple[dict[str, Any], ...] = (
     "width": 32,
     "depth": 1024,
     "latency": 1,
-    "style": "bram",
+    "style": "block",
   },
   {
     "name": "infer_r_w_distributed_16x64",
@@ -162,6 +186,8 @@ def _load_config(path: Path) -> dict[str, Any]:
 
 def _case_map(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
   cases = {case["name"]: dict(case) for case in BUILTIN_CASES}
+  for case in check.load_cases():
+    cases[case["name"]] = dict(case)
   for case in config.get("cases", []):
     if not isinstance(case, dict) or not case.get("name"):
       raise SystemExit("each custom case must be an object with a name")
@@ -394,7 +420,10 @@ def _launcher_command(job: dict[str, Any], command: list[str], work_dir: Path) -
       lines.append(f"call {_cmd_quote(str(setup_script))}")
       lines.append("if errorlevel 1 exit /b %ERRORLEVEL%")
     quoted = " ".join(_cmd_quote(arg) for arg in command)
-    lines.append(quoted)
+    # "call": without it cmd.exe hands control to a .bat tool (vivado.bat)
+    # and never returns, so its exit code is not the tool's (measured with
+    # Vivado 2023.1: 0 or 123 after a failed synth_design, 1 with call).
+    lines.append(("call " if _uses_windows_batch(command) else "") + quoted)
     lines.append("exit /b %ERRORLEVEL%")
     launcher.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return ["cmd", "/c", str(launcher)]
@@ -414,6 +443,8 @@ def _tool_command(job: dict[str, Any], default: str, args: list[str], work_dir: 
 
 
 def _top_name(job: dict[str, Any], case: dict[str, Any]) -> str:
+  if case.get("kind") == "entity":
+    return str(case["entity"])
   return "lm_vs_" + _sanitize(_job_name(job)) + "_" + _sanitize(case["name"])
 
 
@@ -668,35 +699,79 @@ def _render_top(job: dict[str, Any], case: dict[str, Any], entity: str) -> str:
   if kind == "generic_crw_crw":
     return _render_crw_crw_top(entity, case)
 
+  if kind == "crw_cr_common_clock":
+    return _render_crw_cr_common_clock_top(entity, case)
+
   raise SystemExit(f"{case['name']}: unsupported case kind {kind}")
 
 
+def _render_crw_cr_common_clock_top(top: str, case: dict[str, Any]) -> str:
+  """lm_mem_ram_crw_cr with both clock ports on one clock (a URAM has a single clock)."""
+  g = case["generics"]
+  width, depth, latency = int(g["g_ram_data_w"]), int(g["g_ram_depth"]), int(g.get("g_ram_latency", 1))
+  addr = max(1, (depth - 1).bit_length())
+  return f"""-- Generated by tools/vendor_synth: {case['name']}, lm_mem_ram_crw_cr on one clock.
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity {top} is
+  port(
+    clk_i       : in  std_logic;
+    ena_i       : in  std_logic;
+    enb_i       : in  std_logic;
+    wen_a_i     : in  std_logic;
+    data_wr_a_i : in  std_logic_vector({width - 1} downto 0);
+    addr_a_i    : in  std_logic_vector({addr - 1} downto 0);
+    addr_b_i    : in  std_logic_vector({addr - 1} downto 0);
+    data_rd_a_o : out std_logic_vector({width - 1} downto 0);
+    data_rd_b_o : out std_logic_vector({width - 1} downto 0)
+  );
+end entity {top};
+
+architecture a_rtl of {top} is
+begin
+  inst_mem : entity work.lm_mem_ram_crw_cr
+    generic map(
+      g_ram_latency => {latency},
+      g_ram_data_w  => {width},
+      g_ram_depth   => {depth}
+    )
+    port map(
+      clk_a_i     => clk_i,
+      clk_b_i     => clk_i,
+      ena_i       => ena_i,
+      enb_i       => enb_i,
+      wen_a_i     => wen_a_i,
+      data_wr_a_i => data_wr_a_i,
+      addr_a_i    => addr_a_i,
+      addr_b_i    => addr_b_i,
+      data_rd_a_o => data_rd_a_o,
+      data_rd_b_o => data_rd_b_o
+    );
+end architecture a_rtl;
+"""
+
+
 def _source_files_for(job: dict[str, Any], case: dict[str, Any]) -> list[Path]:
-  kind = str(case["kind"])
-  relative: list[str] = list(SOURCE_COMMON)
-
-  if kind == "generic_r_w":
-    relative.extend(SOURCE_GENERIC_R_W)
-  elif kind == "generic_rw_rw":
-    relative.extend(SOURCE_GENERIC_RW_RW)
-  elif kind == "generic_crw_crw":
-    relative.extend(SOURCE_GENERIC_CRW_CRW)
-  elif kind == "infer_r_w":
-    relative.extend(SOURCE_INFER_R_W)
-  elif kind == "primitive_r_w":
-    vendor = _vendor(job)
-    primitive_source = SOURCE_PRIMITIVES.get(vendor)
-    if primitive_source is None:
-      raise SystemExit(f"{case['name']}: unsupported primitive vendor {vendor}")
-    relative.extend(SOURCE_GENERIC_R_W)
-    relative.append(primitive_source)
-  else:
-    raise SystemExit(f"{case['name']}: unsupported case kind {kind}")
-
-  return [ROOT_DIR / path for path in relative]
+  """Library sources from the manifest flow of the job's vendor."""
+  vendor = _vendor(job)
+  # manifest_flow: e.g. "synth-unsupported", to check the fallback with any tool.
+  flow = job.get("manifest_flow") or MANIFEST_FLOWS.get(vendor)
+  if flow is None:
+    raise SystemExit(f"{_job_name(job)}: no manifest flow for vendor {vendor}")
+  tool = MANIFEST_TOOLS.get(_tool(job))
+  return [source.path for source in load_manifest().files(flow, tool)]
 
 
-def _vivado_script(job: dict[str, Any], top: str, sources: list[Path], script: Path, reports: Path) -> list[str]:
+def _vivado_script(
+  job: dict[str, Any],
+  top: str,
+  sources: list[Path],
+  script: Path,
+  reports: Path,
+  generics: dict[str, Any] | None = None,
+  unlimited_ids: tuple[str, ...] = ALWAYS_UNLIMITED,
+) -> list[str]:
   part = job.get("part")
   if not part:
     raise SystemExit(f"{_job_name(job)}: Vivado jobs require part")
@@ -704,26 +779,61 @@ def _vivado_script(job: dict[str, Any], top: str, sources: list[Path], script: P
   script_dir = _tcl_path(script.parent)
   source_lines = "\n".join(f"read_vhdl -vhdl2008 {{{_tcl_path(path)}}}" for path in sources)
   thread_line = f"set_param general.maxThreads {threads}\n" if threads >= 2 else ""
+  limit_lines = "\n".join(f"set_msg_config -id {{{msg_id}}} -limit 1000000" for msg_id in unlimited_ids)
+  # Generics go into the script, never through a command line (cmd.exe splits
+  # arguments on '='), and are read back from the log afterwards.
+  # assert = true: Vivado evaluates VHDL assertions (synth_design -assert).
+  assert_arg = " -assert" if job.get("assert") else ""
+  generic_args = "".join(
+    f" -generic {{{name}={_tcl_generic(value)}}}" for name, value in (generics or {}).items()
+  )
+  synth_line = check.vivado_synth_command(
+    f"synth_design -mode out_of_context -top {top} -part {{{part}}}{generic_args}{assert_arg}")
   text = f"""# SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 {thread_line}set script_dir {{{script_dir}}}
 file mkdir [file join $script_dir reports]
-create_project -force lm_vendor_synth [file join $script_dir project] -part {{{part}}}
-set_property target_language VHDL [current_project]
+catch {{ set_param messaging.defaultLimit 1000000 }}
+{limit_lines}
 {source_lines}
-synth_design -top {top} -part {{{part}}}
-report_utilization -hierarchical -file [file join $script_dir reports utilization_hier.rpt]
+{synth_line}
+report_utilization -file {{{_tcl_path(reports / "utilization.rpt")}}}
 catch {{ report_ram_utilization -file {{{_tcl_path(reports / "ram_utilization.rpt")}}} }}
-catch {{ report_synth -file {{{_tcl_path(reports / "synthesis.rpt")}}} }}
-catch {{ report_timing_summary -file [file join $script_dir reports timing_summary.rpt] }}
-write_checkpoint -force [file join $script_dir reports synth.dcp]
 exit
 """
   script.write_text(text, encoding="utf-8")
-  return _tool_command(job, "vivado", ["-mode", "batch", "-source", _tcl_path(script)], script.parent)
+  return _tool_command(job, "vivado", ["-mode", "batch", "-nojournal", "-source", _tcl_path(script)], script.parent)
 
 
-def _quartus_script(job: dict[str, Any], top: str, sources: list[Path], script: Path, reports: Path) -> list[str]:
+def _tcl_generic(value: Any) -> str:
+  """Value of a generic inside the braces of synth_design -generic {name=value}.
+
+  Braces keep every character, so a VHDL string is written with plain
+  quotes; escaped quotes would reach Vivado as backslashes and quotes.
+  """
+  if isinstance(value, bool):
+    return "true" if value else "false"
+  if isinstance(value, str):
+    return '"' + value + '"'
+  return str(value)
+
+
+def _quartus_generic(value: Any) -> str:
+  if isinstance(value, bool):
+    return "true" if value else "false"
+  if isinstance(value, str):
+    return '"\\"' + value + '\\""'
+  return str(value)
+
+
+def _quartus_script(
+  job: dict[str, Any],
+  top: str,
+  sources: list[Path],
+  script: Path,
+  reports: Path,
+  generics: dict[str, Any] | None = None,
+) -> list[str]:
   family = job.get("family")
   if not family:
     raise SystemExit(f"{_job_name(job)}: Quartus jobs require family")
@@ -731,6 +841,12 @@ def _quartus_script(job: dict[str, Any], top: str, sources: list[Path], script: 
   project = _sanitize(_job_name(job)) + "_" + top
   source_lines = "\n".join(f"set_global_assignment -name VHDL_FILE {{{_tcl_path(path)}}}" for path in sources)
   device_line = f"set_global_assignment -name DEVICE {{{device}}}\n" if device else ""
+  # Generics go into the script, as for Vivado.
+  parameter_lines = "".join(
+    f"set_parameter -name {name} {_quartus_generic(value)}\n" for name, value in (generics or {}).items()
+  )
+  # quartus_flow: "map" (Analysis & Synthesis, the default) or "compile".
+  run_line = "execute_module -tool map" if job.get("quartus_flow", "map") == "map" else "execute_flow -compile"
   text = f"""# SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 load_package flow
@@ -739,7 +855,7 @@ set_global_assignment -name FAMILY {{{family}}}
 {device_line}set_global_assignment -name TOP_LEVEL_ENTITY {top}
 set_global_assignment -name VHDL_INPUT_VERSION VHDL_2008
 {source_lines}
-execute_flow -compile
+{parameter_lines}{run_line}
 project_close
 """
   script.write_text(text, encoding="utf-8")
@@ -831,12 +947,19 @@ def _custom_script(job: dict[str, Any], top: str, sources: list[Path], script: P
   return _launcher_command(job, formatted, script.parent)
 
 
-def _tool_script(job: dict[str, Any], top: str, sources: list[Path], script: Path, reports: Path) -> list[str]:
+def _tool_script(
+  job: dict[str, Any],
+  top: str,
+  sources: list[Path],
+  script: Path,
+  reports: Path,
+  generics: dict[str, Any] | None = None,
+) -> list[str]:
   tool = _tool(job)
   if tool in ("vivado", "xilinx"):
-    return _vivado_script(job, top, sources, script, reports)
+    return _vivado_script(job, top, sources, script, reports, generics)
   if tool in ("quartus", "intel", "altera"):
-    return _quartus_script(job, top, sources, script, reports)
+    return _quartus_script(job, top, sources, script, reports, generics)
   if tool == "diamond":
     return _diamond_script(job, top, sources, script, reports)
   if tool == "radiant":
@@ -892,88 +1015,293 @@ def _report_files(case_dir: Path) -> list[Path]:
   ]
 
 
-def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool) -> dict[str, Any]:
+def _executable_available(job: dict[str, Any], default: str) -> bool:
+  exe = _configured_command(job, default)[0]
+  path = Path(exe)
+  if path.is_absolute() or len(path.parts) > 1:
+    return path.exists()
+  return shutil.which(exe) is not None
+
+
+def _default_executable(job: dict[str, Any]) -> str:
+  return {
+    "vivado": "vivado", "xilinx": "vivado",
+    "quartus": "quartus_sh", "intel": "quartus_sh", "altera": "quartus_sh",
+    "diamond": "diamondc", "radiant": "radiantc",
+    "libero": "libero", "microchip": "libero", "microsemi": "libero",
+  }.get(_tool(job), _tool(job))
+
+
+def _generics_module(case: dict[str, Any], top: str) -> str | None:
+  """The module whose generics are read back from the log for this case, or None."""
+  kind = case.get("kind")
+  if kind == "entity":
+    return top
+  return GENERICS_MODULE.get(str(kind))
+
+
+def _tool_roots(job: dict[str, Any]) -> list[Path]:
+  """Installation directories of the job's tool (for the retry signatures)."""
+  install_dir = _job_path(job, "install_dir")
+  return [install_dir] if install_dir is not None else []
+
+
+def _report_is_fresh(path: Path, started_at: str | None) -> bool:
+  """True if the report was written by the run that started at started_at."""
+  if not path.is_file() or not started_at:
+    return False
+  started = dt.datetime.fromisoformat(started_at).timestamp()
+  # File systems store modification times with limited precision.
+  return path.stat().st_mtime >= started - 2.0
+
+
+def _evaluate(
+  job: dict[str, Any],
+  case: dict[str, Any],
+  top: str,
+  log_text: str,
+  reports: Path,
+  sources: list[Path] | None = None,
+  run: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+  """Compare the results of one run with the expected results.
+
+  run: the record of the run (run.json): return code, start time, retries.
+  A pass needs positive evidence of a complete run of this case: the tool's
+  completion message, exit code 0, no error of the project, and reports
+  written by this run that have every expected row.
+  """
+  run = run or {}
+  tool = _tool(job)
+  part = str(job.get("part") or job.get("device") or "")
+  return_code = run.get("return_code")
+  expectation = check.find_expectation(check.load_expected(_vendor(job)), case["name"], part)
+  if expectation is not None and ("expect_failure" in expectation or "expect_failure_constant" in expectation):
+    problems, facts = check.check_expected_failure(tool, log_text, expectation, sources,
+                                                   assert_mode=bool(job.get("assert")), return_code=return_code)
+    log = check.parse_vivado_log(log_text, top) if tool in ("vivado", "xilinx") else {}
+    # The stop must be for the requested generics (Vivado prints them before the error).
+    module = _generics_module(case, top)
+    if log and module is not None:
+      problems += check.check_generics(case.get("generics", {}), log["module_generics"].get(module.lower(), {}))
+    # A tool that stopped before elaborating the design says nothing about the check.
+    status = "pass" if not problems else ("fail" if facts["elaborated"] else "tool-error")
+    return {"status": status, "problems": problems, "metrics": facts, "log": log}
+  if tool not in ("vivado", "xilinx"):
+    return {"status": "unchecked", "problems": [f"no result extraction for tool {tool} yet"], "metrics": {}, "log": {}}
+  log = check.parse_vivado_log(log_text, top)
+  util_file = reports / "utilization.rpt"
+  metrics = check.parse_vivado_utilization(util_file.read_text(encoding="utf-8", errors="ignore")) if util_file.is_file() else {}
+  incomplete = []
+  if not log["synth_ran"]:
+    incomplete.append("synth_design did not start")
+  if not log["completed"]:
+    incomplete.append("no 'synth_design completed successfully' in the log")
+  error = log["project_error"] or (log["errors"][0] if log["errors"] else None)
+  if error:
+    incomplete.append(error)
+  if return_code != 0:
+    incomplete.append(f"tool exit code {return_code}")
+  if not util_file.is_file():
+    incomplete.append("no utilization report")
+  elif not _report_is_fresh(util_file, run.get("started_at")):
+    incomplete.append("utilization report older than the run")
+  if incomplete:
+    problems = ["synthesis did not complete: " + "; ".join(incomplete)]
+    return {"status": "tool-error", "problems": problems, "metrics": metrics, "log": log}
+  problems: list[str] = []
+  module = _generics_module(case, top)
+  if module is None:
+    problems.append(f"no generics readback for case kind {case.get('kind')}")
+  else:
+    problems += check.check_generics(case.get("generics", {}), log["module_generics"].get(module.lower(), {}))
+  if expectation is None:
+    problems.append(f"no expected results for case {case['name']} on {part}")
+    return {"status": "unchecked", "problems": problems, "metrics": metrics, "log": log}
+  problems += check.compare(metrics, log, expectation, part)
+  return {"status": "fail" if problems else "pass", "problems": problems, "metrics": metrics, "log": log}
+
+
+def _inputs(job: dict[str, Any], case: dict[str, Any], sources: list[Path]) -> dict[str, str]:
+  """Provenance of a run: library sources, manifest, commit, and what selects the case."""
+  selection = json.dumps({"case": case, "part": job.get("part", job.get("device", "")), "tool": _tool(job),
+                          "assert": bool(job.get("assert")), "flow": job.get("manifest_flow")}, sort_keys=True)
+  return provenance(sources, extra=[selection])
+
+
+def _read_run_record(path: Path) -> dict[str, Any] | None:
+  try:
+    return json.loads(path.read_text(encoding="utf-8"))
+  except (OSError, json.JSONDecodeError):
+    return None
+
+
+def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evaluate_only: bool = False) -> dict[str, Any]:
   job = item.job
   case = item.case
   top = _top_name(job, case)
   case_dir = work_root / _sanitize(_job_name(job)) / _sanitize(case["name"])
   reports = case_dir / "reports"
+  record_file = case_dir / RUN_RECORD
 
-  if clean and case_dir.exists():
+  if clean and not evaluate_only and case_dir.exists():
     shutil.rmtree(case_dir)
   reports.mkdir(parents=True, exist_ok=True)
 
-  top_file = case_dir / f"{top}.vhd"
   script_file = case_dir / f"run_{_tool(job)}.tcl"
-  sources = _source_files_for(job, case) + [top_file]
-  top_file.write_text(_render_top(job, case, top), encoding="utf-8")
-  command = _tool_script(job, top, sources, script_file, reports)
+  sources = _source_files_for(job, case)
+  inputs = _inputs(job, case, sources)
+  generics: dict[str, Any] = {}
+  if case.get("kind") == "entity":
+    generics = dict(case.get("generics", {}))
+  elif not evaluate_only:
+    top_file = case_dir / f"{top}.vhd"
+    top_file.write_text(_render_top(job, case, top), encoding="utf-8")
+    sources = sources + [top_file]
+  # Evaluation only: keep the script that actually ran.
+  command = [] if evaluate_only else _tool_script(job, top, sources, script_file, reports, generics)
   log_file = case_dir / "run.log"
 
-  status = "dry-run"
-  return_code: int | None = None
-  started_at = dt.datetime.now(dt.timezone.utc).isoformat()
-  completed_at = started_at
-
-  if dry_run:
-    log_file.write_text(
-      "dry run: command was not executed\ncommand: " + " ".join(command) + "\n",
-      encoding="utf-8",
-    )
-  else:
-    env = os.environ.copy()
-    env.update({str(k): str(v) for k, v in job.get("env", {}).items()})
-    timeout = int(job.get("timeout_seconds", 3600))
-    started_at = dt.datetime.now(dt.timezone.utc).isoformat()
-    with log_file.open("w", encoding="utf-8", errors="ignore") as handle:
-      handle.write("command: " + " ".join(command) + "\n")
-      handle.flush()
-      try:
-        process = subprocess.run(
-          command,
-          cwd=case_dir,
-          env=env,
-          stdout=handle,
-          stderr=subprocess.STDOUT,
-          check=False,
-          timeout=timeout,
-        )
-        return_code = process.returncode
-        status = "pass" if process.returncode == 0 else "fail"
-      except subprocess.TimeoutExpired:
-        status = "timeout"
-        return_code = None
-        handle.write(f"\ntimeout after {timeout} seconds\n")
-    completed_at = dt.datetime.now(dt.timezone.utc).isoformat()
-
-  reports_found = _report_files(case_dir)
-  failure_message = _failure_message(reports_found)
-  if failure_message and status == "pass":
-    status = "fail"
-  memory_lines = _collect_memory_lines(reports_found)
-  return {
+  result: dict[str, Any] = {
     "job": _job_name(job),
     "tool": _tool(job),
     "vendor": _vendor(job),
     "family": _family(job),
+    "part": job.get("part", job.get("device", "")),
     "case": case["name"],
     "case_kind": case["kind"],
-    "status": status,
-    "return_code": return_code,
     "top": top,
+    "generics": generics,
     "work_dir": str(case_dir),
     "script": str(script_file),
     "log": str(log_file),
     "command": command,
-    "started_at": started_at,
-    "completed_at": completed_at,
-    "reports": [str(path) for path in reports_found],
-    "message": failure_message,
-    "memory_lines": memory_lines,
+    "return_code": None,
+    "retries": [],
+    "problems": [],
+    "metrics": {},
+    "tool_version": "",
+    "critical_warnings": None,
+    "provenance": inputs,
+    "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
   }
 
+  if dry_run:
+    log_file.write_text("dry run: command was not executed\ncommand: " + " ".join(command) + "\n", encoding="utf-8")
+    result.update(status="dry-run", completed_at=result["started_at"], message="")
+    return result
 
-def _write_summary(work_root: Path, results: list[dict[str, Any]]) -> None:
+  if evaluate_only:
+    record = _read_run_record(record_file)
+    problem = None
+    if not log_file.is_file() or record is None:
+      problem = "no previous run to evaluate (run.log and run.json are needed)"
+    elif not same_inputs(record.get("provenance"), inputs):
+      problem = (f"the previous run used other inputs (commit {record.get('provenance', {}).get('commit', '?')}); "
+                 "run the case again")
+    if problem:
+      result.update(status="not-run", completed_at=result["started_at"], message=problem, problems=[problem])
+      return result
+    text = log_file.read_text(encoding="utf-8", errors="ignore")
+    result.update(return_code=record.get("return_code"), retries=record.get("retries", []),
+                  started_at=record.get("started_at"))
+    evaluation = _evaluate(job, case, top, text, reports, sources, record)
+    if record.get("timed_out"):
+      evaluation.update(status="timeout", problems=["timeout"])
+    elif record.get("persisted"):
+      evaluation["status"] = "tool-error"
+      evaluation["problems"].insert(0, "transient tool failure in every attempt of the previous run")
+    else:
+      # The policy of a real run, applied again to the log that is evaluated.
+      done = record.get("return_code") == 0 and check.tool_completed(_tool(job), text)
+      reason = retry_reason(text, completed=done, roots=_tool_roots(job))
+      if reason:
+        evaluation["status"] = "tool-error"
+        evaluation["problems"].insert(0, f"transient tool failure in the log: {reason}")
+    log = evaluation["log"]
+    result.update(
+      status=evaluation["status"], problems=evaluation["problems"], metrics=evaluation["metrics"],
+      tool_version=log.get("version", ""), critical_warnings=log.get("critical_warnings"),
+      completed_at=record.get("completed_at", result["started_at"]), message="; ".join(evaluation["problems"])[:400],
+    )
+    return result
+
+  if not _executable_available(job, _default_executable(job)):
+    result.update(status="not-run", completed_at=result["started_at"],
+                  message=f"tool not installed: {_configured_command(job, _default_executable(job))[0]}")
+    result["problems"] = [result["message"]]
+    return result
+
+  env = os.environ.copy()
+  env.update({str(k): str(v) for k, v in job.get("env", {}).items()})
+  timeout = int(job.get("timeout_seconds", 3600))
+  timed_out = False
+
+  def run_once(attempt: int) -> str:
+    nonlocal timed_out
+    # Reports of an earlier attempt must never be read as results of this one.
+    for old in reports.glob("*"):
+      if old.is_file():
+        old.unlink()
+    result["started_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    result["return_code"] = None
+    with log_file.open("w", encoding="utf-8", errors="ignore") as handle:
+      handle.write("command: " + " ".join(command) + "\n")
+      handle.flush()
+      try:
+        # Machine-wide lock: one heavy EDA run at a time, across sessions.
+        # On a timeout run_tool stops the whole tool before the lock is released.
+        with heavy_tool_lock(f"{_tool(job)} {_job_name(job)} {case['name']}", kind="synthesis"):
+          result["return_code"] = run_tool(command, cwd=case_dir, env=env, stdout=handle,
+                                           stderr=subprocess.STDOUT, timeout=timeout)
+      except subprocess.TimeoutExpired:
+        timed_out = True
+        handle.write(f"\ntimeout after {timeout} seconds: the tool was stopped\n")
+    return log_file.read_text(encoding="utf-8", errors="ignore")
+
+  def completed(text: str) -> bool:
+    # A timeout is a result, never retried.
+    return timed_out or (result["return_code"] == 0 and check.tool_completed(_tool(job), text))
+
+  # Shared retry policy (tools/eda_retry.py): every retried attempt is recorded
+  # and its log kept as run.attempt<n>.log.
+  text, result["retries"], persisted = run_with_retries(run_once, completed=completed, roots=_tool_roots(job),
+                                                        log_path=log_file)
+
+  result["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+  record = {key: result[key] for key in ("provenance", "started_at", "completed_at", "return_code", "retries")}
+  record.update(timed_out=timed_out, persisted=persisted)
+  record_file.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+  if timed_out:
+    result.update(status="timeout", message=f"timeout after {timeout} seconds", problems=["timeout"])
+    return result
+
+  evaluation = _evaluate(job, case, top, text, reports, sources, record)
+  if persisted:
+    evaluation["status"] = "tool-error"
+    evaluation["problems"].insert(0, f"transient tool failure in all {len(result['retries'])} attempts: "
+                                     + result["retries"][-1])
+  log = evaluation["log"]
+  result.update(
+    status=evaluation["status"],
+    problems=evaluation["problems"],
+    metrics=evaluation["metrics"],
+    tool_version=log.get("version", ""),
+    critical_warnings=log.get("critical_warnings"),
+    message="; ".join(evaluation["problems"])[:400],
+  )
+  return result
+
+
+def _fmt(value: Any) -> str:
+  if value is None:
+    return "-"
+  if isinstance(value, float) and value.is_integer():
+    return str(int(value))
+  return str(value)
+
+
+def _write_summary(work_root: Path, results: list[dict[str, Any]], archive: dict[str, Any] | None = None) -> None:
   work_root.mkdir(parents=True, exist_ok=True)
   summary_json = work_root / "summary.json"
   summary_csv = work_root / "summary.csv"
@@ -981,23 +1309,62 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]]) -> None:
 
   summary_json.write_text(json.dumps({"results": results}, indent=2) + "\n", encoding="utf-8")
 
-  with summary_csv.open("w", newline="", encoding="utf-8") as handle:
-    writer = csv.DictWriter(handle, fieldnames=["job", "tool", "vendor", "family", "case", "case_kind", "status", "return_code", "work_dir"])
-    writer.writeheader()
-    for result in results:
-      writer.writerow({key: result.get(key) for key in writer.fieldnames})
+  # Results without local paths or commands, suitable for docs/results/.
+  public = [
+    {
+      "tool": r["tool"], "tool_version": r.get("tool_version", ""), "vendor": r["vendor"],
+      "family": r["family"], "part": r.get("part", ""), "case": r["case"], "top": r["top"],
+      "generics": r.get("generics", {}), "status": r["status"], "metrics": r.get("metrics", {}),
+      "critical_warnings": r.get("critical_warnings"), "retries": len(r.get("retries", [])),
+      "problems": r.get("problems", []),
+      "commit": r.get("provenance", {}).get("commit", ""),
+      "sources_hash": r.get("provenance", {}).get("sources_hash", ""),
+    }
+    for r in results
+  ]
+  document: dict[str, Any] = {"results": public}
+  if archive is not None:
+    # Complete logs of the campaign (tools/eda_archive.py).
+    document = {"archive": archive, **document}
+  (work_root / "summary_public.json").write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
+  fields = ["job", "tool", "tool_version", "part", "case", "status", "bram_tiles", "lutram", "uram",
+            "registers", "luts", "critical_warnings", "retries", "message"]
+  with summary_csv.open("w", newline="", encoding="utf-8") as handle:
+    writer = csv.DictWriter(handle, fieldnames=fields)
+    writer.writeheader()
+    for r in results:
+      m = r.get("metrics", {})
+      writer.writerow({
+        "job": r["job"], "tool": r["tool"], "tool_version": r.get("tool_version", ""), "part": r.get("part", ""),
+        "case": r["case"], "status": r["status"], "bram_tiles": m.get("bram_tiles"), "lutram": m.get("lutram"),
+        "uram": m.get("uram"), "registers": m.get("registers"), "luts": m.get("luts"),
+        "critical_warnings": r.get("critical_warnings"), "retries": len(r.get("retries", [])),
+        "message": r.get("message", ""),
+      })
+
+  status_text = {"pass": "pass", "fail": "FAIL", "tool-error": "TOOL ERROR (synthesis did not complete)",
+                 "unchecked": "UNCHECKED (no expected results)",
+                 "not-run": "NOT RUN", "timeout": "TIMEOUT", "dry-run": "dry run"}
   lines = [
     "# Vendor Synthesis Summary",
     "",
-    "| Job | Tool | Case | Status | Return Code | Message |",
-    "| --- | --- | --- | --- | --- | --- |",
+    "| Tool | Part | Case | BRAM tiles | LUTRAM | URAM | Registers | LUTs | CRITICAL WARNINGs | Retries | Result | Notes |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ]
-  for result in results:
+  for r in results:
+    m = r.get("metrics", {})
+    tool = f"{r['tool']} {r.get('tool_version', '')}".strip()
     lines.append(
-      f"| {result['job']} | {result['tool']} | {result['case']} | "
-      f"{result['status']} | {result['return_code']} | {result.get('message', '')} |"
+      f"| {tool} | {r.get('part', '')} | {r['case']} | {_fmt(m.get('bram_tiles'))} | {_fmt(m.get('lutram'))} | "
+      f"{_fmt(m.get('uram'))} | {_fmt(m.get('registers'))} | {_fmt(m.get('luts'))} | "
+      f"{_fmt(r.get('critical_warnings'))} | {len(r.get('retries', []))} | "
+      f"{status_text.get(r['status'], r['status'])} | {r.get('message', '')} |"
     )
+  counts: dict[str, int] = {}
+  for r in results:
+    counts[r["status"]] = counts.get(r["status"], 0) + 1
+  lines += ["", "Totals: " + ", ".join(f"{status_text.get(k, k)}: {v}" for k, v in sorted(counts.items()))]
   summary_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -1045,7 +1412,14 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--dry-run", action="store_true", help="generate scripts and summaries without executing tools")
   parser.add_argument("--list", action="store_true", help="list configured jobs and cases")
   parser.add_argument("--no-clean", action="store_true", help="do not remove previous per-case work directories")
-  parser.add_argument("--keep-going", action="store_true", help="continue after a failed tool run")
+  parser.add_argument("--keep-work", action="store_true",
+                      help="keep the whole work directory of passing cases (default: keep logs and reports only)")
+  parser.add_argument("--keep-going", action="store_true", help="continue after a failed case")
+  parser.add_argument("--evaluate-only", action="store_true",
+                      help="do not run tools; check the existing results in the work root against the expected results")
+  parser.add_argument("--campaign", metavar="NAME",
+                      help="campaign run for docs/results: the work root must be new or empty, nothing is pruned, "
+                           "and the work root is archived in $LM_EDA_ARCHIVE_DIR (tools/eda_archive.py)")
   return parser
 
 
@@ -1065,24 +1439,39 @@ def main(argv: list[str] | None = None) -> int:
 
   selected_cases = _selected_cases(cases, set(args.case))
   run_config = config.get("run", {})
-  work_root = args.work_root or Path(run_config.get("work_root", config.get("work_root", DEFAULT_WORK_ROOT)))
+  configured_root = run_config.get("work_root", config.get("work_root"))
+  work_root = args.work_root or (Path(configured_root) if configured_root else default_work_root())
   if not work_root.is_absolute():
     work_root = ROOT_DIR / work_root
 
   items = _build_run_items(jobs, selected_cases)
   if not items:
     raise SystemExit("no job/case combinations selected")
+  if args.campaign:
+    if args.dry_run or args.evaluate_only:
+      raise SystemExit("--campaign needs real runs (not --dry-run or --evaluate-only)")
+    if work_root.exists() and any(work_root.iterdir()):
+      raise SystemExit(f"--campaign: the work root {work_root} must be new or empty")
 
   results: list[dict[str, Any]] = []
   exit_code = 0
   for item in items:
-    result = _run_item(item, work_root, args.dry_run, not args.no_clean)
+    result = _run_item(item, work_root, args.dry_run, not args.no_clean, args.evaluate_only)
+    # A passing run keeps only its logs and reports; a failing one, and every
+    # run of a campaign, keeps everything.
+    if result["status"] == "pass" and not (args.dry_run or args.evaluate_only or args.keep_work or args.campaign):
+      prune(Path(result["work_dir"]), KEEP_AFTER_PASS)
     results.append(result)
-    if result["status"] in ("fail", "timeout"):
+    print(f"{result['status']:9} {result['job']} {result['case']} {result.get('message', '')}", flush=True)
+    if result["status"] in ("fail", "tool-error", "timeout", "unchecked", "not-run"):
       exit_code = 1
-      if not args.keep_going:
+      if not args.keep_going and result["status"] != "not-run":
         break
 
   _write_summary(work_root, results)
+  if args.campaign:
+    archive = archive_campaign(args.campaign, work_root)
+    _write_summary(work_root, results, archive)
+    print(f"archived the campaign: {archive['archive']} ({archive['files']} files, sha256 {archive['sha256']})")
   print(f"wrote vendor synthesis summary to {work_root}")
   return exit_code

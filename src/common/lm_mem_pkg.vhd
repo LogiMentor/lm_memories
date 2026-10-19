@@ -27,6 +27,20 @@ package lm_mem_pkg is
   function f_bin2gray(a : std_logic_vector) return std_logic_vector;
   function f_gray2bin(a : std_logic_vector) return std_logic_vector;
   function f_vector_or(slv : std_logic_vector) return std_logic;
+
+  -- Static checks. Every check of a generic is a pair, an assertion and a
+  -- constant outside its range, written as:
+  --   constant C_MSG_<CHECK>   : string := "<message>";
+  --   constant C_ERROR_<CHECK> : t_static_check := f_static_check(<ok>, C_MSG_<CHECK>);  -- <explanation>
+  -- f_static_check asserts ok with the message (severity failure), so
+  -- simulators and tools that evaluate assertions stop with it. It then
+  -- returns 1, outside the range of t_static_check, so elaboration stops
+  -- also in tools that ignore assertions: AMD Vivado without
+  -- synth_design -assert reports "[Synth 8-11323] assigned value '1' out of
+  -- range" at the line of the constant. Keep each C_ERROR declaration on one
+  -- line, with its comment, and before the declarations that depend on it.
+  subtype t_static_check is natural range 0 to 0;
+  function f_static_check(ok : boolean; msg : string) return natural;
 end package lm_mem_pkg;
 
 package body lm_mem_pkg is
@@ -81,6 +95,17 @@ package body lm_mem_pkg is
     return v_result;
   end function f_is_power_of_two;
 
+  function f_static_check(ok : boolean; msg : string) return natural is
+    variable v_result : natural := 1;
+  begin
+    assert ok report msg severity failure;
+    if ok then
+      v_result := 0;
+    end if;
+
+    return v_result;
+  end function f_static_check;
+
   function f_sel_a_b(sel : boolean; a, b : integer) return integer is
     variable v_result : integer := b;
   begin
@@ -97,24 +122,20 @@ package body lm_mem_pkg is
   end function f_uns2slv;
 
   function f_bin2gray(a : std_logic_vector) return std_logic_vector is
+    constant C_MSG_LENGTH : string := "lm_mem_pkg.f_bin2gray: input length must be greater than 1";
+    constant C_ERROR_LENGTH_BELOW_2 : t_static_check := f_static_check(a'length > 1, C_MSG_LENGTH);  -- ERROR: input length must be greater than 1
     variable v_a : std_logic_vector(a'length - 1 downto 0) := a;
   begin
-    assert v_a'length > 1
-      report "lm_mem_pkg.f_bin2gray: input length must be greater than 1"
-      severity failure;
-
     return v_a xor ("0" & v_a(v_a'length - 1 downto 1));
   end function f_bin2gray;
 
   function f_gray2bin(a : std_logic_vector) return std_logic_vector is
+    constant C_MSG_LENGTH : string := "lm_mem_pkg.f_gray2bin: input length must be greater than 1";
+    constant C_ERROR_LENGTH_BELOW_2 : t_static_check := f_static_check(a'length > 1, C_MSG_LENGTH);  -- ERROR: input length must be greater than 1
     variable v_a   : std_logic_vector(a'length - 1 downto 0) := a;
     variable v_bin : std_logic_vector(v_a'range);
     variable v_int : std_logic;
   begin
-    assert v_a'length > 1
-      report "lm_mem_pkg.f_gray2bin: input length must be greater than 1"
-      severity failure;
-
     v_int := '0';
     for n in v_a'length - 1 downto 0 loop
       v_bin(n) := v_a(n) xor v_int;

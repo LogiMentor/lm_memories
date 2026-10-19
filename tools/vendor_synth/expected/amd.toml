@@ -1,0 +1,419 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+#
+# Expected Vivado synthesis results (out-of-context) for the cases in
+# ../cases.toml. A case passes only if every listed field matches.
+#
+# Fields:
+#   bram_tiles     exact number of block RAM tiles (RAMB18 = 0.5)
+#   lutram         exact number of LUTs used as memory
+#   uram           exact number of URAM blocks
+#   max_registers  ceiling on flip-flops (a RAM built from flip-flops needs
+#                  depth x width of them)
+#   max_luts       ceiling on LUTs used as logic, "LUT as Logic" (optional)
+#   max_critical_warnings, forbidden_messages: from [defaults] unless set
+#
+#   ramb36, ramb18 exact numbers of RAMB36 and RAMB18 (optional)
+#
+# Parts: xc7a35tfgg484-2 (7-series), xcku3p-ffva676-2-e (Kintex
+# UltraScale+). The cores carry no ram_style attribute; URAM is expected only
+# where Vivado chooses it by itself (r_w_36x4096 below). uram = 0 by default:
+# on 7-series the report has no URAM row and that counts as 0; on
+# UltraScale+ a missing URAM row is a failure (incomplete report).
+#
+# A pass also needs a complete run (tools/vendor_synth/cli.py _evaluate):
+# "synth_design completed successfully", exit code 0, no error of the
+# project, a utilization report written by this run with every row, and the
+# generics read back from the log.
+
+[defaults]
+max_critical_warnings = 0
+forbidden_messages = ["Synth 8-6859", "Synth 8-5787", "Synth 8-4767"]
+uram = 0
+
+[[expect]]
+case = "r_w_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "r_w_32x1024_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "r_w_16x64"
+parts = ["xc7a35tfgg484-2"]
+# 7-series: one RAMB18, output register absorbed.
+bram_tiles = 0.5
+ramb36 = 0
+ramb18 = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "r_w_16x64"
+parts = ["xcku3p-ffva676-2-e"]
+# UltraScale+: distributed RAM, 2 x RAM64M8 + 1 x RAM64M = 20 LUTs as memory,
+# 16 output flip-flops (asynchronous read + register), 1 LUT for the write
+# enable (ena_i and wen_i).
+bram_tiles = 0
+lutram = 20
+max_registers = 16
+max_luts = 1
+
+[[expect]]
+case = "r_w_32x1000"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "r_w_32x1536"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 2
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "cr_cw_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "cr_cw_32x1024_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "r_w_ratio_32to8"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "r_w_ratio_8to32"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "cr_cw_ratio_32to8"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "cr_cw_ratio_8to32"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_cr_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_cr_32x1024_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+# FIFOs: the storage must be a RAM primitive; the registers are the pointers,
+# flags and synchronizers (a flip-flop storage would need 512 or 32768).
+# Ceilings on registers and logic LUTs: the values measured on 2026-10-18
+# (docs/results/vivado_2023.1_amd.json) plus a margin of 10 % + 2, rounded
+# up, so that a regression of the control logic fails.
+[[expect]]
+case = "fifo_sync_32x16"
+parts = ["xc7a35tfgg484-2"]
+# Distributed RAM: 5 x RAM32M (6 bits each) + 2 x RAM32X1D = 24 LUTs as memory.
+bram_tiles = 0
+lutram = 24
+# Measured: 47 registers, 25 LUTs as logic.
+max_registers = 54
+max_luts = 30
+
+[[expect]]
+case = "fifo_sync_32x16"
+parts = ["xcku3p-ffva676-2-e"]
+# Distributed RAM: 2 x RAM32M16 (14 bits, 8 LUTs each) + 1 x RAM32M = 20 LUTs as memory.
+bram_tiles = 0
+lutram = 20
+# Measured: 47 registers, 25 LUTs as logic.
+max_registers = 54
+max_luts = 30
+
+[[expect]]
+case = "fifo_sync_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+# Measured: 27 registers, 56 LUTs as logic (Artix-7; Kintex UltraScale+ 54).
+max_registers = 32
+max_luts = 64
+
+[[expect]]
+case = "fifo_async_32x16"
+parts = ["xc7a35tfgg484-2"]
+# Distributed RAM: 5 x RAM32M (6 bits each) + 2 x RAM32X1D = 24 LUTs as memory.
+bram_tiles = 0
+lutram = 24
+# Measured: 75 registers, 39 LUTs as logic.
+max_registers = 85
+max_luts = 45
+
+[[expect]]
+case = "fifo_async_32x16"
+parts = ["xcku3p-ffva676-2-e"]
+# Distributed RAM: 2 x RAM32M16 (14 bits, 8 LUTs each) + 1 x RAM32M = 20 LUTs as memory.
+bram_tiles = 0
+lutram = 20
+# Measured: 75 registers, 36 LUTs as logic.
+max_registers = 85
+max_luts = 42
+
+[[expect]]
+case = "fifo_async_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+# Measured: 91 registers, 99 LUTs as logic.
+max_registers = 103
+max_luts = 111
+
+# Two-writer RAMs (lm_mem_ram_crw_crw, AMD architecture, and its wrappers).
+# Measured 2026-10-18; every case maps to block RAM primitives only
+# (RAMB36E1/RAMB18E1, RAMB36E2/RAMB18E2), with latency 2 absorbed in the
+# output register.
+
+[[expect]]
+case = "crw_crw_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_32x1024_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_32to8"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_8to32"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_32x1000"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_crw_16x64"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+# One RAMB18 on both families.
+bram_tiles = 0.5
+ramb36 = 0
+ramb18 = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "rw_rw_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "rw_rw_32x1024_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_cw_32x1024"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+# 36 x 4096 on one clock, UltraScale+ only (measured 2026-10-18). Vivado maps
+# the simple dual port to one URAM288 without any attribute (Synth 8-6794).
+# The true dual-port RAMs (crw_cr on one clock, rw_rw) stay in block RAM:
+# 4 RAMB36E2 of 1K x 36, with LUTs for the output multiplexer.
+
+[[expect]]
+case = "r_w_36x4096"
+parts = ["xcku3p-ffva676-2-e"]
+uram = 1
+bram_tiles = 0
+lutram = 0
+max_registers = 0
+max_luts = 0
+
+[[expect]]
+case = "crw_cr_36x4096_cc"
+parts = ["xcku3p-ffva676-2-e"]
+bram_tiles = 4
+lutram = 0
+max_registers = 0
+max_luts = 10
+
+[[expect]]
+case = "rw_rw_36x4096"
+parts = ["xcku3p-ffva676-2-e"]
+bram_tiles = 4
+lutram = 0
+max_registers = 0
+max_luts = 12
+
+# Static checks (fallback_check.toml): synthesis must stop at the check.
+# Vivado without synth_design -assert must report "ERROR: [Synth 8-11323]
+# assigned value '1' out of range" at the line of the constant
+# expect_failure_constant; with -assert, "ERROR: [Synth 8-63] RTL assertion"
+# with the message (expect_failure). Each job accepts only its own message.
+
+[[expect]]
+case = "fallback_crw_crw_32x1024"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_NO_VALIDATED_TWO_WRITER_RAM_FOR_THIS_TOOL"
+expect_failure = ["no validated two-writer RAM architecture for this tool"]
+
+[[expect]]
+case = "fallback_rw_rw_32x1024"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_NO_VALIDATED_TWO_WRITER_RAM_FOR_THIS_TOOL"
+expect_failure = ["no validated two-writer RAM architecture for this tool"]
+
+[[expect]]
+case = "fallback_crw_cw_32x1024"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_NO_VALIDATED_TWO_WRITER_RAM_FOR_THIS_TOOL"
+expect_failure = ["no validated two-writer RAM architecture for this tool"]
+
+[[expect]]
+case = "bad_r_w_latency3"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_RD_LATENCY_NOT_1_OR_2"
+expect_failure = ["lm_mem_ram_sdp: read latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_r_w_ratio_24to8"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_WIDTH_RATIO_NOT_POW2"
+expect_failure = ["lm_mem_ram_sdp: port widths must have a power-of-two ratio"]
+
+[[expect]]
+case = "bad_crw_cr_latency3"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_A_LATENCY_NOT_1_OR_2"
+expect_failure = ["lm_mem_ram_tdp1w: port A latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_crw_crw_latency3"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_B_LATENCY_NOT_1_OR_2"
+expect_failure = ["lm_mem_ram_crw_crw: port B latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_crw_crw_ratio_24to8"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_WIDTH_RATIO_NOT_POW2"
+expect_failure = ["lm_mem_ram_crw_crw: port widths must have a power-of-two ratio"]
+
+[[expect]]
+case = "bad_fifo_sync_depth24"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_WR_DEPTH_NOT_POW2"
+expect_failure = ["lm_mem_fifo: g_wr_depth must be a power of two"]
+
+[[expect]]
+case = "bad_ccd_resync_levels1"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_META_LEVELS_BELOW_2"
+expect_failure = ["lm_mem_ccd_resync: g_meta_levels must be at least 2"]
+
+[[expect]]
+case = "bad_fifo_almost_full_0"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_ALMOST_FULL_OUT_OF_RANGE"
+expect_failure = ["lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth"]
+
+[[expect]]
+case = "bad_fifo_almost_empty_15"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_ALMOST_EMPTY_OUT_OF_RANGE"
+expect_failure = ["lm_mem_fifo: g_almost_empty_limit must be in 0 to read depth - 2"]
+
+[[expect]]
+case = "bad_r_w_infer_latency3"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_LATENCY_NOT_1_OR_2"
+expect_failure = ["lm_mem_ram_r_w_infer: latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_r_w_infer_no_vendor"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_VENDOR_FAMILY_TOOL_UNSET"
+expect_failure = ["lm_mem_ram_r_w_infer: vendor, family, and tool strings must be set"]
+
+[[expect]]
+case = "bad_xilinx_prim_no_family"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_FAMILY_PRIMITIVE_UNSET"
+expect_failure = ["lm_mem_xilinx_ram_r_w_prim: family and primitive must be set"]

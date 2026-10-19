@@ -38,10 +38,12 @@ entity lm_mem_intel_ram_r_w_prim is
 end entity lm_mem_intel_ram_r_w_prim;
 
 architecture a_rtl of lm_mem_intel_ram_r_w_prim is
+  -- Static check (lm_mem_pkg): elaboration stops at this line, with its
+  -- message where assertions are evaluated.
+  constant C_OK_STRINGS  : boolean := (g_family'length > 0) and (g_primitive'length > 0);
+  constant C_MSG_STRINGS : string  := "lm_mem_intel_ram_r_w_prim: family and primitive must be set";
+  constant C_ERROR_FAMILY_PRIMITIVE_UNSET : t_static_check := f_static_check(C_OK_STRINGS, C_MSG_STRINGS);  -- ERROR: g_family and g_primitive must not be empty
 begin
-  assert (g_family'length > 0) and (g_primitive'length > 0)
-    report "lm_mem_intel_ram_r_w_prim: family and primitive must be set"
-    severity failure;
 
   inst_mem : entity work.lm_mem_ram_r_w
     generic map(

@@ -41,6 +41,15 @@ entity lm_mem_ram_r_w_infer is
 end entity lm_mem_ram_r_w_infer;
 
 architecture a_rtl of lm_mem_ram_r_w_infer is
+  -- Static checks (lm_mem_pkg): elaboration stops at the line of the first
+  -- failing check, with its message where assertions are evaluated.
+  constant C_OK_LATENCY  : boolean := (g_ram_latency = 1) or (g_ram_latency = 2);
+  constant C_OK_STRINGS  : boolean := (g_vendor'length > 0) and (g_family'length > 0) and (g_tool'length > 0);
+  constant C_MSG_LATENCY : string  := "lm_mem_ram_r_w_infer: latency must be 1 or 2";
+  constant C_MSG_STRINGS : string  := "lm_mem_ram_r_w_infer: vendor, family, and tool strings must be set";
+  constant C_ERROR_LATENCY_NOT_1_OR_2      : t_static_check := f_static_check(C_OK_LATENCY, C_MSG_LATENCY);  -- ERROR: g_ram_latency must be 1 or 2
+  constant C_ERROR_VENDOR_FAMILY_TOOL_UNSET : t_static_check := f_static_check(C_OK_STRINGS, C_MSG_STRINGS);  -- ERROR: g_vendor, g_family and g_tool must not be empty
+
   type t_mem is array (0 to g_ram_depth - 1) of std_logic_vector(g_ram_data_w - 1 downto 0);
 
   signal s_mem       : t_mem;
@@ -55,14 +64,6 @@ architecture a_rtl of lm_mem_ram_r_w_infer is
   attribute ramstyle of s_mem     : signal is g_style;
   attribute syn_ramstyle of s_mem : signal is g_style;
 begin
-  assert (g_ram_latency = 1) or (g_ram_latency = 2)
-    report "lm_mem_ram_r_w_infer: latency must be 1 or 2"
-    severity failure;
-
-  assert (g_vendor'length > 0) and (g_family'length > 0) and (g_tool'length > 0)
-    report "lm_mem_ram_r_w_infer: vendor, family, and tool strings must be set"
-    severity failure;
-
   proc_mem : process(clk_i)
   begin
     if rising_edge(clk_i) then

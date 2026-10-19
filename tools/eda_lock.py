@@ -33,6 +33,12 @@ to any repository, so other projects can use the same file to queue with us.
   wait and says so.
 - Child processes of the holder inherit LM_EDA_LOCK_TOKEN and do not wait
   for the lock their parent already holds.
+- Directory: LM_EDA_LOCK_DIR, else the system temporary directory. On
+  Windows that directory is per user (%TEMP%); users who share a machine set
+  LM_EDA_LOCK_DIR to one directory they can all write (for example
+  C:/ProgramData/lm_eda). On POSIX systems the lock and ticket files are
+  made readable and writable by everyone (mode 0666, whatever the umask), so
+  that other users can queue on them in a shared /tmp.
 """
 
 from __future__ import annotations
@@ -147,8 +153,23 @@ def _wait_for_memory(
     time.sleep(min(poll_s, max(0.05, timeout_s - waited)))
 
 
+LOCK_DIR_ENV = "LM_EDA_LOCK_DIR"
+
+
 def default_lock_path() -> Path:
-  return Path(tempfile.gettempdir()) / LOCK_NAME
+  directory = os.environ.get(LOCK_DIR_ENV)
+  return Path(directory or tempfile.gettempdir()) / LOCK_NAME
+
+
+def _open_shared(path: Path, flags: int) -> int:
+  """Open (or create) a lock or ticket file that every user may lock."""
+  fd = os.open(path, flags, 0o666)
+  if sys.platform != "win32":
+    try:
+      os.fchmod(fd, 0o666)  # the umask would otherwise keep other users out
+    except OSError:
+      pass  # created by another user, who set the mode already
+  return fd
 
 
 def _try_lock(fd: int) -> bool:
@@ -275,9 +296,10 @@ def heavy_tool_lock(
   announced = False
   flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
   ticket = path.parent / f"{path.name}.q.{time.time_ns():020d}-{os.getpid()}-{token[:8]}"
-  ticket_fd = os.open(ticket, flags, 0o666)
+  path.parent.mkdir(parents=True, exist_ok=True)
+  ticket_fd = _open_shared(ticket, flags)
   _try_lock(ticket_fd)  # a fresh, unique file: always succeeds
-  fd = os.open(path, flags, 0o666)
+  fd = _open_shared(path, flags)
   try:
     while True:
       ahead = _older_live_ticket(path, ticket)

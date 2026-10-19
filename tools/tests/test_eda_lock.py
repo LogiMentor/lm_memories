@@ -81,6 +81,25 @@ class EdaLockTest(unittest.TestCase):
     self.assertEqual(self.path.read_text(encoding="utf-8"), "", "the holder record is cleared on release")
     self.assertNotIn(TOKEN_ENV, os.environ)
 
+  def test_lock_directory_from_the_environment(self) -> None:
+    from unittest import mock
+
+    from tools.eda_lock import LOCK_DIR_ENV, LOCK_NAME, default_lock_path
+    shared = Path(self.tmp.name) / "shared"
+    with mock.patch.dict(os.environ, {LOCK_DIR_ENV: str(shared)}):
+      self.assertEqual(default_lock_path(), shared / LOCK_NAME)
+      with heavy_tool_lock("unit test", log=self.messages.append, free_mb=lambda: 1e9, timeout_s=1):
+        self.assertTrue((shared / LOCK_NAME).is_file(), "the directory is created")
+
+  @unittest.skipIf(sys.platform == "win32", "POSIX file modes")
+  def test_lock_file_is_shared_whatever_the_umask(self) -> None:
+    old = os.umask(0o077)
+    try:
+      with self._lock(timeout_s=1):
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o666)
+    finally:
+      os.umask(old)
+
   def test_live_holder_times_out_with_its_description(self) -> None:
     proc = self._holder("wait", stdin=subprocess.PIPE)
     try:

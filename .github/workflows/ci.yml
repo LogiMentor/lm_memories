@@ -34,6 +34,9 @@ jobs:
       - name: Run existing VHDL tests
         run: python sim/scripts/run_ghdl.py
 
+      - name: Check static checks of generics (rule on src/, negative cases with GHDL)
+        run: python -m unittest -v tools.tests.test_static_checks
+
       - name: Run VUnit tests
         run: python sim/vunit/run.py -p 2 --xunit-xml vunit_results.xml
 
@@ -46,7 +49,13 @@ jobs:
           if-no-files-found: ignore
 
   python:
-    runs-on: ubuntu-latest
+    # Windows too: the lock (msvcrt), the process-tree timeout (taskkill) and
+    # the cmd.exe launchers have Windows-only paths.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout

@@ -122,24 +122,20 @@ package body lm_mem_pkg is
   end function f_uns2slv;
 
   function f_bin2gray(a : std_logic_vector) return std_logic_vector is
+    constant C_MSG_LENGTH : string := "lm_mem_pkg.f_bin2gray: input length must be greater than 1";
+    constant C_ERROR_LENGTH_BELOW_2 : t_static_check := f_static_check(a'length > 1, C_MSG_LENGTH);  -- ERROR: input length must be greater than 1
     variable v_a : std_logic_vector(a'length - 1 downto 0) := a;
   begin
-    assert v_a'length > 1
-      report "lm_mem_pkg.f_bin2gray: input length must be greater than 1"
-      severity failure;
-
     return v_a xor ("0" & v_a(v_a'length - 1 downto 1));
   end function f_bin2gray;
 
   function f_gray2bin(a : std_logic_vector) return std_logic_vector is
+    constant C_MSG_LENGTH : string := "lm_mem_pkg.f_gray2bin: input length must be greater than 1";
+    constant C_ERROR_LENGTH_BELOW_2 : t_static_check := f_static_check(a'length > 1, C_MSG_LENGTH);  -- ERROR: input length must be greater than 1
     variable v_a   : std_logic_vector(a'length - 1 downto 0) := a;
     variable v_bin : std_logic_vector(v_a'range);
     variable v_int : std_logic;
   begin
-    assert v_a'length > 1
-      report "lm_mem_pkg.f_gray2bin: input length must be greater than 1"
-      severity failure;
-
     v_int := '0';
     for n in v_a'length - 1 downto 0 loop
       v_bin(n) := v_a(n) xor v_int;

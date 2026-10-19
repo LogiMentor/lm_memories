@@ -34,6 +34,15 @@ All notable changes to this project are documented here.
   without `-assert` reports `[Synth 8-11323] assigned value '1' out of range`
   at the line of the failing `C_ERROR_<CHECK>` constant; with `-assert`, and
   in simulation, the tools print the message.
+- **More wrong generics stop synthesis**, also in Vivado without `-assert`:
+  `lm_mem_ccd_resync` with `g_meta_levels` below 2 (before: a one-flip-flop
+  synchronizer), `lm_mem_ram_r_w_infer` with a latency other than 1 or 2 or
+  an empty vendor, family or tool string, the primitive wrappers with an
+  empty family or primitive string. The FIFOs now check their almost-flag
+  limits: `g_almost_empty_limit` in 0 to read depth - 2 and
+  `g_almost_full_limit` in 1 to the write depth (before: no check; outside
+  these ranges a flag never changes). The default limits (1, 1) need a read
+  depth of at least 3.
 - **Two-writer RAMs with tools other than AMD Vivado** (`lm_mem_ram_crw_crw`,
   `lm_mem_ram_rw_rw`, `lm_mem_ram_crw_cw`) now **stop synthesis** with the
   message `no validated two-writer RAM architecture for this tool`; Vivado

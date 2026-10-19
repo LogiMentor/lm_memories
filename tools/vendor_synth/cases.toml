@@ -259,6 +259,48 @@ entity = "lm_mem_fifo_sync"
 description = "Wrong generic: FIFO depth 24 (not a power of two)."
 generics = { g_data_w = 32, g_depth = 24 }
 
+[[cases]]
+name = "bad_ccd_resync_levels1"
+kind = "entity"
+entity = "lm_mem_ccd_resync"
+description = "Wrong generic: synchronizer with one flip-flop."
+generics = { g_meta_levels = 1 }
+
+[[cases]]
+name = "bad_fifo_almost_full_0"
+kind = "entity"
+entity = "lm_mem_fifo_sync"
+description = "Wrong generic: almost-full limit 0 (flag never set)."
+generics = { g_data_w = 32, g_depth = 16, g_almost_full_limit = 0 }
+
+[[cases]]
+name = "bad_fifo_almost_empty_15"
+kind = "entity"
+entity = "lm_mem_fifo_sync"
+description = "Wrong generic: almost-empty limit 15 of 16 (flag always set)."
+generics = { g_data_w = 32, g_depth = 16, g_almost_empty_limit = 15 }
+
+[[cases]]
+name = "bad_r_w_infer_latency3"
+kind = "entity"
+entity = "lm_mem_ram_r_w_infer"
+description = "Wrong generic: read latency 3 on the inference wrapper."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 3 }
+
+[[cases]]
+name = "bad_r_w_infer_no_vendor"
+kind = "entity"
+entity = "lm_mem_ram_r_w_infer"
+description = "Wrong generic: empty vendor string on the inference wrapper."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_vendor = "" }
+
+[[cases]]
+name = "bad_xilinx_prim_no_family"
+kind = "entity"
+entity = "lm_mem_xilinx_ram_r_w_prim"
+description = "Wrong generic: empty family string on a primitive wrapper."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_family = "" }
+
 # 36 x 4096 on one clock: on UltraScale+ Vivado chooses URAM without an
 # attribute (Synth 8-6794). The crw_cr case ties both clock ports to one
 # clock in a generated top (a URAM has a single clock).

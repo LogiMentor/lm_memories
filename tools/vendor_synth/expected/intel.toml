@@ -56,3 +56,39 @@ case = "bad_fifo_sync_depth24"
 parts = ["5CEBA4F23C7"]
 expect_failure_constant = "C_ERROR_WR_DEPTH_NOT_POW2"
 expect_failure = ["lm_mem_fifo: g_wr_depth must be a power of two"]
+
+[[expect]]
+case = "bad_ccd_resync_levels1"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_META_LEVELS_BELOW_2"
+expect_failure = ["lm_mem_ccd_resync: g_meta_levels must be at least 2"]
+
+[[expect]]
+case = "bad_fifo_almost_full_0"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_ALMOST_FULL_OUT_OF_RANGE"
+expect_failure = ["lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth"]
+
+[[expect]]
+case = "bad_fifo_almost_empty_15"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_ALMOST_EMPTY_OUT_OF_RANGE"
+expect_failure = ["lm_mem_fifo: g_almost_empty_limit must be in 0 to read depth - 2"]
+
+[[expect]]
+case = "bad_r_w_infer_latency3"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_LATENCY_NOT_1_OR_2"
+expect_failure = ["lm_mem_ram_r_w_infer: latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_r_w_infer_no_vendor"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_VENDOR_FAMILY_TOOL_UNSET"
+expect_failure = ["lm_mem_ram_r_w_infer: vendor, family, and tool strings must be set"]
+
+[[expect]]
+case = "bad_xilinx_prim_no_family"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_FAMILY_PRIMITIVE_UNSET"
+expect_failure = ["lm_mem_xilinx_ram_r_w_prim: family and primitive must be set"]

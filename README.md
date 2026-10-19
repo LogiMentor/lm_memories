@@ -143,11 +143,18 @@ python -m tools.manifest list --flow synth-amd --format tcl
 
 ### Wrong generics and unsupported tools stop synthesis
 
-Every check of a generic (latency, width ratio, depth, FIFO options), and the
-fallback of the two-writer RAMs for tools without a validated architecture,
-is a static check (`f_static_check` in `lm_mem_pkg`): an assertion with an
-explicit message, plus a constant outside its range for tools that ignore
-assertions. Simulation, synthesis and elaboration all stop.
+Every check of a generic in `src/` (latency, width ratio, depth, FIFO
+options and almost-flag limits, synchronizer length, vendor strings of the
+inference and primitive wrappers, and the input length of the Gray-code
+functions), and the fallback of the two-writer RAMs for tools without a
+validated architecture, is a static check (`f_static_check` in
+`lm_mem_pkg`): an assertion with an explicit message, plus a constant outside
+its range for tools that ignore assertions. Simulation, synthesis and
+elaboration all stop. `tools/tests/test_static_checks.py` enforces the rule
+on every file of `src/` (no other assertion of severity error or failure)
+and checks the newer cases with GHDL; `tools/vendor_synth` checks wrong
+generics with Vivado and Quartus (`fallback_check.toml`,
+`quartus_check.toml`).
 
 **Vivado users: add `-assert` to `synth_design`.** By default Vivado 2023.1
 ignores VHDL assertions. Measured on `xc7a35tfgg484-2`, all of these are

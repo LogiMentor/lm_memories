@@ -76,6 +76,17 @@ architecture a_rtl of lm_mem_fifo is
   constant C_RATIO      : integer := C_MAXWIDTH / C_MINWIDTH;
   constant C_DIFF       : integer := f_ceil_log2(C_MAXWIDTH / C_MINWIDTH);
   constant C_RD_DEPTH   : integer := f_sel_a_b(g_wr_data_w > g_rd_data_w, g_wr_depth * C_RATIO, g_wr_depth / C_RATIO);
+
+  -- Almost flags: almost_empty_o is set at most g_almost_empty_limit + 1
+  -- read words, almost_full_o at least g_almost_full_limit - 1 write words
+  -- (1: at least one word, or a write into an empty FIFO). Outside these
+  -- ranges a flag is constant.
+  constant C_OK_ALMOST_EMPTY  : boolean := (g_almost_empty_limit >= 0) and (g_almost_empty_limit <= C_RD_DEPTH - 2);
+  constant C_OK_ALMOST_FULL   : boolean := (g_almost_full_limit >= 1) and (g_almost_full_limit <= g_wr_depth);
+  constant C_MSG_ALMOST_EMPTY : string  := "lm_mem_fifo: g_almost_empty_limit must be in 0 to read depth - 2";
+  constant C_MSG_ALMOST_FULL  : string  := "lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth";
+  constant C_ERROR_ALMOST_EMPTY_OUT_OF_RANGE : t_static_check := f_static_check(C_OK_ALMOST_EMPTY, C_MSG_ALMOST_EMPTY);  -- ERROR: g_almost_empty_limit must be in 0 to read depth - 2
+  constant C_ERROR_ALMOST_FULL_OUT_OF_RANGE  : t_static_check := f_static_check(C_OK_ALMOST_FULL, C_MSG_ALMOST_FULL);  -- ERROR: g_almost_full_limit must be in 1 to g_wr_depth
   constant C_RD_ADD_BW  : natural := f_ceil_log2(C_RD_DEPTH);
   constant C_ADD_BW_MAX : natural := f_sel_a_b(C_WR_ADD_BW > C_RD_ADD_BW, C_WR_ADD_BW, C_RD_ADD_BW);
 

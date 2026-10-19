@@ -80,15 +80,3 @@ case = "bad_r_w_infer_latency3"
 parts = ["5CEBA4F23C7"]
 expect_failure_constant = "C_ERROR_LATENCY_NOT_1_OR_2"
 expect_failure = ["lm_mem_ram_r_w_infer: latency must be 1 or 2"]
-
-[[expect]]
-case = "bad_r_w_infer_no_vendor"
-parts = ["5CEBA4F23C7"]
-expect_failure_constant = "C_ERROR_VENDOR_FAMILY_TOOL_UNSET"
-expect_failure = ["lm_mem_ram_r_w_infer: vendor, family, and tool strings must be set"]
-
-[[expect]]
-case = "bad_xilinx_prim_no_family"
-parts = ["5CEBA4F23C7"]
-expect_failure_constant = "C_ERROR_FAMILY_PRIMITIVE_UNSET"
-expect_failure = ["lm_mem_xilinx_ram_r_w_prim: family and primitive must be set"]

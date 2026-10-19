@@ -444,6 +444,25 @@ class ExpectedFailureTest(unittest.TestCase):
     self.assertTrue(facts["stopped"])
     self.assertEqual(len(facts["fallback_messages"]), 1)
 
+  def test_stop_for_other_generics_fails(self) -> None:
+    # A stop counts only for the requested generics (read back from the log).
+    from tools.vendor_synth import cli
+    job = {"name": "j", "tool": "vivado", "vendor": "amd", "part": "xc7a35tfgg484-2"}
+    case = {"name": "bad_r_w_latency3", "kind": "entity", "entity": "e",
+            "generics": {"g_ram_latency": 3}}
+    expectation_log = self._range_error(self.src, 4).replace(
+      "ERROR: [Synth 8-11323]", "\tParameter g_ram_latency bound to: 7 - type: integer \nERROR: [Synth 8-11323]", 1)
+    with mock.patch.object(check, "find_expectation", lambda *a: self.EXPECT):
+      result = cli._evaluate(job, case, "e", expectation_log, Path(self.tmp.name), [self.src], {"return_code": 1})
+    self.assertEqual(result["status"], "fail")
+    self.assertTrue(any("requested 3, synthesized with 7" in p for p in result["problems"]), result["problems"])
+
+  def test_string_generics_reach_vivado_as_strings(self) -> None:
+    # Inside the braces of -generic {name=value} a backslash is kept: plain quotes.
+    from tools.vendor_synth import cli
+    self.assertEqual(cli._tcl_generic("amd"), '"amd"')
+    self.assertEqual(cli._tcl_generic(""), '""')
+
   def test_completed_synthesis_fails(self) -> None:
     log = "Command: synth_design\nsynth_design completed successfully\n"
     problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])

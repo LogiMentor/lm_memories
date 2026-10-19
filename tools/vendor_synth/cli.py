@@ -804,10 +804,15 @@ exit
 
 
 def _tcl_generic(value: Any) -> str:
+  """Value of a generic inside the braces of synth_design -generic {name=value}.
+
+  Braces keep every character, so a VHDL string is written with plain
+  quotes; escaped quotes would reach Vivado as backslashes and quotes.
+  """
   if isinstance(value, bool):
     return "true" if value else "false"
   if isinstance(value, str):
-    return '\\"' + value + '\\"'
+    return '"' + value + '"'
   return str(value)
 
 
@@ -1073,6 +1078,10 @@ def _evaluate(
     problems, facts = check.check_expected_failure(tool, log_text, expectation, sources,
                                                    assert_mode=bool(job.get("assert")), return_code=return_code)
     log = check.parse_vivado_log(log_text, top) if tool in ("vivado", "xilinx") else {}
+    # The stop must be for the requested generics (Vivado prints them before the error).
+    module = _generics_module(case, top)
+    if log and module is not None:
+      problems += check.check_generics(case.get("generics", {}), log["module_generics"].get(module.lower(), {}))
     # A tool that stopped before elaborating the design says nothing about the check.
     status = "pass" if not problems else ("fail" if facts["elaborated"] else "tool-error")
     return {"status": status, "problems": problems, "metrics": facts, "log": log}

@@ -49,7 +49,7 @@ if calls < spec.get("fail_reads", 0):
     kinds = spec.get("fail_kinds", ["read"])
     kind = kinds[calls % len(kinds)]
     if kind == "read":
-        print('couldn\'t read file "C:/Xilinx/Vivado/2023.1/scripts/rt/data/x.tcl": No error')
+        print('couldn\'t read file "%s/scripts/rt/data/x.tcl": No error' % spec["install_dir"])
     elif kind == "rt":
         print('invalid command name "rt-undefined"')
     else:
@@ -176,7 +176,7 @@ class VendorRunTest(unittest.TestCase):
       "jobs": [{
         "name": "fake", "enabled": True, "tool": "vivado", "vendor": "amd", "family": "artix7",
         "part": part, "command": executable or [sys.executable, str(self.fake)], "cases": [case],
-        "install_dir": "C:/Xilinx/Vivado/2023.1",
+        "install_dir": spec["install_dir"],
       }],
     }), encoding="utf-8")
     code = main(["--config", str(config), *extra_args])
@@ -188,6 +188,8 @@ class VendorRunTest(unittest.TestCase):
     spec = {
       "generics": {"g_ram_data_w": 16, "g_ram_depth": 64, "g_ram_latency": 1},
       "util": UTIL_TEMPLATE.format(luts=0, lutram=0, regs=0, bram=0.5),
+      # Absolute on every system: the retry policy matches files under it.
+      "install_dir": (self.root / "Xilinx" / "Vivado" / "2023.1").as_posix(),
     }
     spec.update(overrides)
     return spec

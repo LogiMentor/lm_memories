@@ -389,6 +389,9 @@ package body lm_mem_tb_pkg is
       -- corrupt the whole word of each port (UltraScale+ RAMB36E2). Cells of
       -- the earlier write are marked only while that write is still their
       -- last one. The result is the same whichever write is processed second.
+      -- Marking a cell changes it at instant t, so its state before t is kept
+      -- first, as for the cells of this write: a read at instant t sees the
+      -- same state whether its monitor runs before or after this write.
       for j in v_log'range loop
         if v_log(j).used and (v_log(j).port_id /= port_id) and
            f_overlap(v_log(j).base, v_log(j).n, base, n) and f_collide(v_log(j).t, t) then
@@ -396,6 +399,12 @@ package body lm_mem_tb_pkg is
           for k in 0 to v_log(j).n - 1 loop
             v_c := v_log(j).base + k;
             if (not f_overlap(v_c, 1, base, n)) and (v_cells(v_c).t_last = v_log(j).t) then
+              if v_cells(v_c).t_last /= t then
+                v_cells(v_c).prev         := v_cells(v_c).cur;
+                v_cells(v_c).prev_written := v_cells(v_c).written;
+                v_cells(v_c).prev_undef   := v_cells(v_c).undef;
+                v_cells(v_c).t_last       := t;
+              end if;
               v_cells(v_c).undef := true;
             end if;
           end loop;

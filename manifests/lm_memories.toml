@@ -148,6 +148,7 @@ check = "vunit"
 files = [
   "sim/vunit/tb_lm_mem_ram.vhd",
   "sim/vunit/tb_lm_mem_fifo.vhd",
+  "sim/vunit/tb_lm_mem_tb_pkg.vhd",
 ]
 
 # Library sources for simulation.

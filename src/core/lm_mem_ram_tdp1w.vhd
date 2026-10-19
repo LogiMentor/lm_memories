@@ -26,6 +26,9 @@
 --    read returns undefined data. There is no address comparison in the core:
 --    the storage covers the whole address range, so a non-power-of-two depth
 --    uses the next power of two words.
+--  - Read outputs have no initial value: they are undefined until the first
+--    enabled read reaches them (with latency 2, until the second enabled read
+--    of that port).
 --  - Initial content is zero; there is no reset.
 --  - g_simulation is deprecated and ignored.
 -------------------------------------------------------------------------------

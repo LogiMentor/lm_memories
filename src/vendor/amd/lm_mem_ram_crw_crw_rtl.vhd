@@ -21,6 +21,8 @@
 --  - The storage covers the whole address range: there is no address
 --    comparison, and a depth that is not a power of two uses the next power
 --    of two words.
+--  - The output registers have no initial value (undefined until the first
+--    enabled read, see the entity).
 --  - In RTL simulation the result of a collision between the ports depends on
 --    the process order; the collision behaviour is undefined (see the entity).
 -------------------------------------------------------------------------------

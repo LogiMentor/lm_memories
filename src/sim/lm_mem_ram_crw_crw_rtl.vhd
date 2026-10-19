@@ -32,6 +32,8 @@
 --    warning.
 --  - Access at or beyond the depth: warning; a write is ignored and a read
 --    returns 'X'.
+--  - Read outputs are 'X' until the first enabled read reaches them (no
+--    initial value in the synthesis architectures).
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -72,10 +74,10 @@ architecture a_rtl of lm_mem_ram_crw_crw is
   type t_times is array (0 to C_CELLS - 1) of time;
   type t_flags is array (0 to C_CELLS - 1) of boolean;
 
-  signal s_data_rd_a   : std_logic_vector(g_ram_a_data_w - 1 downto 0) := (others => '0');
-  signal s_data_rd_b   : std_logic_vector(g_ram_b_data_w - 1 downto 0) := (others => '0');
-  signal s_data_rd_a_p : std_logic_vector(g_ram_a_data_w - 1 downto 0) := (others => '0');
-  signal s_data_rd_b_p : std_logic_vector(g_ram_b_data_w - 1 downto 0) := (others => '0');
+  signal s_data_rd_a   : std_logic_vector(g_ram_a_data_w - 1 downto 0) := (others => 'X');
+  signal s_data_rd_b   : std_logic_vector(g_ram_b_data_w - 1 downto 0) := (others => 'X');
+  signal s_data_rd_a_p : std_logic_vector(g_ram_a_data_w - 1 downto 0) := (others => 'X');
+  signal s_data_rd_b_p : std_logic_vector(g_ram_b_data_w - 1 downto 0) := (others => 'X');
 
   function f_overlap(a_base, a_n, b_base, b_n : natural) return boolean is
   begin

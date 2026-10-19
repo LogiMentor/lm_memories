@@ -37,6 +37,7 @@ entity tb_lm_mem_ram is
     g_b_reads          : boolean  := true;
     g_cross_rdw_valid  : boolean  := false;
     g_x_on_undef       : boolean  := false;
+    g_undef_until_rd   : boolean  := true;
     g_n_cycles         : positive := 2000;
     g_hot_addrs        : positive := 8;
     g_seed             : positive := 1;
@@ -67,6 +68,7 @@ begin
       g_b_reads          => g_b_reads,
       g_cross_rdw_valid  => g_cross_rdw_valid,
       g_x_on_undef       => g_x_on_undef,
+      g_undef_until_rd   => g_undef_until_rd,
       g_n_cycles         => g_n_cycles,
       g_hot_addrs        => g_hot_addrs,
       g_seed             => g_seed,

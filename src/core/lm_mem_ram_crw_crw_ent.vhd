@@ -35,6 +35,9 @@
 --  - Addresses at or beyond the depth (possible only when the depth is not a
 --    power of two): a write never changes an address within the depth; a
 --    read returns undefined data.
+--  - Read outputs have no initial value: they are undefined until the first
+--    enabled read reaches them (with latency 2, until the second enabled read
+--    of that port).
 --  - Initial content is zero; there is no reset.
 --  - g_simulation is deprecated and ignored.
 -------------------------------------------------------------------------------

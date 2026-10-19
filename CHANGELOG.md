@@ -64,6 +64,12 @@ All notable changes to this project are documented here.
   address range, so a depth that is not a power of two uses the next power of
   two words. For example, a 32 x 1536 `lm_mem_ram_r_w` now uses two RAMB36 on
   7-series. Designs that only use addresses below the depth are not affected.
+- **Read outputs are undefined until the first enabled read** reaches them
+  (with latency 2, until the second), in every RAM: no output register has
+  an initial value. This was already so for the single-writer RAMs and the
+  previous two-writer model; the simulation model of the two-writer RAMs now
+  drives 'X' in that phase (before this change in the PR: zeros). Hardware
+  powers up with defined values, but no design may rely on them.
 - **Width ratios must be a power of two** in `lm_mem_ram_r_w_ratio`,
   `lm_mem_ram_cr_cw_ratio` and the FIFOs. This was already documented; the
   core now asserts it, because the asymmetric RAM template (narrow address =

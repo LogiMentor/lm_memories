@@ -317,6 +317,14 @@ Defined behaviour (checked):
   B. Both output stages hold their value while disabled.
 - Latency 1 and 2.
 - Initial content is zero, and there is no reset.
+- Read outputs have no initial value: they are undefined until the first
+  enabled read reaches them (with latency 2, until the second enabled read
+  of that port), as in the frozen reference model. Every RTL architecture
+  leaves its output registers without an initial value; the simulation model
+  of `lm_mem_ram_crw_crw` drives 'X'. The harness checks that each read
+  output is 'U' or 'X' until then, in RTL simulation only: a netlist powers
+  up with defined values (block RAM output latches at 0), so the
+  post-synthesis runs do not compare that phase.
 - Mixed width: the lower narrow address holds the lower bits of the wide word.
 - `g_init_file /= ""` is rejected.
 

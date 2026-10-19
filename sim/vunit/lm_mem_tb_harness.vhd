@@ -23,9 +23,16 @@
 --  - Fails on coverage holes: fewer checked reads than g_min_checked, no read
 --    of never-written data, no read-first case where one is expected, no
 --    masked write, no hold check, no access beyond a non-power-of-two depth,
---    or too many reads excluded by collisions.
+--    too many reads excluded by collisions, or (g_undef_until_rd) fewer than
+--    C_IDLE checks per read port of an output before the first read.
+--  - Each port starts with C_IDLE cycles with its enable low.
 --  - g_x_on_undef: reads of cells left undefined by a write/write collision
 --    must return 'X' (simulation models only, see lm_mem_tb_pkg).
+--  - g_undef_until_rd: until the first read reaches a read output (before
+--    the first enabled read, and while a latency-2 pipeline fills), every bit
+--    of that output must be 'U' or 'X': the RTL has no initial value on its
+--    output registers. A netlist powers up with defined values, so the
+--    post-synthesis runs set it to false and that phase is not compared.
 --  - Process order: inputs change on falling edges and are sampled on rising
 --    edges; outputs are observed on falling edges; every scoreboard decision
 --    uses the state before the current instant (see lm_mem_tb_pkg).
@@ -55,6 +62,7 @@ entity lm_mem_tb_harness is
     g_b_reads          : boolean  := true;
     g_cross_rdw_valid  : boolean  := false;
     g_x_on_undef       : boolean  := false;
+    g_undef_until_rd   : boolean  := true;
     g_n_cycles         : positive := 2000;
     g_hot_addrs        : positive := 8;
     g_seed             : positive := 1;
@@ -84,6 +92,10 @@ architecture a_tb of lm_mem_tb_harness is
   constant C_WINDOW   : time     := maximum(g_a_period, g_b_period);
   constant C_PORT_A   : natural  := 0;
   constant C_PORT_B   : natural  := 1;
+  -- First cycles of each port with the enable low: the outputs are checked
+  -- before any read (g_undef_until_rd).
+  constant C_IDLE     : positive := 3;
+  constant C_READERS  : natural  := boolean'pos(g_a_reads) + boolean'pos(g_b_reads);
 
   shared variable sv_sb : t_scoreboard;
 
@@ -233,6 +245,9 @@ begin
     for i in 1 to g_n_cycles loop
       wait until falling_edge(s_clk_a);
       p_tb_rand_bit(v_s1, v_s2, 0.85, v_bit);
+      if i <= C_IDLE then
+        v_bit := '0';
+      end if;
       s_ena <= v_bit;
       if g_a_writes then
         p_tb_rand_bit(v_s1, v_s2, 0.5, v_bit);
@@ -266,6 +281,9 @@ begin
     for i in 1 to g_n_cycles loop
       wait until falling_edge(s_clk_b);
       p_tb_rand_bit(v_s1, v_s2, 0.85, v_bit);
+      if i <= C_IDLE then
+        v_bit := '0';
+      end if;
       s_enb <= v_bit;
       if g_b_writes then
         p_tb_rand_bit(v_s1, v_s2, 0.5, v_bit);
@@ -330,6 +348,13 @@ begin
           sv_sb.add_error("port A output changed while its enable was low");
         end if;
         sv_sb.count_hold_check;
+      elsif g_a_reads and g_undef_until_rd then
+        -- No read has reached the output yet.
+        if not f_tb_all_undef(s_dout_a) then
+          sv_sb.add_error("port A output is " & to_hstring(s_dout_a) &
+                          " before any read reached it; expected undefined");
+        end if;
+        sv_sb.count_undef_output_check;
       end if;
       sv_sb.resolve(now, false);
     end loop;
@@ -377,6 +402,13 @@ begin
           sv_sb.add_error("port B output changed while its enable was low");
         end if;
         sv_sb.count_hold_check;
+      elsif g_b_reads and g_undef_until_rd then
+        -- No read has reached the output yet.
+        if not f_tb_all_undef(s_dout_b) then
+          sv_sb.add_error("port B output is " & to_hstring(s_dout_b) &
+                          " before any read reached it; expected undefined");
+        end if;
+        sv_sb.count_undef_output_check;
       end if;
       sv_sb.resolve(now, false);
     end loop;
@@ -416,6 +448,11 @@ begin
     end if;
     if v_c.hold_checks = 0 then
       sv_sb.add_error("coverage: no output hold check");
+    end if;
+    if g_undef_until_rd and (v_c.undef_out_checks < C_IDLE * C_READERS) then
+      sv_sb.add_error("coverage: " & integer'image(v_c.undef_out_checks) &
+                      " checks of an output before the first read, minimum " &
+                      integer'image(C_IDLE * C_READERS));
     end if;
     if not C_POW2 then
       if (g_a_writes or g_b_writes) and (v_c.writes_oor = 0) then

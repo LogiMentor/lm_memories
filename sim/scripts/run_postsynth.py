@@ -261,9 +261,13 @@ def compile_order(mode: str, adapter: Path | None, netlists: list[Path]) -> list
   return lib + tb[:idx] + middle + tb[idx:]
 
 
-def generics_args(g: dict, sim_info: str, x_on_undef: bool) -> dict:
-  args = {k: v for k, v in g.items() if k not in ("g_sim_info", "g_x_on_undef")}
-  args["g_x_on_undef"] = x_on_undef
+def generics_args(g: dict, sim_info: str, rtl: bool) -> dict:
+  """Testbench generics. 'X' after a write/write collision, and undefined
+  outputs before the first read, are properties of the RTL; a netlist returns
+  defined values in both cases, so they are checked on the RTL only."""
+  args = {k: v for k, v in g.items() if k not in ("g_sim_info", "g_x_on_undef", "g_undef_until_rd")}
+  args["g_x_on_undef"] = rtl
+  args["g_undef_until_rd"] = rtl
   args["g_sim_info"] = sim_info
   return args
 

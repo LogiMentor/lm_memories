@@ -64,6 +64,7 @@ package lm_mem_tb_pkg is
     cov_init_read    : natural;
     cov_rdw_old_data : natural;
     hold_checks      : natural;
+    undef_out_checks : natural;
     errors           : natural;
   end record t_tb_counts;
 
@@ -106,6 +107,7 @@ package lm_mem_tb_pkg is
     procedure resolve(now_t : time; flush : boolean);
     procedure add_error(msg : string);
     procedure count_hold_check;
+    procedure count_undef_output_check;
     impure function counts return t_tb_counts;
     impure function pending return natural;
   end protected t_scoreboard;
@@ -118,6 +120,9 @@ package lm_mem_tb_pkg is
   end protected t_tb_queue;
 
   function f_tb_counts_image(c : t_tb_counts) return string;
+
+  -- True when every bit is 'U' or 'X' (an output no read has reached yet).
+  function f_tb_all_undef(v : std_logic_vector) return boolean;
 
   procedure p_tb_rand_slv(
     variable seed1 : inout positive;
@@ -157,8 +162,19 @@ package body lm_mem_tb_pkg is
            " init_reads=" & integer'image(c.cov_init_read) &
            " old_data_reads=" & integer'image(c.cov_rdw_old_data) &
            " hold_checks=" & integer'image(c.hold_checks) &
+           " undefined_output_checks=" & integer'image(c.undef_out_checks) &
            " errors=" & integer'image(c.errors);
   end function f_tb_counts_image;
+
+  function f_tb_all_undef(v : std_logic_vector) return boolean is
+  begin
+    for i in v'range loop
+      if (v(i) /= 'U') and (v(i) /= 'X') then
+        return false;
+      end if;
+    end loop;
+    return true;
+  end function f_tb_all_undef;
 
   procedure p_tb_rand_slv(
     variable seed1 : inout positive;
@@ -581,6 +597,11 @@ package body lm_mem_tb_pkg is
     begin
       v_counts.hold_checks := v_counts.hold_checks + 1;
     end procedure count_hold_check;
+
+    procedure count_undef_output_check is
+    begin
+      v_counts.undef_out_checks := v_counts.undef_out_checks + 1;
+    end procedure count_undef_output_check;
 
     impure function counts return t_tb_counts is
     begin

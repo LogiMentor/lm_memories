@@ -224,6 +224,8 @@ cases = ["infer_r_w_bram_32x1024"]
         self.assertEqual(command[-1], str(launcher))
         self.assertIn(str(executable), text)
         self.assertNotIn("settings64", text)
+        # The exit code of a .bat tool reaches the caller only through "call".
+        self.assertIn(f'call "{executable}"', text)
       else:
         self.assertEqual(command[0], str(executable))
 

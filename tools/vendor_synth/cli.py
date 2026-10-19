@@ -420,7 +420,10 @@ def _launcher_command(job: dict[str, Any], command: list[str], work_dir: Path) -
       lines.append(f"call {_cmd_quote(str(setup_script))}")
       lines.append("if errorlevel 1 exit /b %ERRORLEVEL%")
     quoted = " ".join(_cmd_quote(arg) for arg in command)
-    lines.append(quoted)
+    # "call": without it cmd.exe hands control to a .bat tool (vivado.bat)
+    # and never returns, so its exit code is not the tool's (measured with
+    # Vivado 2023.1: 0 or 123 after a failed synth_design, 1 with call).
+    lines.append(("call " if _uses_windows_batch(command) else "") + quoted)
     lines.append("exit /b %ERRORLEVEL%")
     launcher.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return ["cmd", "/c", str(launcher)]

@@ -52,6 +52,8 @@ case = "r_w_16x64"
 parts = ["xc7a35tfgg484-2"]
 # 7-series: one RAMB18, output register absorbed.
 bram_tiles = 0.5
+ramb36 = 0
+ramb18 = 1
 lutram = 0
 max_registers = 0
 max_luts = 0
@@ -149,13 +151,18 @@ max_luts = 0
 
 # FIFOs: the storage must be a RAM primitive; the registers are the pointers,
 # flags and synchronizers (a flip-flop storage would need 512 or 32768).
+# Ceilings on registers and logic LUTs: the values measured on 2026-10-18
+# (docs/results/vivado_2023.1_amd.json) plus a margin of 10 % + 2, rounded
+# up, so that a regression of the control logic fails.
 [[expect]]
 case = "fifo_sync_32x16"
 parts = ["xc7a35tfgg484-2"]
 # Distributed RAM: 5 x RAM32M (6 bits each) + 2 x RAM32X1D = 24 LUTs as memory.
 bram_tiles = 0
 lutram = 24
-max_registers = 120
+# Measured: 47 registers, 25 LUTs as logic.
+max_registers = 54
+max_luts = 30
 
 [[expect]]
 case = "fifo_sync_32x16"
@@ -163,14 +170,18 @@ parts = ["xcku3p-ffva676-2-e"]
 # Distributed RAM: 2 x RAM32M16 (14 bits, 8 LUTs each) + 1 x RAM32M = 20 LUTs as memory.
 bram_tiles = 0
 lutram = 20
-max_registers = 120
+# Measured: 47 registers, 25 LUTs as logic.
+max_registers = 54
+max_luts = 30
 
 [[expect]]
 case = "fifo_sync_32x1024"
 parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
 bram_tiles = 1
 lutram = 0
-max_registers = 200
+# Measured: 27 registers, 56 LUTs as logic (Artix-7; Kintex UltraScale+ 54).
+max_registers = 32
+max_luts = 64
 
 [[expect]]
 case = "fifo_async_32x16"
@@ -178,7 +189,9 @@ parts = ["xc7a35tfgg484-2"]
 # Distributed RAM: 5 x RAM32M (6 bits each) + 2 x RAM32X1D = 24 LUTs as memory.
 bram_tiles = 0
 lutram = 24
-max_registers = 120
+# Measured: 75 registers, 39 LUTs as logic.
+max_registers = 85
+max_luts = 45
 
 [[expect]]
 case = "fifo_async_32x16"
@@ -186,14 +199,18 @@ parts = ["xcku3p-ffva676-2-e"]
 # Distributed RAM: 2 x RAM32M16 (14 bits, 8 LUTs each) + 1 x RAM32M = 20 LUTs as memory.
 bram_tiles = 0
 lutram = 20
-max_registers = 120
+# Measured: 75 registers, 36 LUTs as logic.
+max_registers = 85
+max_luts = 42
 
 [[expect]]
 case = "fifo_async_32x1024"
 parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
 bram_tiles = 1
 lutram = 0
-max_registers = 200
+# Measured: 91 registers, 99 LUTs as logic.
+max_registers = 103
+max_luts = 111
 
 # Two-writer RAMs (lm_mem_ram_crw_crw, AMD architecture, and its wrappers).
 # Measured 2026-10-18; every case maps to block RAM primitives only
@@ -245,6 +262,8 @@ case = "crw_crw_16x64"
 parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
 # One RAMB18 on both families.
 bram_tiles = 0.5
+ramb36 = 0
+ramb18 = 1
 lutram = 0
 max_registers = 0
 max_luts = 0

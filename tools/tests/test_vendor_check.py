@@ -32,6 +32,8 @@ UTIL_TEMPLATE = """\
 |   LUT as Memory         | {lutram} |     0 |          0 |      9600 |  0.00 |
 | Slice Registers         | {regs} |     0 |          0 |     41600 |  0.00 |
 | Block RAM Tile    | {bram} |     0 |          0 |        50 |  2.00 |
+|   RAMB36/FIFO*    |    0 |     0 |          0 |        50 |  0.00 |
+|   RAMB18          |    1 |     0 |          0 |       100 |  1.00 |
 """
 
 FAKE_VIVADO = r'''
@@ -109,6 +111,20 @@ class CheckParsingTest(unittest.TestCase):
     self.assertEqual((m["ramb36"], m["ramb18"]), (0.0, 1.0))
     # A missing row is unknown, never 0.
     self.assertIsNone(check.parse_vivado_utilization("| CLB LUTs*  |    3 |\n")["uram"])
+
+  def test_fifo_logic_regression_fails(self) -> None:
+    # Review of PR #4: the FIFO cases had no LUT ceiling, so 1000000 LUTs passed.
+    log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}
+    fifo = [e for e in check.load_expected("amd")["expect"] if e["case"].startswith("fifo_")]
+    self.assertEqual(len(fifo), 6)
+    for entry in fifo:
+      for part in entry["parts"]:
+        expectation = check.find_expectation(check.load_expected("amd"), entry["case"], part)
+        metrics = {"luts": 1e6, "luts_logic": 1e6, "lutram": float(entry["lutram"]), "registers": 0.0,
+                   "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0}
+        problems = check.compare(metrics, log, expectation, part)
+        self.assertEqual(len(problems), 1, (entry["case"], part, problems))
+        self.assertIn("luts_logic", problems[0])
 
   def test_uram_absent_only_on_families_without_uram(self) -> None:
     log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}

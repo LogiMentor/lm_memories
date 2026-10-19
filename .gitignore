@@ -19,3 +19,6 @@ xelab.pb
 xsim*.jou
 xsim*.log
 vunit_results.xml
+
+# Local review material, never committed
+local/

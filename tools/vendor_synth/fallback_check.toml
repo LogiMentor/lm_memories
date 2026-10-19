@@ -5,9 +5,12 @@
 # - fallback_*: the synth-unsupported flow compiles
 #   src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd, and synthesis must stop;
 # - bad_*: a wrong generic must stop synthesis at its check.
-# Two jobs: Vivado defaults (assertions ignored; the out-of-range constant
-# stops synthesis with Synth 8-11323) and synth_design -assert (the assertion
-# stops it with its message). The Quartus side is quartus_check.toml.
+# Two jobs, each accepting only its own evidence (tools/vendor_synth/check.py):
+# Vivado defaults (assertions ignored): "ERROR: [Synth 8-11323] ... out of
+# range" at the line of the constant; synth_design -assert: "ERROR: [Synth
+# 8-63] RTL assertion" with the message. Both also need "synth_design failed",
+# a non-zero exit code and the module of the check elaborated. The Quartus
+# side is quartus_check.toml.
 #
 #   python -m tools.vendor_synth --config tools/vendor_synth/fallback_check.toml --keep-going
 

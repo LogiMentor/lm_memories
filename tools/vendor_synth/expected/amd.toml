@@ -13,9 +13,18 @@
 #   max_luts       ceiling on LUTs used as logic, "LUT as Logic" (optional)
 #   max_critical_warnings, forbidden_messages: from [defaults] unless set
 #
+#   ramb36, ramb18 exact numbers of RAMB36 and RAMB18 (optional)
+#
 # Parts: xc7a35tfgg484-2 (7-series), xcku3p-ffva676-2-e (Kintex
-# UltraScale+). Expected results cover block RAM only: the cores carry no
-# ram_style attribute, so no URAM is expected.
+# UltraScale+). The cores carry no ram_style attribute; URAM is expected only
+# where Vivado chooses it by itself (r_w_36x4096 below). uram = 0 by default:
+# on 7-series the report has no URAM row and that counts as 0; on
+# UltraScale+ a missing URAM row is a failure (incomplete report).
+#
+# A pass also needs a complete run (tools/vendor_synth/cli.py _evaluate):
+# "synth_design completed successfully", exit code 0, no error of the
+# project, a utilization report written by this run with every row, and the
+# generics read back from the log.
 
 [defaults]
 max_critical_warnings = 0
@@ -295,10 +304,10 @@ max_registers = 0
 max_luts = 12
 
 # Static checks (fallback_check.toml): synthesis must stop at the check.
-# Vivado without synth_design -assert reports "[Synth 8-11323] assigned value
-# '1' out of range" at the line of the constant expect_failure_constant; with
-# -assert it prints the assertion message (expect_failure). Either is
-# accepted; the other job of fallback_check.toml covers the other mode.
+# Vivado without synth_design -assert must report "ERROR: [Synth 8-11323]
+# assigned value '1' out of range" at the line of the constant
+# expect_failure_constant; with -assert, "ERROR: [Synth 8-63] RTL assertion"
+# with the message (expect_failure). Each job accepts only its own message.
 
 [[expect]]
 case = "fallback_crw_crw_32x1024"

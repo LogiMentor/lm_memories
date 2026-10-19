@@ -24,8 +24,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from tools.eda_archive import archive_campaign
 from tools.eda_lock import heavy_tool_lock
-from tools.eda_retry import run_with_retries
+from tools.eda_proc import run_tool
+from tools.eda_provenance import provenance, same_inputs
+from tools.eda_retry import retry_reason, run_with_retries
 from tools.eda_workdir import prune, work_root as work_root_for
 from tools.manifest import load as load_manifest
 
@@ -61,7 +64,12 @@ def default_work_root() -> Path:
 
 # Kept in a case directory after a passing run (prune_case_dir); the rest
 # (projects, tool databases, .Xil) is removed. Enough for --evaluate-only.
-KEEP_AFTER_PASS = ("run.log", "reports", "*.tcl", "*.rpt", "*.summary", "*.vhd")
+KEEP_AFTER_PASS = ("*.log", "run.json", "reports", "*.tcl", "*.rpt", "*.summary", "*.vhd")
+# Record of a real run next to its log: provenance, times, exit code, retries.
+# --evaluate-only needs it and refuses a run made from other inputs.
+RUN_RECORD = "run.json"
+# Generated tops whose generics are read back from the inner library entity.
+GENERICS_MODULE = {"crw_cr_common_clock": "lm_mem_ram_crw_cr"}
 MEMORY_KEYWORDS = re.compile(
   r"(ram|bram|uram|m20k|mlab|m10k|ebr|dpram|block memory|distributed)",
   re.IGNORECASE,
@@ -1014,6 +1022,29 @@ def _default_executable(job: dict[str, Any]) -> str:
   }.get(_tool(job), _tool(job))
 
 
+def _generics_module(case: dict[str, Any], top: str) -> str | None:
+  """The module whose generics are read back from the log for this case, or None."""
+  kind = case.get("kind")
+  if kind == "entity":
+    return top
+  return GENERICS_MODULE.get(str(kind))
+
+
+def _tool_roots(job: dict[str, Any]) -> list[Path]:
+  """Installation directories of the job's tool (for the retry signatures)."""
+  install_dir = _job_path(job, "install_dir")
+  return [install_dir] if install_dir is not None else []
+
+
+def _report_is_fresh(path: Path, started_at: str | None) -> bool:
+  """True if the report was written by the run that started at started_at."""
+  if not path.is_file() or not started_at:
+    return False
+  started = dt.datetime.fromisoformat(started_at).timestamp()
+  # File systems store modification times with limited precision.
+  return path.stat().st_mtime >= started - 2.0
+
+
 def _evaluate(
   job: dict[str, Any],
   case: dict[str, Any],
@@ -1021,13 +1052,23 @@ def _evaluate(
   log_text: str,
   reports: Path,
   sources: list[Path] | None = None,
+  run: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-  """Compare the results of one run with the expected results."""
+  """Compare the results of one run with the expected results.
+
+  run: the record of the run (run.json): return code, start time, retries.
+  A pass needs positive evidence of a complete run of this case: the tool's
+  completion message, exit code 0, no error of the project, and reports
+  written by this run that have every expected row.
+  """
+  run = run or {}
   tool = _tool(job)
   part = str(job.get("part") or job.get("device") or "")
+  return_code = run.get("return_code")
   expectation = check.find_expectation(check.load_expected(_vendor(job)), case["name"], part)
   if expectation is not None and ("expect_failure" in expectation or "expect_failure_constant" in expectation):
-    problems, facts = check.check_expected_failure(tool, log_text, expectation, sources)
+    problems, facts = check.check_expected_failure(tool, log_text, expectation, sources,
+                                                   assert_mode=bool(job.get("assert")), return_code=return_code)
     log = check.parse_vivado_log(log_text, top) if tool in ("vivado", "xilinx") else {}
     # A tool that stopped before elaborating the design says nothing about the check.
     status = "pass" if not problems else ("fail" if facts["elaborated"] else "tool-error")
@@ -1037,17 +1078,48 @@ def _evaluate(
   log = check.parse_vivado_log(log_text, top)
   util_file = reports / "utilization.rpt"
   metrics = check.parse_vivado_utilization(util_file.read_text(encoding="utf-8", errors="ignore")) if util_file.is_file() else {}
-  problems: list[str] = []
-  if log["errors"] or not log["synth_ran"] or not util_file.is_file():
-    problems.append("synthesis did not complete: " + "; ".join(log["errors"][:3] or ["no utilization report"]))
+  incomplete = []
+  if not log["synth_ran"]:
+    incomplete.append("synth_design did not start")
+  if not log["completed"]:
+    incomplete.append("no 'synth_design completed successfully' in the log")
+  error = log["project_error"] or (log["errors"][0] if log["errors"] else None)
+  if error:
+    incomplete.append(error)
+  if return_code != 0:
+    incomplete.append(f"tool exit code {return_code}")
+  if not util_file.is_file():
+    incomplete.append("no utilization report")
+  elif not _report_is_fresh(util_file, run.get("started_at")):
+    incomplete.append("utilization report older than the run")
+  if incomplete:
+    problems = ["synthesis did not complete: " + "; ".join(incomplete)]
     return {"status": "tool-error", "problems": problems, "metrics": metrics, "log": log}
-  if case.get("kind") == "entity":
-    problems += check.check_generics(case.get("generics", {}), log["generics"])
+  problems: list[str] = []
+  module = _generics_module(case, top)
+  if module is None:
+    problems.append(f"no generics readback for case kind {case.get('kind')}")
+  else:
+    problems += check.check_generics(case.get("generics", {}), log["module_generics"].get(module.lower(), {}))
   if expectation is None:
     problems.append(f"no expected results for case {case['name']} on {part}")
     return {"status": "unchecked", "problems": problems, "metrics": metrics, "log": log}
-  problems += check.compare(metrics, log, expectation)
+  problems += check.compare(metrics, log, expectation, part)
   return {"status": "fail" if problems else "pass", "problems": problems, "metrics": metrics, "log": log}
+
+
+def _inputs(job: dict[str, Any], case: dict[str, Any], sources: list[Path]) -> dict[str, str]:
+  """Provenance of a run: library sources, manifest, commit, and what selects the case."""
+  selection = json.dumps({"case": case, "part": job.get("part", job.get("device", "")), "tool": _tool(job),
+                          "assert": bool(job.get("assert")), "flow": job.get("manifest_flow")}, sort_keys=True)
+  return provenance(sources, extra=[selection])
+
+
+def _read_run_record(path: Path) -> dict[str, Any] | None:
+  try:
+    return json.loads(path.read_text(encoding="utf-8"))
+  except (OSError, json.JSONDecodeError):
+    return None
 
 
 def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evaluate_only: bool = False) -> dict[str, Any]:
@@ -1056,6 +1128,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
   top = _top_name(job, case)
   case_dir = work_root / _sanitize(_job_name(job)) / _sanitize(case["name"])
   reports = case_dir / "reports"
+  record_file = case_dir / RUN_RECORD
 
   if clean and not evaluate_only and case_dir.exists():
     shutil.rmtree(case_dir)
@@ -1063,6 +1136,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
 
   script_file = case_dir / f"run_{_tool(job)}.tcl"
   sources = _source_files_for(job, case)
+  inputs = _inputs(job, case, sources)
   generics: dict[str, Any] = {}
   if case.get("kind") == "entity":
     generics = dict(case.get("generics", {}))
@@ -1094,6 +1168,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     "metrics": {},
     "tool_version": "",
     "critical_warnings": None,
+    "provenance": inputs,
     "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
   }
 
@@ -1103,16 +1178,37 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     return result
 
   if evaluate_only:
-    if not log_file.is_file():
-      result.update(status="not-run", completed_at=result["started_at"], message="no previous run to evaluate")
-      result["problems"] = [result["message"]]
+    record = _read_run_record(record_file)
+    problem = None
+    if not log_file.is_file() or record is None:
+      problem = "no previous run to evaluate (run.log and run.json are needed)"
+    elif not same_inputs(record.get("provenance"), inputs):
+      problem = (f"the previous run used other inputs (commit {record.get('provenance', {}).get('commit', '?')}); "
+                 "run the case again")
+    if problem:
+      result.update(status="not-run", completed_at=result["started_at"], message=problem, problems=[problem])
       return result
-    evaluation = _evaluate(job, case, top, log_file.read_text(encoding="utf-8", errors="ignore"), reports, sources)
+    text = log_file.read_text(encoding="utf-8", errors="ignore")
+    result.update(return_code=record.get("return_code"), retries=record.get("retries", []),
+                  started_at=record.get("started_at"))
+    evaluation = _evaluate(job, case, top, text, reports, sources, record)
+    if record.get("timed_out"):
+      evaluation.update(status="timeout", problems=["timeout"])
+    elif record.get("persisted"):
+      evaluation["status"] = "tool-error"
+      evaluation["problems"].insert(0, "transient tool failure in every attempt of the previous run")
+    else:
+      # The policy of a real run, applied again to the log that is evaluated.
+      done = record.get("return_code") == 0 and check.tool_completed(_tool(job), text)
+      reason = retry_reason(text, completed=done, roots=_tool_roots(job))
+      if reason:
+        evaluation["status"] = "tool-error"
+        evaluation["problems"].insert(0, f"transient tool failure in the log: {reason}")
     log = evaluation["log"]
     result.update(
       status=evaluation["status"], problems=evaluation["problems"], metrics=evaluation["metrics"],
       tool_version=log.get("version", ""), critical_warnings=log.get("critical_warnings"),
-      completed_at=result["started_at"], message="; ".join(evaluation["problems"])[:400],
+      completed_at=record.get("completed_at", result["started_at"]), message="; ".join(evaluation["problems"])[:400],
     )
     return result
 
@@ -1129,45 +1225,48 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
 
   def run_once(attempt: int) -> str:
     nonlocal timed_out
+    # Reports of an earlier attempt must never be read as results of this one.
+    for old in reports.glob("*"):
+      if old.is_file():
+        old.unlink()
+    result["started_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    result["return_code"] = None
     with log_file.open("w", encoding="utf-8", errors="ignore") as handle:
       handle.write("command: " + " ".join(command) + "\n")
       handle.flush()
       try:
         # Machine-wide lock: one heavy EDA run at a time, across sessions.
+        # On a timeout run_tool stops the whole tool before the lock is released.
         with heavy_tool_lock(f"{_tool(job)} {_job_name(job)} {case['name']}", kind="synthesis"):
-          process = subprocess.run(
-            command,
-            cwd=case_dir,
-            env=env,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            check=False,
-            timeout=timeout,
-          )
-        result["return_code"] = process.returncode
+          result["return_code"] = run_tool(command, cwd=case_dir, env=env, stdout=handle,
+                                           stderr=subprocess.STDOUT, timeout=timeout)
       except subprocess.TimeoutExpired:
         timed_out = True
-        handle.write(f"\ntimeout after {timeout} seconds\n")
-    return "" if timed_out else log_file.read_text(encoding="utf-8", errors="ignore")
+        handle.write(f"\ntimeout after {timeout} seconds: the tool was stopped\n")
+    return log_file.read_text(encoding="utf-8", errors="ignore")
 
-  # Shared retry policy (tools/eda_retry.py): every failed attempt is recorded.
-  text, result["retries"], persisted = run_with_retries(run_once)
+  def completed(text: str) -> bool:
+    # A timeout is a result, never retried.
+    return timed_out or (result["return_code"] == 0 and check.tool_completed(_tool(job), text))
+
+  # Shared retry policy (tools/eda_retry.py): every retried attempt is recorded
+  # and its log kept as run.attempt<n>.log.
+  text, result["retries"], persisted = run_with_retries(run_once, completed=completed, roots=_tool_roots(job),
+                                                        log_path=log_file)
 
   result["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+  record = {key: result[key] for key in ("provenance", "started_at", "completed_at", "return_code", "retries")}
+  record.update(timed_out=timed_out, persisted=persisted)
+  record_file.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
   if timed_out:
     result.update(status="timeout", message=f"timeout after {timeout} seconds", problems=["timeout"])
     return result
 
-  evaluation = _evaluate(job, case, top, text, reports, sources)
+  evaluation = _evaluate(job, case, top, text, reports, sources, record)
   if persisted:
     evaluation["status"] = "tool-error"
     evaluation["problems"].insert(0, f"transient tool failure in all {len(result['retries'])} attempts: "
                                      + result["retries"][-1])
-  # A non-zero exit code is expected when the tool must stop (fallback).
-  expected_stop = "stopped" in evaluation["metrics"]
-  if result["return_code"] not in (0, None) and evaluation["status"] == "pass" and not expected_stop:
-    evaluation["status"] = "fail"
-    evaluation["problems"].append(f"tool exit code {result['return_code']}")
   log = evaluation["log"]
   result.update(
     status=evaluation["status"],
@@ -1188,7 +1287,7 @@ def _fmt(value: Any) -> str:
   return str(value)
 
 
-def _write_summary(work_root: Path, results: list[dict[str, Any]]) -> None:
+def _write_summary(work_root: Path, results: list[dict[str, Any]], archive: dict[str, Any] | None = None) -> None:
   work_root.mkdir(parents=True, exist_ok=True)
   summary_json = work_root / "summary.json"
   summary_csv = work_root / "summary.csv"
@@ -1204,10 +1303,16 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]]) -> None:
       "generics": r.get("generics", {}), "status": r["status"], "metrics": r.get("metrics", {}),
       "critical_warnings": r.get("critical_warnings"), "retries": len(r.get("retries", [])),
       "problems": r.get("problems", []),
+      "commit": r.get("provenance", {}).get("commit", ""),
+      "sources_hash": r.get("provenance", {}).get("sources_hash", ""),
     }
     for r in results
   ]
-  (work_root / "summary_public.json").write_text(json.dumps({"results": public}, indent=2) + "\n", encoding="utf-8")
+  document: dict[str, Any] = {"results": public}
+  if archive is not None:
+    # Complete logs of the campaign (tools/eda_archive.py).
+    document = {"archive": archive, **document}
+  (work_root / "summary_public.json").write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
   fields = ["job", "tool", "tool_version", "part", "case", "status", "bram_tiles", "lutram", "uram",
             "registers", "luts", "critical_warnings", "retries", "message"]
@@ -1298,6 +1403,9 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--keep-going", action="store_true", help="continue after a failed case")
   parser.add_argument("--evaluate-only", action="store_true",
                       help="do not run tools; check the existing results in the work root against the expected results")
+  parser.add_argument("--campaign", metavar="NAME",
+                      help="campaign run for docs/results: the work root must be new or empty, nothing is pruned, "
+                           "and the work root is archived in $LM_EDA_ARCHIVE_DIR (tools/eda_archive.py)")
   return parser
 
 
@@ -1325,13 +1433,19 @@ def main(argv: list[str] | None = None) -> int:
   items = _build_run_items(jobs, selected_cases)
   if not items:
     raise SystemExit("no job/case combinations selected")
+  if args.campaign:
+    if args.dry_run or args.evaluate_only:
+      raise SystemExit("--campaign needs real runs (not --dry-run or --evaluate-only)")
+    if work_root.exists() and any(work_root.iterdir()):
+      raise SystemExit(f"--campaign: the work root {work_root} must be new or empty")
 
   results: list[dict[str, Any]] = []
   exit_code = 0
   for item in items:
     result = _run_item(item, work_root, args.dry_run, not args.no_clean, args.evaluate_only)
-    # A passing run keeps only its logs and reports; a failing one keeps everything.
-    if result["status"] == "pass" and not (args.dry_run or args.evaluate_only or args.keep_work):
+    # A passing run keeps only its logs and reports; a failing one, and every
+    # run of a campaign, keeps everything.
+    if result["status"] == "pass" and not (args.dry_run or args.evaluate_only or args.keep_work or args.campaign):
       prune(Path(result["work_dir"]), KEEP_AFTER_PASS)
     results.append(result)
     print(f"{result['status']:9} {result['job']} {result['case']} {result.get('message', '')}", flush=True)
@@ -1341,5 +1455,9 @@ def main(argv: list[str] | None = None) -> int:
         break
 
   _write_summary(work_root, results)
+  if args.campaign:
+    archive = archive_campaign(args.campaign, work_root)
+    _write_summary(work_root, results, archive)
+    print(f"archived the campaign: {archive['archive']} ({archive['files']} files, sha256 {archive['sha256']})")
   print(f"wrote vendor synthesis summary to {work_root}")
   return exit_code

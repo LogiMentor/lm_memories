@@ -17,6 +17,9 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from unittest import mock
+
+from tools.eda_archive import sha256_file
 from tools.vendor_synth import check
 from tools.vendor_synth.cli import main
 
@@ -55,14 +58,19 @@ os.makedirs(".Xil", exist_ok=True)  # tool scratch, removed after a passing run
 open(os.path.join(".Xil", "junk.tcl"), "w").write("x")
 top = re.search(r"-top (\S+)", script).group(1)
 print("Command: synth_design -mode out_of_context -top " + top)
-print("INFO: [Synth 8-638] synthesizing module '%s' [x.vhd:1]" % top)
-for name, value in spec["generics"].items():
-    print("\tParameter %s bound to: %s - type: integer " % (name, value))
-print("INFO: [Synth 8-256] done synthesizing module '%s'" % top)
+for module, generics in [(top, spec["generics"])] + spec.get("modules", []):
+    print("INFO: [Synth 8-638] synthesizing module '%s' [x.vhd:1]" % module)
+    for name, value in generics.items():
+        print("\tParameter %s bound to: %s - type: integer " % (name, value))
+    print("INFO: [Synth 8-256] done synthesizing module '%s'" % module)
 for line in spec.get("extra", []):
     print(line)
+if spec.get("truncate"):
+    sys.exit(0)  # the log ends here: no report, no completion message, exit code 0
 util = re.search(r"report_utilization -file \{([^}]+)\}", script).group(1)
 open(util, "w").write(spec["util"])
+print("synth_design completed successfully")
+sys.exit(spec.get("exit_code", 0))
 '''
 
 
@@ -94,13 +102,23 @@ class CheckParsingTest(unittest.TestCase):
     self.assertIn("synthesized with 0", problems[0])
 
   def test_utilization_names_for_both_families(self) -> None:
-    us = "| CLB LUTs*  |    3 |\n|   LUT as Memory |    0 |\n| CLB Registers |   5 |\n| Block RAM Tile |  0.5 |\n| URAM |    0 |\n"
+    us = ("| CLB LUTs*  |    3 |\n|   LUT as Memory |    0 |\n| CLB Registers |   5 |\n| Block RAM Tile |  0.5 |\n"
+          "|   RAMB36/FIFO*    |    0 |\n|   RAMB18          |    1 |\n| URAM |    0 |\n")
     m = check.parse_vivado_utilization(us)
     self.assertEqual((m["luts"], m["registers"], m["bram_tiles"], m["uram"]), (3.0, 5.0, 0.5, 0.0))
+    self.assertEqual((m["ramb36"], m["ramb18"]), (0.0, 1.0))
+    # A missing row is unknown, never 0.
+    self.assertIsNone(check.parse_vivado_utilization("| CLB LUTs*  |    3 |\n")["uram"])
+
+  def test_uram_absent_only_on_families_without_uram(self) -> None:
+    log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}
+    metrics = {"luts": 0.0, "luts_logic": 0.0, "lutram": 0.0, "registers": 0.0, "bram_tiles": 1.0, "uram": None}
+    self.assertEqual(check.compare(metrics, log, {"uram": 0}, "xc7a35tfgg484-2"), [])
+    self.assertEqual(len(check.compare(metrics, log, {"uram": 0}, "xcku3p-ffva676-2-e")), 1)
 
   def test_compare_flags_every_kind_of_mismatch(self) -> None:
     log = {"critical_warnings": 2, "message_ids": {"Synth 8-5787": 4}, "limited_messages": ["Synth 8-1"]}
-    metrics = {"bram_tiles": 0.0, "lutram": 0.0, "uram": 0.0, "registers": 65568.0, "luts": 9845.0}
+    metrics = {"bram_tiles": 0.0, "lutram": 0.0, "uram": 0.0, "registers": 65568.0, "luts": 9845.0, "luts_logic": 9845.0}
     expectation = {"bram_tiles": 1, "lutram": 0, "uram": 0, "max_registers": 0, "max_luts": 0,
                    "max_critical_warnings": 0, "forbidden_messages": ["Synth 8-5787"]}
     problems = check.compare(metrics, log, expectation)
@@ -132,7 +150,8 @@ class VendorRunTest(unittest.TestCase):
     tempfile.tempdir = None
     self.tmp.cleanup()
 
-  def _run(self, spec: dict, case: str = "r_w_16x64", part: str = "xc7a35tfgg484-2", executable=None) -> dict:
+  def _run(self, spec: dict, case: str = "r_w_16x64", part: str = "xc7a35tfgg484-2", executable=None,
+           extra_args: tuple[str, ...] = ()) -> dict:
     self.spec.write_text(repr(spec), encoding="utf-8")
     config = self.root / "config.json"
     work = self.root / "work"
@@ -141,9 +160,10 @@ class VendorRunTest(unittest.TestCase):
       "jobs": [{
         "name": "fake", "enabled": True, "tool": "vivado", "vendor": "amd", "family": "artix7",
         "part": part, "command": executable or [sys.executable, str(self.fake)], "cases": [case],
+        "install_dir": "C:/Xilinx/Vivado/2023.1",
       }],
     }), encoding="utf-8")
-    code = main(["--config", str(config)])
+    code = main(["--config", str(config), *extra_args])
     result = json.loads((work / "summary.json").read_text(encoding="utf-8"))["results"][0]
     result["exit_code"] = code
     return result
@@ -224,6 +244,99 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(len(result["retries"]), 3, "every failed attempt is recorded")
     self.assertIn("transient tool failure in all 3 attempts", result["problems"][0])
     self.assertEqual((self.root / "calls.txt").read_text(), "3")
+    # The complete log of every retried attempt is kept.
+    kept = sorted(p.name for p in Path(result["work_dir"]).glob("run.attempt*.log"))
+    self.assertEqual(kept, ["run.attempt1.log", "run.attempt2.log", "run.attempt3.log"])
+
+  # False passes found by the reviews of PR #4.
+
+  def test_truncated_log_is_not_a_pass(self) -> None:
+    result = self._run(self._good_spec(truncate=True))
+    self.assertEqual(result["status"], "tool-error")
+    self.assertIn("synth_design completed successfully", result["problems"][0])
+
+  def test_truncated_run_does_not_reuse_the_reports_of_an_earlier_run(self) -> None:
+    self.assertEqual(self._run(self._good_spec())["status"], "pass")
+    (self.root / "calls.txt").unlink()
+    result = self._run(self._good_spec(truncate=True), extra_args=("--no-clean",))
+    self.assertEqual(result["status"], "tool-error", result["problems"])
+    self.assertIn("no utilization report", result["problems"][0])
+
+  def test_nonzero_exit_code_is_not_a_pass(self) -> None:
+    result = self._run(self._good_spec(exit_code=3))
+    self.assertEqual(result["status"], "tool-error")
+    self.assertIn("tool exit code 3", result["problems"][0])
+
+  def test_harmless_line_in_a_completed_run_is_not_retried(self) -> None:
+    extra = ['couldn\'t read file "C:/Xilinx/Vivado/2023.1/scripts/init.tcl": no such file or directory']
+    result = self._run(self._good_spec(extra=extra))
+    self.assertEqual(result["status"], "pass", result["problems"])
+    self.assertEqual(result["retries"], [])
+
+  def test_evaluate_only_applies_the_transient_signatures(self) -> None:
+    self.assertEqual(self._run(self._good_spec())["status"], "pass")
+    # A run that stopped on a broken generated script, after its reports.
+    log = self.root / "work" / "fake" / "r_w_16x64" / "run.log"
+    log.write_text(log.read_text().replace("synth_design completed successfully", 'invalid command name "rt-undefined"'))
+    code = main(["--config", str(self.root / "config.json"), "--evaluate-only"])
+    result = json.loads((self.root / "work" / "summary.json").read_text(encoding="utf-8"))["results"][0]
+    self.assertEqual(code, 1)
+    self.assertEqual(result["status"], "tool-error")
+    self.assertIn("rt-undefined", result["problems"][0])
+
+  def test_evaluate_only_refuses_a_run_of_other_inputs(self) -> None:
+    self.assertEqual(self._run(self._good_spec())["status"], "pass")
+    record_file = self.root / "work" / "fake" / "r_w_16x64" / "run.json"
+    record = json.loads(record_file.read_text())
+    record["provenance"]["sources_hash"] = "0" * 64
+    record_file.write_text(json.dumps(record))
+    code = main(["--config", str(self.root / "config.json"), "--evaluate-only"])
+    result = json.loads((self.root / "work" / "summary.json").read_text(encoding="utf-8"))["results"][0]
+    self.assertEqual(code, 1)
+    self.assertEqual(result["status"], "not-run")
+    self.assertIn("other inputs", result["problems"][0])
+
+  def test_missing_uram_row_on_ultrascale_plus_fails(self) -> None:
+    util = UTIL_TEMPLATE.format(luts=1, lutram=20, regs=16, bram=0)
+    result = self._run(self._good_spec(util=util), part="xcku3p-ffva676-2-e")
+    self.assertEqual(result["status"], "fail")
+    self.assertTrue(any("no URAM row" in p for p in result["problems"]), result["problems"])
+    result = self._run(self._good_spec(util=util + "| URAM              |    0 |\n"), part="xcku3p-ffva676-2-e")
+    self.assertEqual(result["status"], "pass", result["problems"])
+
+  def test_incomplete_utilization_report_fails(self) -> None:
+    util = "\n".join(l for l in UTIL_TEMPLATE.format(luts=0, lutram=0, regs=0, bram=0.5).splitlines()
+                     if "Registers" not in l)
+    result = self._run(self._good_spec(util=util))
+    self.assertEqual(result["status"], "fail")
+    self.assertTrue(any("incomplete: no registers" in p for p in result["problems"]), result["problems"])
+
+  def test_campaign_keeps_everything_and_records_the_archive(self) -> None:
+    archive = self.root / "archive"
+    with mock.patch.dict(os.environ, {"LM_EDA_ARCHIVE_DIR": str(archive)}):
+      result = self._run(self._good_spec(fail_reads=1), extra_args=("--campaign", "test"))
+    self.assertEqual(result["status"], "pass", result["problems"])
+    work_dir = Path(result["work_dir"])
+    self.assertTrue((work_dir / ".Xil").is_dir(), "a campaign run is not pruned")
+    self.assertTrue((work_dir / "run.attempt1.log").is_file())
+    public = json.loads((self.root / "work" / "summary_public.json").read_text(encoding="utf-8"))
+    record = public["archive"]
+    self.assertEqual(record["sha256"], sha256_file(archive / record["archive"]))
+    self.assertTrue(public["results"][0]["sources_hash"])
+    # A campaign needs a new work root.
+    with mock.patch.dict(os.environ, {"LM_EDA_ARCHIVE_DIR": str(archive)}), self.assertRaises(SystemExit):
+      self._run(self._good_spec(), extra_args=("--campaign", "test", "--no-clean"))
+
+  def test_generics_of_the_inner_module_are_checked(self) -> None:
+    util = UTIL_TEMPLATE.format(luts=10, lutram=0, regs=0, bram=4) + "| URAM              |    0 |\n"
+    inner = {"g_ram_data_w": 36, "g_ram_depth": 4096, "g_ram_latency": 1}
+    good = self._good_spec(generics={}, util=util, modules=[("lm_mem_ram_crw_cr", inner)])
+    result = self._run(good, case="crw_cr_36x4096_cc", part="xcku3p-ffva676-2-e")
+    self.assertEqual(result["status"], "pass", result["problems"])
+    bad = self._good_spec(generics={}, util=util, modules=[("lm_mem_ram_crw_cr", {**inner, "g_ram_depth": 4000})])
+    result = self._run(bad, case="crw_cr_36x4096_cc", part="xcku3p-ffva676-2-e")
+    self.assertEqual(result["status"], "fail")
+    self.assertTrue(any("requested 4096, synthesized with 4000" in p for p in result["problems"]))
 
 
 class ExpectedFailureTest(unittest.TestCase):
@@ -247,13 +360,17 @@ class ExpectedFailureTest(unittest.TestCase):
     self.tmp.cleanup()
 
   def _range_error(self, path: Path, line: int) -> str:
+    # The shape of a real Vivado 2023.1 log (bad_r_w_latency3).
     return (f"Command: synth_design -top e\n"
+            f"INFO: [Synth 8-638] synthesizing module 'e' [{self.src.as_posix()}:2]\n"
             f"ERROR: [Synth 8-11323] assigned value '1' out of range [{path.as_posix()}:{line}]\n"
-            f"ERROR: [Synth 8-285] failed synthesizing module 'e' [{path.as_posix()}:2]\n"
+            f"ERROR: [Synth 8-285] failed synthesizing module 'e' [{self.src.as_posix()}:2]\n"
+            f"synth_design failed\n"
             f"ERROR: [Common 17-69] Command failed: Vivado Synthesis failed\n")
 
   def test_vivado_range_error_at_the_constant_passes(self) -> None:
-    problems, facts = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src])
+    problems, facts = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src],
+                                                   return_code=1)
     self.assertEqual(problems, [])
     self.assertEqual(facts["check_lines"], [f"{self.src.as_posix()}:4"])
     self.assertIn("Synth 8-11323", facts["fallback_messages"][0])
@@ -263,6 +380,27 @@ class ExpectedFailureTest(unittest.TestCase):
       problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])
       self.assertEqual(len(problems), 1, problems)
       self.assertIn("names the failing check", problems[0])
+
+  def test_message_outside_an_error_does_not_count(self) -> None:
+    # Reviews of PR #4: an INFO or WARNING line with the constant name or the
+    # message passed, with no error and no evidence of a stop.
+    for log in ("INFO: diagnostic source: C_LM_MEM_TDP_NOT_SUPPORTED\n",
+                "WARNING: [Synth 8-63] RTL assertion: \"no validated two-writer RAM architecture\"\n"):
+      for assert_mode in (False, True):
+        problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], assert_mode=assert_mode)
+        self.assertTrue(any("names the failing check" in p for p in problems), (log, problems))
+        self.assertTrue(any("did not report a stop" in p for p in problems), (log, problems))
+
+  def test_each_vivado_mode_needs_its_own_message(self) -> None:
+    # Without -assert the range error is the only evidence; with -assert, the assertion.
+    problems, _ = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src],
+                                               assert_mode=True)
+    self.assertTrue(any("[Synth 8-63]" in p for p in problems), problems)
+
+  def test_exit_code_zero_is_not_a_stop(self) -> None:
+    problems, _ = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src],
+                                               return_code=0)
+    self.assertEqual(problems, ["tool exit code 0, but synthesis was expected to stop"])
 
   def test_tool_failure_before_elaboration_is_not_elaborated(self) -> None:
     log = ("Command: synth_design -top e -assert\n"
@@ -279,11 +417,13 @@ class ExpectedFailureTest(unittest.TestCase):
     self.assertTrue(any("not found in the compiled sources" in p for p in problems))
 
   def test_vivado_stop_with_fallback_message_passes(self) -> None:
-    log = ('Command: synth_design -top lm_mem_ram_crw_crw\n'
+    log = (f'Command: synth_design -top lm_mem_ram_crw_crw -assert\n'
+           f"INFO: [Synth 8-638] synthesizing module 'e' [{self.src.as_posix()}:2]\n"
            'ERROR: [Synth 8-63] RTL assertion: "lm_mem_ram_crw_crw: no validated two-writer RAM architecture '
            'for this tool." [x.vhd:31]\n'
+           'synth_design failed\n'
            'ERROR: [Common 17-69] Command failed: Synthesis failed\n')
-    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])
+    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], assert_mode=True)
     self.assertEqual(problems, [])
     self.assertTrue(facts["stopped"])
     self.assertEqual(len(facts["fallback_messages"]), 1)
@@ -291,20 +431,28 @@ class ExpectedFailureTest(unittest.TestCase):
   def test_completed_synthesis_fails(self) -> None:
     log = "Command: synth_design\nsynth_design completed successfully\n"
     problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])
-    self.assertEqual(len(problems), 2)
+    self.assertIn("synthesis completed, but it was expected to stop", problems)
 
   def test_quartus_stop_with_constant_message_passes(self) -> None:
-    log = ('Error (10405): VHDL error at x.vhd(30): value "1" is out of target constraint range (0 to 0) '
+    log = (f'Error (10405): VHDL error at {self.src.name}(4): value "1" is out of target constraint range (0 to 0) '
            'for C_LM_MEM_TDP_NOT_SUPPORTED\n'
            'Error: Quartus Prime Analysis & Synthesis was unsuccessful. 1 error, 0 warnings\n')
     problems, facts = check.check_expected_failure("quartus", log, self.EXPECT, [self.src])
     self.assertEqual(problems, [])
-    self.assertEqual(len(facts["errors"]), 2)
+    self.assertEqual(len(facts["errors"]), 1)
+
+  def test_quartus_constant_named_elsewhere_fails(self) -> None:
+    log = ('Error (10405): VHDL error at x.vhd(30): value "1" is out of target constraint range (0 to 0) '
+           'for C_LM_MEM_TDP_NOT_SUPPORTED\n'
+           'Error: Quartus Prime Analysis & Synthesis was unsuccessful. 1 error, 0 warnings\n')
+    problems, _ = check.check_expected_failure("quartus", log, self.EXPECT, [self.src])
+    self.assertTrue(any("names the failing check" in p for p in problems), problems)
 
   def test_stop_without_fallback_message_fails(self) -> None:
-    log = "Error (12006): Node instance inst instantiates undefined entity foo\n"
+    log = ("Error (12006): Node instance inst instantiates undefined entity foo\n"
+           "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 1 error, 0 warnings\n")
     problems, _ = check.check_expected_failure("quartus", log, self.EXPECT, [self.src])
-    self.assertEqual(len(problems), 1)
+    self.assertEqual(len(problems), 2, problems)
     self.assertIn("names the failing check", problems[0])
 
   def test_quartus_success_fails(self) -> None:

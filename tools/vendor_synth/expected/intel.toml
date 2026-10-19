@@ -7,8 +7,11 @@
 # flow compiles the fallback (src/vendor/unsupported). Expected result for the
 # two-writer RAMs: Analysis & Synthesis stops at the static check of the
 # fallback. For the bad_* cases it stops at the check of the wrong generic.
-# Quartus prints the assertion message (Error 10652); a message naming the
-# constant (expect_failure_constant) is accepted as well.
+# Quartus prints the assertion message (Error 10652) and an error at the line
+# of the constant expect_failure_constant (Error 10657, failed call of
+# f_static_check); either error is accepted, a line that is not an error is
+# not. "Analysis & Synthesis was unsuccessful" and a non-zero exit code are
+# required as well.
 #
 # Device: 5CEBA4F23C7 (Cyclone V E).
 

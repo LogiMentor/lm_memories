@@ -49,6 +49,10 @@ class VendorSynthTests(unittest.TestCase):
       top = Path(summary["results"][0]["work_dir"]) / (summary["results"][0]["top"] + ".vhd")
       self.assertIn("read_vhdl -vhdl2008", script)
       self.assertIn("lm_mem_ram_r_w_infer", top.read_text(encoding="utf-8"))
+      # Vivado 2023.1 exits with 0 after a failed synth_design in a -source
+      # script (campaign pilot of 2026-10-19): the script exits with 1 itself.
+      self.assertIn("if {[catch {synth_design -mode out_of_context", script)
+      self.assertIn("  exit 1\n}", script)
 
   def test_vivado_threads_one_uses_default_thread_setting(self):
     with tempfile.TemporaryDirectory() as tmpdir:

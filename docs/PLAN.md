@@ -836,11 +836,18 @@ the summary in `<campaign root>/summary.md`.
   `vivado.bat` without `call` never gets control back, so the lines after
   it (`exit /b %ERRORLEVEL%`) do not run and the caller sees an exit code
   that is not Vivado's: measured with Vivado 2023.1, 0 or 123 after a failed
-  `synth_design`, 1 with `call` or when `vivado.bat` is run directly. Fixed
-  here in the launcher of `tools/vendor_synth`. To check in the scripts of
-  the other LogiMentor repositories that start Vivado (or any `.bat` tool,
-  such as `xsim.bat` and `settings64.bat`) from a batch file and use its
-  exit code.
+  `synth_design`, 1 with `call` or when `vivado.bat` is run directly, for a
+  script that ends with a Tcl `error`. Fixed here in the launcher of
+  `tools/vendor_synth`. To check in the scripts of the other LogiMentor
+  repositories that start Vivado (or any `.bat` tool, such as `xsim.bat` and
+  `settings64.bat`) from a batch file and use its exit code.
+- **Vivado exits with 0 after a failed `synth_design`** in a `-source`
+  script, also with `call` (campaign pilot of 2026-10-19: six expected stops,
+  each with `synth_design failed` and `[Common 17-69]` in the log, all exit
+  code 0). The scripts here run `synth_design` inside `catch` and end with
+  `exit 1` when it fails (`vivado_synth_command` in
+  `tools/vendor_synth/check.py`). The same check applies to every LogiMentor
+  script that relies on the exit code of a Vivado batch run.
 
 ## Appendix: how the reproduction was run
 

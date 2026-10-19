@@ -415,6 +415,15 @@ class ExpectedFailureTest(unittest.TestCase):
                                                assert_mode=True)
     self.assertTrue(any("[Synth 8-63]" in p for p in problems), problems)
 
+  def test_marker_of_the_script_is_a_stop(self) -> None:
+    # The scripts print the marker and exit with 1 when synth_design fails.
+    log = self._range_error(self.src, 4).replace("synth_design failed\n",
+                                                 check.SYNTH_FAILED_MARKER + " Synthesis failed\n")
+    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], return_code=1)
+    self.assertEqual(problems, [])
+    self.assertTrue(facts["stopped"])
+    self.assertIn("exit 1", check.vivado_synth_command("synth_design -top e"))
+
   def test_exit_code_zero_is_not_a_stop(self) -> None:
     problems, _ = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src],
                                                return_code=0)

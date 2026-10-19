@@ -71,6 +71,15 @@ class ReuseTest(unittest.TestCase):
       self.assertIsNone(ps.reusable(work, other_part)[0])
 
 
+class ScriptTest(unittest.TestCase):
+  def test_failed_synthesis_exits_with_1(self) -> None:
+    # Vivado 2023.1 exits with 0 after a failed synth_design in a -source script.
+    g = dict(ps.RAM_CONFIGS)["crw_crw.1clk.16x64"]
+    script = ps.synth_inputs("xc7a35tfgg484-2", "k", g, Path(tempfile.gettempdir()))["script_text"]
+    self.assertIn("if {[catch {synth_design -mode out_of_context -top lm_ps_k", script)
+    self.assertIn("  exit 1\n}", script)
+
+
 class SelectionTest(unittest.TestCase):
   def test_selection_without_netlist_comparison_is_an_error(self) -> None:
     # Review of PR #4: 36x4096 on Artix-7 ran the RTL only and exited 0.

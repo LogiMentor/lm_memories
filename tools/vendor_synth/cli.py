@@ -787,6 +787,8 @@ def _vivado_script(
   generic_args = "".join(
     f" -generic {{{name}={_tcl_generic(value)}}}" for name, value in (generics or {}).items()
   )
+  synth_line = check.vivado_synth_command(
+    f"synth_design -mode out_of_context -top {top} -part {{{part}}}{generic_args}{assert_arg}")
   text = f"""# SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 {thread_line}set script_dir {{{script_dir}}}
@@ -794,7 +796,7 @@ file mkdir [file join $script_dir reports]
 catch {{ set_param messaging.defaultLimit 1000000 }}
 {limit_lines}
 {source_lines}
-synth_design -mode out_of_context -top {top} -part {{{part}}}{generic_args}{assert_arg}
+{synth_line}
 report_utilization -file {{{_tcl_path(reports / "utilization.rpt")}}}
 catch {{ report_ram_utilization -file {{{_tcl_path(reports / "ram_utilization.rpt")}}} }}
 exit

@@ -235,10 +235,13 @@ def synth_inputs(part: str, key: str, g: dict, work: Path, common_clock: bool = 
   wrapper_text = wrapper_vhdl(key, g, common_clock)
   library = [s.path for s in load().files("synth-amd", "vivado")] + [ADAPTER_RTL]
   reads = "\n".join(f"read_vhdl -vhdl2008 {{{tcl(s)}}}" for s in [*library, wrapper])
+  # Exits with 1 when synth_design fails (Vivado itself exits with 0).
+  synth_line = check.vivado_synth_command(
+    f"synth_design -mode out_of_context -top lm_ps_{key} -part {{{part}}} -flatten_hierarchy full")
   script_text = f"""set_param general.maxThreads 2
 catch {{ set_param messaging.defaultLimit 1000000 }}
 {reads}
-synth_design -mode out_of_context -top lm_ps_{key} -part {{{part}}} -flatten_hierarchy full
+{synth_line}
 report_utilization -file {{{tcl(work / 'utilization.rpt')}}}
 write_vhdl -mode funcsim -force {{{tcl(netlist)}}}
 exit

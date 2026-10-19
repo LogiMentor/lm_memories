@@ -25,6 +25,25 @@ VENDOR_FILES = {
   "microchip": "microchip", "microsemi": "microchip",
 }
 
+# Printed by the Vivado scripts of vendor_synth and run_postsynth.py when
+# synth_design returns an error; they then exit with 1 (vivado_synth_command).
+SYNTH_FAILED_MARKER = "lm_vendor_synth: synth_design failed:"
+
+def vivado_synth_command(command: str) -> str:
+  """synth_design in a Vivado batch script, exiting with 1 when it fails.
+
+  A failed synth_design in a -source script leaves the exit code of Vivado
+  2023.1 at 0 (campaign pilot of 2026-10-19: six expected stops, all exit
+  code 0, also through the launcher with "call"), so the script stops with
+  "exit 1" itself; the marker line says the tool reported the failure.
+  """
+  return (f"if {{[catch {{{command}}} result]}} {{\n"
+          f"  puts \"{SYNTH_FAILED_MARKER} $result\"\n"
+          f"  exit 1\n"
+          f"}}")
+
+
+
 _PARAM_RE = re.compile(r"^\s*Parameter\s+(\S+)\s+bound to:\s*(.*?)\s+-\s+type:\s*(\S+)")
 _MODULE_RE = re.compile(r"synthesizing module '([^']+)'")
 _LIMIT_RE = re.compile(r"\[Common 17-14\] Message '([^']+)' appears 100 times")
@@ -97,7 +116,7 @@ def parse_vivado_log(text: str, top: str) -> dict[str, Any]:
     "synth_ran": synth_start is not None,
     # Positive evidence of the end of synth_design, either way.
     "completed": any(line.startswith("synth_design completed successfully") for line in synth_lines),
-    "stopped": any(line.startswith("synth_design failed") for line in lines),
+    "stopped": any(line.startswith(("synth_design failed", SYNTH_FAILED_MARKER)) for line in lines),
     "critical_warnings": sum(1 for line in synth_lines if line.startswith("CRITICAL WARNING:")),
     "critical_warnings_outside_synth": sum(
       1 for line in lines[:synth_start or 0] if line.startswith("CRITICAL WARNING:")
@@ -304,7 +323,7 @@ def check_expected_failure(
     expected = (" or ".join(repr(t) for t in texts) + (f", or {constant} at its declaration" if constant else ""))
   else:
     errors = [line.strip() for line in lines if line.startswith("ERROR:")]
-    stopped = any(line.startswith("synth_design failed") for line in lines)
+    stopped = any(line.startswith(("synth_design failed", SYNTH_FAILED_MARKER)) for line in lines)
     if assert_mode:
       accepted = [line for line in errors if "[Synth 8-63]" in line and any(text in line for text in texts)]
       expected = "[Synth 8-63] with " + " or ".join(repr(t) for t in texts)

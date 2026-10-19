@@ -94,8 +94,10 @@ All notable changes to this project are documented here.
   non-project mode.
 - **Read during write between different ports** of any true dual-port RAM is
   undefined, also with a single clock (`lm_mem_ram_rw_rw`). Read during
-  write on the same port, and on a common-clock simple dual-port RAM, still
-  returns the old data.
+  write on the same port still returns the old data. On a common-clock
+  simple dual-port RAM the old data is guaranteed only where verified for
+  the vendor: AMD Vivado so far; Intel is checked in phase 4 (Quartus 23.1
+  `Warning (276027)`: dual-clock RAM, read during write undefined).
 - **File lists:** compile the files listed for your flow in
   `manifests/lm_memories.toml` (`python -m tools.manifest list --flow ...`).
   New files are required (`src/core/`), and later releases will select
@@ -121,7 +123,17 @@ All notable changes to this project are documented here.
   `docs/results/`.
 - `tools/eda_lock.py`: machine-wide lock so that heavy tool runs from
   different sessions on the same machine queue up, served in order of
-  arrival.
+  arrival; `LM_EDA_LOCK_DIR` sets its directory (users sharing a Windows
+  machine).
+- `tools/eda_proc.py`: a timeout stops the whole process tree of the tool
+  before the lock is released. `tools/eda_retry.py`: one retry policy
+  (completed runs and project errors are never retried; the log of every
+  attempt is kept). `tools/eda_provenance.py`: hash of sources and manifest,
+  and commit, in every synthesis artefact. `tools/eda_archive.py`:
+  campaign runs (`--campaign`) are archived outside the repository
+  (`LM_EDA_ARCHIVE_DIR`) with their SHA-256 in the results.
+- `sim/scripts/run_vunit_campaign.py`: the VUnit suite as a campaign, with
+  structured results (xunit) and archived logs.
 - Post-synthesis simulation of the two-writer RAMs on AMD
   (`sim/scripts/run_postsynth.py`): the same harness and scoreboard on Vivado
   funcsim netlists, with GHDL (UNISIM) and xsim, RTL and netlist side by side.

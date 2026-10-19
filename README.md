@@ -48,6 +48,23 @@ Common packages live in `src/common/`, and FIFO implementations live in
 Support and validation status is tracked in
 [`docs/support_matrix.md`](docs/support_matrix.md).
 
+## Verification runs and their results
+
+- Every heavy run (Vivado, Quartus, simulators) holds a machine-wide lock
+  (`tools/eda_lock.py`; directory `LM_EDA_LOCK_DIR`, default the system
+  temporary directory) and waits for free memory; on a timeout the whole
+  tool is stopped before the lock is released.
+- A synthesis or simulation result counts only with positive evidence of a
+  complete run: the tool's completion message, exit code 0, complete
+  reports or counters of this run, and the same inputs (hash of the
+  sources and the manifest) when a result is evaluated again or a netlist
+  reused.
+- The runs that feed `docs/results/` are campaigns (`--campaign NAME`):
+  nothing is pruned, the logs of every attempt are archived, compressed,
+  outside the repository (`LM_EDA_ARCHIVE_DIR`, default `lm_eda_archive` in
+  the home directory), and the result JSON records the archive name and
+  SHA-256 ([`docs/results/README.md`](docs/results/README.md)).
+
 ## Simulation Quick Start
 
 The VHDL sources are simulator-neutral and can be used with GHDL, QuestaSim,
@@ -122,12 +139,21 @@ python -m tools.manifest list --flow synth-amd --format tcl
   `lm_mem_ram_r_w` 36 x 4096 becomes one URAM288. URAM cannot be initialized
   from the bitstream and needs output registers for Fmax. Its behaviour was
   checked by post-synthesis simulation for that case and matches the
-  documentation (old data on a read during write, latency 1). The true
+  documentation (old data on a read during write, latency 1, zero content
+  before the first write). These checks use the UNISIM simulation model of
+  URAM288, not hardware. The true
   dual-port RAMs of the same size (`lm_mem_ram_crw_cr` on one clock,
   `lm_mem_ram_rw_rw`) stay in block RAM. A `g_ram_style` generic is proposed
   (PLAN 3.13) but not implemented.
-- Read during write on the same port, or on a common-clock simple dual-port
-  RAM, returns the old data. Between different ports of a true dual-port RAM,
+- Read during write on the same port returns the old data. On a
+  common-clock simple dual-port RAM (`lm_mem_ram_r_w`,
+  `lm_mem_ram_r_w_ratio`) the old data is guaranteed only where it is
+  verified for the vendor: AMD Vivado, block RAM and URAM. On Intel it is
+  checked in phase 4 (Quartus 23.1 infers `lm_mem_ram_r_w` as a dual-clock
+  RAM and reports its read-during-write behaviour as undefined, `Warning
+  (276027)`); Lattice and Microchip are not verified
+  ([`docs/support_matrix.md`](docs/support_matrix.md)). Between different
+  ports of a true dual-port RAM,
   and between ports on different clocks, it is undefined. This includes
   `lm_mem_ram_rw_rw`, although it has a single clock: a read on one port of
   the address written by the other port in the same cycle returns undefined

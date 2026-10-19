@@ -3,8 +3,10 @@
 
 # Plan: inferable generic RAMs (issue #3)
 
-Status: phase 0 of the implementation (plan and structure). No RTL has been
-changed yet.
+Status: phases 0 to 3 are implemented in PR #4 (not merged), with the
+corrections of the reviews of PR #4 (section 3.14). Phase 4 (Intel) starts
+after the merge. Sections 3.10 to 3.13 are the notes written at the end of
+each phase; where a later section differs, the later one holds.
 
 Sections 1 and 2 record the diagnosis: the reproduction and the root cause.
 Section 3 is the revised implementation plan: binding decisions, layout,
@@ -310,9 +312,12 @@ Defined behaviour (checked):
   of the two-writer RAMs.
 - Common-clock simple dual port (`lm_mem_ram_r_w`, `lm_mem_ram_r_w_ratio`):
   a read of the address being written in the same cycle returns the old data,
-  **where the vendor supports it**. This is checked per vendor with
-  post-synthesis simulation, and the exceptions are listed in the README
-  status table.
+  **guaranteed only where verified for the vendor**: AMD (RTL and netlist,
+  block RAM and URAM). Intel is checked in phase 4: Quartus 23.1 infers
+  `lm_mem_ram_r_w` 32 x 1024 on Cyclone V as a dual-clock RAM and warns
+  that its read-during-write behaviour is undefined (`Warning (276027)`).
+  Lattice and Microchip: not verified. The status per vendor is in
+  `docs/support_matrix.md`.
 - Enable gating: `ena_i` gates the port A read and write; `enb_i` gates port
   B. Both output stages hold their value while disabled.
 - Latency 1 and 2.
@@ -455,11 +460,24 @@ Confirmed defaults:
 - The script reads the effective value of each generic from the log
   (`Parameter <name> bound to: <value>`). The case fails if it differs from
   the requested value.
-- Retries follow one policy for every script (`tools/eda_retry.py`): one
-  list of transient signatures (`couldn't read file`, `invalid command name
-  "rt-undefined"`, `synth_design failed` with no error but `[Common 17-69]`),
-  at most two retries, every failed attempt recorded, and `tool-error` if
-  the failure persists. Other failures are never retried.
+- A case passes only with positive evidence of a complete run of these
+  inputs: the tool's completion message, exit code 0, no error of the
+  project, reports written by this run with every row, the generics read
+  back (also of the inner entity of a generated top), and a run record
+  (`run.json`: sources and manifest hash, commit, times, exit code) that
+  `--evaluate-only` requires to match the current inputs. An expected stop
+  needs an error of the tool that names the check, the stop message, a
+  non-zero exit code and the elaborated module of the check; each Vivado
+  mode accepts only its own message (section 3.14).
+- Retries follow one policy for every script (`tools/eda_retry.py`): a
+  completed run and a run with an error of the project are never retried;
+  otherwise the transient signatures (`couldn't read file` for a file of the
+  installation or one the tool generated under `.Xil`, `invalid command
+  name "rt-undefined"`, `synth_design failed` with no error but `[Common
+  17-69]`), at most two retries, every retried attempt recorded with its
+  complete log, and `tool-error` if the failure persists. A timeout stops
+  the whole process tree of the tool before the lock is released
+  (`tools/eda_proc.py`).
 - Runs are sequential, one tool process at a time. Each run holds the
   machine-wide lock `lm_eda_heavy_tools.lock` in the system temporary
   directory (`tools/eda_lock.py`, fixed name, not tied to the repo), so
@@ -474,7 +492,11 @@ Confirmed defaults:
   post-synthesis runner; `--work-root` overrides it. Vivado fails on Windows
   when the paths it derives under `.Xil` exceed 260 characters. After a
   passing run only logs, reports and scripts stay; a failing run keeps
-  everything (`--keep-work` keeps everything always).
+  everything (`--keep-work` keeps everything always). Campaign runs
+  (`--campaign NAME`, the runs that feed `docs/results/`) are never pruned:
+  their work directory is archived, compressed, outside the repository
+  (`tools/eda_archive.py`, `$LM_EDA_ARCHIVE_DIR`), and the result JSON
+  records the archive name and SHA-256.
 - A tool that is not installed is reported as **NOT RUN**, never as pass.
 - Configurations: 32 x 1024, `lm_mem_ram_r_w` 16 x 64, FIFO 32 x 16, plus
   latency 2, ratio 32 -> 8 and 8 -> 32, and FIFO 32 x 1024.
@@ -484,7 +506,7 @@ Confirmed defaults:
 | Vendor | Device | Status |
 | --- | --- | --- |
 | AMD 7-series | `xc7a35tfgg484-2` | approved |
-| AMD UltraScale+ | `xcku3p-ffva676-2-e` (Kintex UltraScale+) | approved. Expected results cover block RAM only: no URAM, because the cores carry no `ram_style` attribute. |
+| AMD UltraScale+ | `xcku3p-ffva676-2-e` (Kintex UltraScale+) | approved. The cores carry no `ram_style` attribute; URAM is expected only where Vivado chooses it by itself (`lm_mem_ram_r_w` 36 x 4096, section 3.13). |
 | Intel | `5CEBA4F23C7` (Cyclone V E), `10M50DAF484C7G` (MAX 10) | approved |
 | Lattice | `LFE5U-45F-6BG381C` (ECP5) | approved; blocked by the expired Diamond license |
 | Microchip | `MPF100T-FCG484I` (PolarFire) | approved; Libero not installed |
@@ -602,8 +624,9 @@ Each phase ends with a report and waits for confirmation.
   counts as a pass. Seven runs ended in `tool-error` on the reference machine
   and passed when run again by hand. The symptoms were unreadable
   installation files, a broken internal `.Xil` script, and silent stops,
-  while other sessions were running Vivado without the shared lock. The
-  automatic retry still covers only `couldn't read file`.
+  while other sessions were running Vivado without the shared lock. At the
+  end of phase 2 the automatic retry covered only `couldn't read file`;
+  the policy now is in section 3.6.
 - **`--evaluate-only`** checks existing results again with the current
   expected results without running the tool. It was used to produce the
   final table from the latest run of every case.
@@ -747,6 +770,58 @@ and FIFO, default `"auto"`, that sets the storage attributes of each tool:
 **Shared EDA lock:** approved in principle (public repository
 `lm-eda-lock`, a CLI for Tcl flows). It is implemented after PR #4 is
 merged, as separate work.
+
+### 3.14 Corrections after the reviews of PR #4
+
+Two reviews of PR #4 at `5a5761a` found no blocking problem, 9 important,
+9 minor and 5 notes. The corrections, with the decisions taken:
+
+- **Read outputs before the first read:** undefined in every architecture
+  (no initial value on the output registers, as in the frozen reference);
+  the simulation model of `lm_mem_ram_crw_crw` drives 'X'. The harness
+  checks 'U' or 'X' on every read output before the first read reaches it,
+  in RTL simulation only (section 3.5).
+- **Scoreboard:** after a write/write collision, the cells of the earlier
+  write keep their state before the instant, so the result no longer
+  depends on the order of the monitors (`tb_lm_mem_tb_pkg`).
+- **Pass criteria:** `vendor_synth` and `run_postsynth.py` need positive
+  evidence of a complete run (section 3.6); `run_postsynth.py` needs exactly
+  one PASS line, a complete harness line, exit code 0 and no fatal
+  diagnostic, and a selection without netlist comparison is an error.
+- **Provenance:** synthesis artefacts record the hash of the sources and the
+  manifest and the commit; a netlist is reused, and a log evaluated again,
+  only for the same inputs (`tools/eda_provenance.py`).
+- **Timeout:** the whole process tree of the tool is stopped, then the lock
+  is released (`tools/eda_proc.py`).
+- **Retry:** section 3.6.
+- **Expected stops:** a real error that names the check; Vivado without
+  `-assert` needs `[Synth 8-11323]` at the constant, with `-assert`
+  `[Synth 8-63]` with the message; Quartus `Error (10652)` with the message
+  or an error at the constant (`10657`, `10405`).
+- **Mutation check:** structured VUnit results and a passing baseline.
+- **Static checks:** every check of a generic in `src/` is a static check,
+  also in `lm_mem_ccd_resync`, `lm_mem_ram_r_w_infer`, the primitive
+  wrappers and the Gray-code functions; the FIFO checks its almost-flag
+  limits. A test enforces the rule; each new check has negative cases in
+  Vivado (both modes), Quartus and GHDL.
+- **Expected results:** register and LUT ceilings for the FIFOs (measured
+  + 10 % + 2); one RAMB18 for the half-tile cases; generics of the inner
+  entity of generated tops; a missing URAM row fails on UltraScale+.
+- **Lock:** files shared across users on POSIX (mode 0666), lock directory
+  `LM_EDA_LOCK_DIR` (on Windows `TEMP` is per user), Python tests on
+  Windows in CI.
+- **Logs of campaigns:** archived (section 3.6).
+
+Left for phase 4 and later, not changed now:
+
+- **Portability of the cores to other synthesis tools.** The asymmetric
+  template (`address & i`) builds a null-range `to_unsigned(i, 0)` when a
+  port is the narrow one; Quartus 23.1 accepts it with `Warning (10296)`.
+  Mixed-width inference on Intel, and Lattice LSE and Synplify (no license),
+  are checked in phase 4 or when the tools are available.
+- **URAM on hardware:** the zero initial content and the old data on a read
+  during write of URAM are checked on the UNISIM model only.
+- **Hardware:** no entity is checked on a board.
 
 ## Appendix: how the reproduction was run
 

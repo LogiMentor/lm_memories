@@ -803,7 +803,11 @@ Two reviews of PR #4 at `5a5761a` found no blocking problem, 9 important,
   also in `lm_mem_ccd_resync`, `lm_mem_ram_r_w_infer`, the primitive
   wrappers and the Gray-code functions; the FIFO checks its almost-flag
   limits. A test enforces the rule; each new check has negative cases in
-  Vivado (both modes), Quartus and GHDL.
+  Vivado (both modes), Quartus and GHDL. A second test keeps the shape of
+  the mechanism, which GHDL alone cannot show because it stops at the
+  assertion first: a failed check returns 1, outside `t_static_check`
+  (`natural range 0 to 0`), and every `C_ERROR_` constant is declared in an
+  architecture or a subprogram, never in a generate, block or process.
 - **Expected results:** register and LUT ceilings for the FIFOs (measured
   + 10 % + 2); one RAMB18 for the half-tile cases; generics of the inner
   entity of generated tops; a missing URAM row fails on UltraScale+.
@@ -842,10 +846,14 @@ the summary in `<campaign root>/summary.md`.
   repositories that start Vivado (or any `.bat` tool, such as `xsim.bat` and
   `settings64.bat`) from a batch file and use its exit code.
 - **Vivado exits with 0 after a failed `synth_design`** in a `-source`
-  script, also with `call` (campaign pilot of 2026-10-19: six expected stops,
-  each with `synth_design failed` and `[Common 17-69]` in the log, all exit
-  code 0). The scripts here run `synth_design` inside `catch` and end with
-  `exit 1` when it fails (`vivado_synth_command` in
+  script, also with `call` (campaign pilot of 2026-10-19, commit `4fb1ae7`:
+  five expected stops, three without `-assert` and two with it, each with
+  the expected `[Synth 8-11323]` or `[Synth 8-63]` at the check, then
+  `synth_design failed` and `[Common 17-69]` in the log, all exit code 0;
+  the checks were right, only the exit code was wrong). The pilot now also
+  runs `bad_fifo_almost_empty_15` with `-assert`, so each of the three
+  cases is checked in both modes. The scripts here run `synth_design`
+  inside `catch` and end with `exit 1` when it fails (`vivado_synth_command` in
   `tools/vendor_synth/check.py`). The same check applies to every LogiMentor
   script that relies on the exit code of a Vivado batch run.
 

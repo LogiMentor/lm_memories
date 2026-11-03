@@ -8,6 +8,10 @@
   with its "-- ERROR:" comment on the same line. Assertions of severity
   note or warning (deprecation notes, run-time warnings of the simulation
   model and the FIFO) are allowed.
+- Shape of the mechanism: a failed f_static_check returns 1, outside
+  t_static_check (natural range 0 to 0), which is what stops Vivado without
+  synth_design -assert; every C_ERROR_<CHECK> constant is declared in an
+  architecture or a subprogram, never in a generate, block or process.
 - Negative cases with GHDL (skipped where GHDL is not installed): each
   check added for the reviews of PR #4 stops elaboration with its message.
   The synthesis tools check the same cases in tools/vendor_synth
@@ -104,6 +108,45 @@ class StaticCheckRuleTest(unittest.TestCase):
           where = f"{path.relative_to(ROOT_DIR).as_posix()}:{number}"
           self.assertIn(": t_static_check := f_static_check(", line, where)
           self.assertIn("-- ERROR:", line, where)
+
+  def test_a_failed_check_is_out_of_range_of_its_constant(self) -> None:
+    # Without synth_design -assert, Vivado skips the assertion and stops only
+    # because the constant is out of range: [Synth 8-11323] "assigned value
+    # '1' out of range" at the C_ERROR_ line (campaign pilot of 2026-10-19).
+    # GHDL stops at the assertion first, so the GHDL cases below cannot show
+    # that the range part works: this test keeps its shape.
+    code = _code((ROOT_DIR / "src" / "common" / "lm_mem_pkg.vhd").read_text(encoding="utf-8"))
+    self.assertRegex(code, r"subtype\s+t_static_check\s+is\s+natural\s+range\s+0\s+to\s+0\s*;")
+    body = re.search(r"function\s+f_static_check\s*\([^)]*\)\s*return\s+natural\s+is\b(.*?)"
+                     r"\bend\s+function\s+f_static_check\s*;", code,
+                     re.IGNORECASE | re.DOTALL)
+    self.assertIsNotNone(body)
+    # Starts at 1 and becomes 0 only when ok holds: a failed check returns 1.
+    self.assertRegex(body.group(1), r"variable\s+v_result\s*:\s*natural\s*:=\s*1\s*;")
+    self.assertRegex(body.group(1), r"if\s+ok\s+then\s+v_result\s*:=\s*0\s*;\s*end\s+if\s*;")
+    self.assertNotRegex(body.group(1), r"v_result\s*:=(?!\s*0\s*;)")
+
+  def test_every_check_is_declared_where_it_is_always_elaborated(self) -> None:
+    # A constant in an architecture is elaborated with the entity, one in a
+    # subprogram with each call. One inside a generate, block or process
+    # would be skipped when that branch is not elaborated.
+    for path in sorted((ROOT_DIR / "src").rglob("*.vhd")):
+      lines = _code(path.read_text(encoding="utf-8")).splitlines()
+      scope = None
+      for number, line in enumerate(lines, start=1):
+        if re.match(r"\s*end\b", line, re.IGNORECASE):
+          continue
+        if re.search(r"\bgenerate\b", line, re.IGNORECASE):
+          scope = "generate"
+        elif re.search(r"\b(process|block)\b", line, re.IGNORECASE):
+          scope = "process or block"
+        elif re.match(r"\s*((pure|impure)\s+)?(function|procedure)\b", line, re.IGNORECASE):
+          scope = "subprogram"
+        elif re.match(r"\s*architecture\b", line, re.IGNORECASE):
+          scope = "architecture"
+        if re.match(r"\s*constant\s+C_ERROR_\w+\s*:", line):
+          where = f"{path.relative_to(ROOT_DIR).as_posix()}:{number}"
+          self.assertIn(scope, ("architecture", "subprogram"), where)
 
 
 @unittest.skipUnless(GHDL, "GHDL not installed")

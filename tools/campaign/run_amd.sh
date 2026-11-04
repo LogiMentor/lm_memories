@@ -30,6 +30,13 @@
 #   vunit_ghdl      run_vunit_campaign.py on GHDL
 #   vunit_questa    run_vunit_campaign.py on Questa (-p 1)
 #   mutation        mutation_check.py --campaign, with baseline
+#   rerun_tool_errors  python -m tools.campaign.rerun: every case that ended
+#                   as tool-error runs once more (never a fail); the summary
+#                   lists each one with its first and second result
+#
+# The memory thresholds of the EDA lock (LM_EDA_MIN_FREE_MB_SYNTH, default
+# 8192 MB, and LM_EDA_MIN_FREE_MB_SIM, default 2048 MB) are recorded in
+# logs/steps.txt and in the summary.
 #
 # Result: <campaign root>/summary.md and summary.json (tools/campaign/summarize.py).
 # Exit code: 0 only if the pilot and every step passed.
@@ -71,11 +78,18 @@ fi
 mkdir -p "$ROOT/logs" || fail "cannot create $ROOT"
 STEPS="$ROOT/logs/steps.txt"
 stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+# Memory thresholds of the EDA lock in effect for every run of the campaign
+# (tools/eda_lock.py), recorded in the step log and in the summary.
+MEMORY=$("$PY" -c 'from tools.eda_lock import min_free_mb
+print("; ".join("%s %d MB (%s)" % ((k,) + (int(min_free_mb(k)[0]), min_free_mb(k)[1])) for k in ("synthesis", "simulation")))') \
+  || fail "cannot read the memory thresholds of tools/eda_lock.py"
 {
   echo "$(stamp) start commit $(git rev-parse HEAD)"
   echo "python: $("$PY" --version 2>&1); ghdl: $("$GHDL" --version | head -1); vivado: $LM_VIVADO_DIR"
+  echo "memory thresholds: $MEMORY"
 } > "$STEPS"
 echo "Campaign root: $ROOT"
+echo "Memory thresholds: $MEMORY"
 echo "Progress: $STEPS"
 
 step() {
@@ -112,6 +126,8 @@ step vunit_ghdl env LM_EDA_WORKDIR="$ROOT" "$PY" sim/scripts/run_vunit_campaign.
 step vunit_questa env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=modelsim \
   "$PY" sim/scripts/run_vunit_campaign.py questa_2021.1 -p 1
 step mutation env LM_EDA_WORKDIR="$ROOT" "$PY" sim/vunit/mutation_check.py --campaign ghdl_6.0.0
+# Once more, only the cases that ended as tool-error (never a fail).
+step rerun_tool_errors "$PY" -m tools.campaign.rerun "$ROOT"
 echo "$(stamp) done" >> "$STEPS"
 
 summarize

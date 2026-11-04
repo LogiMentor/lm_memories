@@ -835,6 +835,43 @@ generics, a generic changed in the Vivado script, the old code against the
 new static checks), then every campaign in sequence under the lock, with
 the summary in `<campaign root>/summary.md`.
 
+- **Rerun of tool-errors:** the last step (`tools/campaign/rerun.py`) runs
+  once more every case that ended as `tool-error` (the three vendor_synth
+  steps; for the post-synthesis step, the syntheses recorded with
+  `tool_error`), each in its own work root under `rerun/`, archived with
+  `--campaign <name>_rerun`. A `fail` is never run again. The summary lists
+  every rerun with its first and second result; a step whose only
+  non-passing cases were tool-errors passes only if each rerun passed.
+- **Memory thresholds:** the thresholds of the EDA lock in effect
+  (`LM_EDA_MIN_FREE_MB_SYNTH`, `LM_EDA_MIN_FREE_MB_SIM`) are written to
+  `logs/steps.txt` at the start and shown in the summary.
+- **Collisions in the netlist simulations:** the harness provokes
+  collisions on purpose; the UNISIM block RAM models report each one as an
+  assertion error ("Memory Collision Error on RAMB18E1", "[Unisim
+  RAMB18E2-1] ... Memory Collision"), which made every netlist simulation
+  of a two-writer RAM fail (2026-11-04: 13 errors for `collisions_ww=13`).
+  The harness now writes the instant of each collision (write/write: the
+  write; read/write: the read and the colliding write).
+  `check_collisions` in `run_postsynth.py` accepts a model message only
+  when it pairs with a harness collision of the same kind at the same
+  instant whose cells overlap the word of the message (model address
+  without the low bits of the port width, read from the netlist). For
+  write/write, every block RAM must pair every harness collision exactly
+  once: one more or one less fails. For read/write, every model message
+  must pair, but a harness collision without a message is allowed: with one
+  clock and READ_FIRST the models report nothing (`crw_crw.1clk.16x64`: 53
+  in the harness, none in the models). A message that cannot be paired by
+  instant and address (unknown instance or width, 'X' in the address)
+  passes only when, for its instance and kind, the number of messages
+  equals the harness count. Every other UNISIM diagnostic (also "Address
+  Overlap Error") stays fatal. Measured on 2026-11-04 with
+  `crw_crw.1clk.16x64` on `xc7a35tfgg484-2` (RAMB18E1) and
+  `xcku3p-ffva676-2-e` (RAMB18E2), GHDL and xsim: 13 messages, 13 paired,
+  PASS; the same logs with one harness collision less, one model message
+  more or one less: FAIL. The other configurations (two clocks, mixed
+  widths, 36 x 4096 with several block RAMs) are first checked by the
+  campaign.
+
 ### 3.15 Cross-cutting work (other LogiMentor repositories)
 
 - **Shared EDA lock** (`lm-eda-lock`): section 3.13, after the merge of PR #4.

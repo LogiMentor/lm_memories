@@ -49,6 +49,7 @@ class SummaryTest(unittest.TestCase):
       summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
       self.assertFalse(summary["steps"]["vivado"]["ok"])
       self.assertEqual(summary["memory_thresholds"], "not recorded")
+      self.assertEqual(summary["retry_waits"], "not recorded")
 
 
 def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
@@ -61,7 +62,7 @@ def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
            "vunit_questa": 0, "mutation": 0, "rerun_tool_errors": 0, **(rc or {})}
   (root / "logs" / "steps.txt").write_text(
     "t start commit abc\nmemory thresholds: synthesis 4096 MB (LM_EDA_MIN_FREE_MB_SYNTH); simulation 2048 MB "
-    "(LM_EDA_MIN_FREE_MB_SIM)\n" + "".join(f"t end {k} rc={v}\n" for k, v in codes.items()))
+    "(LM_EDA_MIN_FREE_MB_SIM)\nretry waits: 30, 60 s (LM_EDA_RETRY_DELAYS)\n" + "".join(f"t end {k} rc={v}\n" for k, v in codes.items()))
   (root / "pilot" / "pilot.json").write_text(json.dumps({"ok": True, "launcher": {"ok": True, "problems": []}}))
   results = [{"job": "artix7", "part": "xc7a35tfgg484-2", "case": f"case{i}", "status": s,
               "problems": [] if s == "pass" else [f"{s} of case{i}"]} for i, s in enumerate(vivado_statuses)]
@@ -96,6 +97,8 @@ class RerunTest(unittest.TestCase):
       self.assertEqual(code, 0, text)
       self.assertIn("synthesis 4096 MB (LM_EDA_MIN_FREE_MB_SYNTH)", summary["memory_thresholds"])
       self.assertIn("Memory thresholds of the EDA lock: synthesis 4096 MB", text)
+      self.assertEqual(summary["retry_waits"], "30, 60 s (LM_EDA_RETRY_DELAYS)")
+      self.assertIn("Waits before a rerun of a transient tool failure: 30, 60 s", text)
       self.assertIn("nothing was run again", text)
 
   def test_only_tool_errors_run_again(self) -> None:

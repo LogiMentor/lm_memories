@@ -23,7 +23,8 @@ Writes <pilot directory>/pilot.json and exits with 1 if any check fails:
 Retry policy, the same as the campaign (tools/eda_retry.py): each pilot case
 ends as pass, fail or tool-error. A tool-error (the tool failed with a
 transient signature of eda_retry and no error of the project) is run again,
-at most MAX_RETRIES times, each attempt in its own directory
+at most MAX_RETRIES times, after the wait of eda_retry (30 s, then 60 s;
+$LM_EDA_RETRY_DELAYS), each attempt in its own directory
 (<check>/<case>/attempt<n>), kept and archived with the pilot. A fail stops
 the pilot at once: the remaining cases are not run. The pilot fails if a
 case failed or is still a tool-error after its reruns. Every case records
@@ -43,13 +44,14 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
 
 from tools.eda_lock import heavy_tool_lock
 from tools.eda_proc import run_tool
-from tools.eda_retry import MAX_RETRIES, retry_reason, transient_reason
+from tools.eda_retry import MAX_RETRIES, record_reason, retry_delay, retry_delays, retry_reason, transient_reason
 from tools.vendor_synth.check import RUN_ID_ENV
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -89,10 +91,20 @@ Attempt = dict
 
 
 def run_case(check: str, case: str, attempt: Callable[[Path], Attempt], base: Path,
-             max_retries: int = MAX_RETRIES) -> dict:
-  """Run one pilot case, and again while it ends as tool-error (at most max_retries times)."""
+             max_retries: int = MAX_RETRIES, delays: tuple[float, ...] | None = None,
+             sleep: Callable[[float], None] = time.sleep) -> dict:
+  """Run one pilot case, and again while it ends as tool-error (at most max_retries times).
+
+  Before each rerun it waits as tools/eda_retry.py does (retry_delay).
+  """
+  delays = retry_delays() if delays is None else delays
   history: list[Attempt] = []
+  waits: list[float] = []
   for n in range(1, max_retries + 2):
+    if n > 1:
+      waits.append(retry_delay(n - 1, delays))
+      print(f"pilot {check} {case}: waiting {waits[-1]:g} s before attempt {n}", flush=True)
+      sleep(waits[-1])
     where = base / check / re.sub(r"[^A-Za-z0-9_.-]+", "_", case) / f"attempt{n}"
     try:
       a = attempt(where)
@@ -100,6 +112,7 @@ def run_case(check: str, case: str, attempt: Callable[[Path], Attempt], base: Pa
       a = {"status": "fail", "problems": [f"{type(exc).__name__}: {exc}"], "exit_code": None,
            "tool_runs": 0, "transient": []}
     a.setdefault("dir", str(where))
+    a["waited_s"] = waits[-1] if n > 1 else 0
     history.append(a)
     print(f"pilot {check} {case} attempt {n}: {a['status']}"
           + (f" ({'; '.join(a['transient'])[:200]})" if a["transient"] else ""), flush=True)
@@ -108,7 +121,7 @@ def run_case(check: str, case: str, attempt: Callable[[Path], Attempt], base: Pa
   last = history[-1]
   signatures = [s for a in history for s in a["transient"]]
   return {"check": check, "case": case, "status": last["status"], "attempts": len(history),
-          "tool_runs": sum(a["tool_runs"] for a in history), "signatures": signatures,
+          "tool_runs": sum(a["tool_runs"] for a in history), "waits_s": waits, "signatures": signatures,
           "problems": last["problems"], "dir": last["dir"], "history": history}
 
 
@@ -129,7 +142,7 @@ def _log_text(path: Path) -> str:
 
 def _signatures(r: dict, log_text: str) -> list[str]:
   """Transient signatures of a vendor_synth result: its retried runs, and its last run if transient."""
-  found = [entry.split(": ", 1)[1] if entry.startswith("attempt ") else entry for entry in r.get("retries", [])]
+  found = [record_reason(entry) for entry in r.get("retries", [])]
   if r["status"] == "tool-error":
     last = transient_reason(log_text, [VIVADO_DIR])
     if last is not None and last not in found[-1:]:
@@ -272,17 +285,19 @@ def old_code_attempt(old_tree: Path, config: Path, case: str) -> Callable[[Path]
 MakeAttempt = Callable[[list[dict]], Callable[[Path], Attempt]]
 
 
-def run_pilot(base: Path, plan: list[tuple[str, str, MakeAttempt]], max_retries: int = MAX_RETRIES) -> dict:
+def run_pilot(base: Path, plan: list[tuple[str, str, MakeAttempt]], max_retries: int = MAX_RETRIES,
+              delays: tuple[float, ...] | None = None, sleep: Callable[[float], None] = time.sleep) -> dict:
   """Run the cases of plan ((check, case, make_attempt)) in order; a fail stops the rest.
 
   make_attempt(cases done so far) returns the attempt function of the case,
   or raises PilotStop when a case it needs did not pass.
   """
+  delays = retry_delays() if delays is None else delays
   cases: list[dict] = []
   stopped = None
 
   def not_run(check: str, case: str, why: str) -> dict:
-    return {"check": check, "case": case, "status": "not-run", "attempts": 0, "tool_runs": 0,
+    return {"check": check, "case": case, "status": "not-run", "attempts": 0, "tool_runs": 0, "waits_s": [],
             "signatures": [], "problems": [f"not run: {why}"], "history": []}
 
   for check, case, make_attempt in plan:
@@ -294,11 +309,11 @@ def run_pilot(base: Path, plan: list[tuple[str, str, MakeAttempt]], max_retries:
     except PilotStop as exc:
       cases.append(not_run(check, case, str(exc)))
       continue
-    entry = run_case(check, case, attempt, base, max_retries)
+    entry = run_case(check, case, attempt, base, max_retries, delays, sleep)
     cases.append(entry)
     if entry["status"] == "fail":
       stopped = f"{check} {case}"
-  report: dict = {"max_retries": max_retries, "cases": cases}
+  report: dict = {"max_retries": max_retries, "retry_delays_s": list(delays), "cases": cases}
   for check in CHECKS:
     mine = [c for c in cases if c["check"] == check]
     problems = [f"{c['case']}: {c['status']}"

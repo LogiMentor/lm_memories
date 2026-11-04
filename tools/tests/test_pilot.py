@@ -42,8 +42,9 @@ def fake(*statuses: str):
 
 class RunPilotTest(unittest.TestCase):
   def _run(self, plan) -> dict:
+    self.waits: list[float] = []
     with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
-      return pilot.run_pilot(Path(tmp), plan)
+      return pilot.run_pilot(Path(tmp), plan, delays=(30.0, 60.0), sleep=self.waits.append)
 
   def test_a_tool_error_runs_again_until_it_passes(self) -> None:
     attempt = fake("tool-error", "tool-error", "pass")
@@ -52,6 +53,11 @@ class RunPilotTest(unittest.TestCase):
     self.assertTrue(report["ok"])
     self.assertEqual((case["status"], case["attempts"], case["tool_runs"]), ("pass", 3, 3))
     self.assertEqual(case["signatures"], ["unreadable-file: attempt 1", "unreadable-file: attempt 2"])
+    # The waits of tools/eda_retry.py before each rerun, recorded.
+    self.assertEqual(self.waits, [30.0, 60.0])
+    self.assertEqual(case["waits_s"], [30.0, 60.0])
+    self.assertEqual([a["waited_s"] for a in case["history"]], [0, 30.0, 60.0])
+    self.assertEqual(report["retry_delays_s"], [30.0, 60.0])
     self.assertEqual([p.name for p in attempt.calls], ["attempt1", "attempt2", "attempt3"])
     self.assertEqual(attempt.calls[0].parent.name, "j_c")
 
@@ -70,6 +76,7 @@ class RunPilotTest(unittest.TestCase):
     self.assertFalse(report["ok"])
     self.assertEqual(len(failing.calls), 1)
     self.assertEqual(never.calls, [])
+    self.assertEqual(self.waits, [])
     self.assertEqual([c["status"] for c in report["cases"]], ["fail", "not-run", "not-run"])
     self.assertIn("not run: launcher a failed", report["cases"][1]["problems"])
 
@@ -125,7 +132,8 @@ class VendorSynthRecordTest(unittest.TestCase):
 
   def test_signatures_are_not_repeated(self) -> None:
     last = pilot.transient_reason(TRANSIENT_LOG, [pilot.VIVADO_DIR])
-    persisted = {"status": "tool-error", "retries": [f"attempt 1: rt-undefined: x", f"attempt 2: {last}"]}
+    persisted = {"status": "tool-error",
+                 "retries": ["attempt 1: rt-undefined: x; waited 30 s before attempt 2", f"attempt 2: {last}"]}
     self.assertEqual(pilot._signatures(persisted, TRANSIENT_LOG), ["rt-undefined: x", last])
     self.assertEqual(pilot._signatures({"status": "tool-error", "retries": []}, TRANSIENT_LOG), [last])
     self.assertEqual(pilot._signatures({"status": "pass", "retries": ["attempt 1: s"]}, TRANSIENT_LOG), ["s"])
@@ -165,11 +173,12 @@ class PilotSummaryTest(unittest.TestCase):
   def test_each_case_with_its_attempts_and_signatures(self) -> None:
     attempt = fake("tool-error", "pass")
     with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
-      report = pilot.run_pilot(Path(tmp), [("old_code", "old-artix7/bad_r_w_infer_latency3", lambda d: attempt)])
+      report = pilot.run_pilot(Path(tmp), [("old_code", "old-artix7/bad_r_w_infer_latency3", lambda d: attempt)],
+                               delays=(30.0, 60.0), sleep=lambda s: None)
     text = "\n".join(summarize.pilot_lines(report))
-    self.assertIn("| old_code | old-artix7/bad_r_w_infer_latency3 | pass | 2 | 2 | unreadable-file: attempt 1 | - |",
+    self.assertIn("| old_code | old-artix7/bad_r_w_infer_latency3 | pass | 2 | 30 | 2 | unreadable-file: attempt 1 | - |",
                   text)
-    self.assertIn("at most 2 times", text)
+    self.assertIn("at most 2 times, after a wait of 30, 60 s", text)
 
   def test_old_pilot_records_still_read(self) -> None:
     lines = summarize.pilot_lines({"ok": False, "launcher": {"ok": False, "problems": ["exit code 0"]}})

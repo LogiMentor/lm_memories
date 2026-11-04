@@ -166,9 +166,11 @@ class VendorRunTest(unittest.TestCase):
     self.fake = self.root / "fake_vivado.py"
     self.fake.write_text(FAKE_VIVADO, encoding="utf-8")
     self.spec = self.root / "spec.txt"
-    self.old_env = {k: os.environ.get(k) for k in ("FAKE_VIVADO", "TEMP", "TMP", "TMPDIR", "LM_EDA_MIN_FREE_MB_SYNTH")}
+    self.old_env = {k: os.environ.get(k) for k in ("FAKE_VIVADO", "TEMP", "TMP", "TMPDIR", "LM_EDA_MIN_FREE_MB_SYNTH",
+                                                   "LM_EDA_RETRY_DELAYS")}
     os.environ["FAKE_VIVADO"] = str(self.spec)
     os.environ["LM_EDA_MIN_FREE_MB_SYNTH"] = "0"  # fake tools: no memory wait
+    os.environ["LM_EDA_RETRY_DELAYS"] = "0"  # fake tools: no wait before a rerun
     lockdir = self.root / "lockdir"
     lockdir.mkdir()
     for key in ("TEMP", "TMP", "TMPDIR"):
@@ -256,6 +258,7 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(len(result["retries"]), 2)
     self.assertIn("rt-undefined", result["retries"][0])
     self.assertIn("silent-stop", result["retries"][1])
+    self.assertTrue(result["retries"][0].endswith("; waited 0 s before attempt 2"), result["retries"][0])
 
   def test_evaluate_only_rechecks_without_running(self) -> None:
     first = self._run(self._good_spec())

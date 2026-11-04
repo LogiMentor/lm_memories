@@ -18,8 +18,16 @@ this order, for each attempt:
    (roots, given by the caller) or one the tool generated (a path through a
    .Xil directory).
 
-Every retried attempt is recorded with its signature and log line, and its
-complete log is kept next to the log of the run (log_path), as
+Before each rerun the policy waits: RETRY_DELAYS seconds (30 s before the
+first rerun, 60 s before the second), or the comma-separated seconds of
+$LM_EDA_RETRY_DELAYS (for example "30,60"; "0" for no wait; the last value
+also serves later reruns). The failures of 2026-11-04 came in bursts: three
+runs within 30 seconds all failed. The wait is outside the machine-wide EDA
+lock, which each run takes for itself.
+
+Every retried attempt is recorded with its signature and log line, and the
+wait that followed it ("attempt <n>: <reason>; waited <s> s before attempt
+<n+1>"); its complete log is kept next to the log of the run (log_path), as
 <name>.attempt<n><suffix>. If the failure persists, the caller reports the
 run as tool-error, never as a result.
 
@@ -29,13 +37,20 @@ run as tool-error, never as a result.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
 MAX_RETRIES = 2
+# Seconds to wait before the first, second, ... rerun; the last value also
+# serves later reruns. Overridden by $LM_EDA_RETRY_DELAYS ("30,60").
+RETRY_DELAYS = (30.0, 60.0)
+RETRY_DELAYS_ENV = "LM_EDA_RETRY_DELAYS"
+_WAIT_RE = re.compile(r"; waited [0-9.]+ s before attempt \d+$")
 
 # Error messages that only say that a command failed; the cause is elsewhere.
 GENERIC_ERRORS = ("Common 17-69",)
@@ -135,6 +150,38 @@ def retry_reason(text: str, completed: bool, roots: Iterable[str | Path] = ()) -
   return transient_reason(text, roots)
 
 
+def retry_delays() -> tuple[float, ...]:
+  """Seconds to wait before each rerun: $LM_EDA_RETRY_DELAYS if set, else RETRY_DELAYS."""
+  value = os.environ.get(RETRY_DELAYS_ENV, "").strip()
+  if not value:
+    return RETRY_DELAYS
+  try:
+    delays = tuple(float(v) for v in value.split(","))
+  except ValueError:
+    delays = ()
+  if not delays or any(d < 0 for d in delays):
+    raise ValueError(f"{RETRY_DELAYS_ENV}={value!r}: expected seconds separated by commas, for example 30,60")
+  return delays
+
+
+def retry_delay(rerun: int, delays: tuple[float, ...] | None = None) -> float:
+  """Seconds to wait before rerun number rerun (1 for the first rerun)."""
+  delays = retry_delays() if delays is None else delays
+  return delays[min(rerun, len(delays)) - 1]
+
+
+def wait_record(seconds: float, next_attempt: int) -> str:
+  """The suffix of an attempt record for the wait that followed it."""
+  return f"; waited {seconds:g} s before attempt {next_attempt}"
+
+
+def record_reason(entry: str) -> str:
+  """The signature and log line of an attempt record, without "attempt <n>: " and the wait."""
+  if entry.startswith("attempt ") and ": " in entry:
+    entry = entry.split(": ", 1)[1]
+  return _WAIT_RE.sub("", entry)
+
+
 def attempt_log(log_path: Path, attempt: int) -> Path:
   """Where the complete log of a retried attempt (1-based) is kept."""
   return log_path.with_name(f"{log_path.stem}.attempt{attempt}{log_path.suffix}")
@@ -146,17 +193,22 @@ def run_with_retries(
   roots: Iterable[str | Path] = (),
   log_path: Path | None = None,
   max_retries: int = MAX_RETRIES,
+  delays: tuple[float, ...] | None = None,
+  sleep: Callable[[float], None] = time.sleep,
 ) -> tuple[str, list[str], bool]:
   """Run a tool until its log is a result, at most 1 + max_retries times.
 
   run_once(attempt) runs the tool once, writing its log to log_path if given,
   and returns the log text; completed(text) tells whether that run completed.
+  Before each rerun it waits retry_delay (delays: default retry_delays()).
   Returns the last log text, one record per retried attempt ("attempt <n>:
-  <reason>"), and whether the transient failure persisted (then the run is a
+  <reason>", with "; waited <s> s before attempt <n+1>" when a rerun
+  followed), and whether the transient failure persisted (then the run is a
   tool-error).
   """
   attempts: list[str] = []
   roots = tuple(roots)
+  delays = retry_delays() if delays is None else delays
   for attempt in range(max_retries + 1):
     text = run_once(attempt)
     reason = retry_reason(text, completed(text), roots)
@@ -164,5 +216,12 @@ def run_with_retries(
       return text, attempts, False
     if log_path is not None and log_path.is_file():
       shutil.copyfile(log_path, attempt_log(log_path, attempt + 1))
-    attempts.append(f"attempt {attempt + 1}: {reason}")
+    record = f"attempt {attempt + 1}: {reason}"
+    if attempt < max_retries:
+      seconds = retry_delay(attempt + 1, delays)
+      record += wait_record(seconds, attempt + 2)
+      attempts.append(record)
+      sleep(seconds)
+    else:
+      attempts.append(record)
   return text, attempts, True

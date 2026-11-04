@@ -123,15 +123,18 @@ def pilot_lines(pilot: dict) -> list[str]:
   cases = pilot.get("cases")
   if not cases:
     return lines
-  lines += ["", f"Each case that ended as tool-error ran again, at most {pilot.get('max_retries', '?')} times; "
-            "a fail stops the pilot. Tool runs: the attempts of the pilot and the retries of vendor_synth "
-            "inside each attempt. Signatures: every transient failure met (tools/eda_retry.py).", "",
-            "| Check | Case | Result | Attempts | Tool runs | Transient signatures | Problems |",
-            "| --- | --- | --- | --- | --- | --- | --- |"]
+  delays = ", ".join(f"{d:g}" for d in pilot.get("retry_delays_s", [])) or "?"
+  lines += ["", f"Each case that ended as tool-error ran again, at most {pilot.get('max_retries', '?')} times, "
+            f"after a wait of {delays} s (tools/eda_retry.py); a fail stops the pilot. Tool runs: the attempts "
+            "of the pilot and the retries of vendor_synth inside each attempt. Signatures: every transient "
+            "failure met.", "",
+            "| Check | Case | Result | Attempts | Waits (s) | Tool runs | Transient signatures | Problems |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |"]
   for c in cases:
     signatures = "<br>".join(_cell(s[:160]) for s in c["signatures"]) or "-"
     problems = _cell("; ".join(c["problems"])[:200]) or "-"
-    lines.append(f"| {c['check']} | {c['case']} | {c['status']} | {c['attempts']} | {c['tool_runs']} | "
+    waits = ", ".join(f"{w:g}" for w in c.get("waits_s", [])) or "-"
+    lines.append(f"| {c['check']} | {c['case']} | {c['status']} | {c['attempts']} | {waits} | {c['tool_runs']} | "
                  f"{signatures} | {problems} |")
   return lines
 
@@ -143,11 +146,13 @@ def main(argv: list[str] | None = None) -> int:
   exit_codes = {m.group(1): int(m.group(2)) for m in re.finditer(r"end (\S+) rc=(\d+)", steps_text)}
   commit = re.search(r"start commit (\S+)", steps_text)
   memory = re.search(r"memory thresholds: (.*)", steps_text)
+  waits = re.search(r"retry waits: (.*)", steps_text)
   pilot = _load(root / "pilot" / "pilot.json") or {"ok": False, "detail": "no pilot.json"}
   rerun = _load(root / "rerun" / "rerun.json")
   reruns = (rerun or {}).get("items", [])
   summary = {"commit": commit.group(1) if commit else "unknown",
              "memory_thresholds": memory.group(1).strip() if memory else "not recorded",
+             "retry_waits": waits.group(1).strip() if waits else "not recorded",
              "pilot": pilot, "exit_codes": exit_codes, "steps": {}, "rerun": rerun}
   if pilot.get("ok"):
     by_step = {name: [i for i in reruns if i["step"] == name]
@@ -176,7 +181,8 @@ def main(argv: list[str] | None = None) -> int:
 
   lines = [f"# AMD campaign: {'PASS' if summary['ok'] else 'FAIL'}", "",
            f"Commit: `{summary['commit']}`", "",
-           f"Memory thresholds of the EDA lock: {summary['memory_thresholds']}", "", "## Pilot", ""]
+           f"Memory thresholds of the EDA lock: {summary['memory_thresholds']}", "",
+           f"Waits before a rerun of a transient tool failure: {summary['retry_waits']}", "", "## Pilot", ""]
   lines += pilot_lines(pilot)
   lines += ["", "## Steps", "", "| Step | Exit code | Result | Archive (SHA-256) |", "| --- | --- | --- | --- |"]
   for name, s in summary["steps"].items():

@@ -4,12 +4,14 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from tools.eda_retry import (MAX_RETRIES, attempt_log, project_error, retry_reason, run_with_retries,
-                             transient_reason)
+from tools.eda_retry import (MAX_RETRIES, RETRY_DELAYS, RETRY_DELAYS_ENV, attempt_log, project_error, record_reason,
+                             retry_delay, retry_delays, retry_reason, run_with_retries, transient_reason)
 
 ROOTS = ["C:/Xilinx/Vivado/2023.1"]
 UNREADABLE = ('couldn\'t read file "C:/Xilinx/Vivado/2023.1/scripts/rt/data/lib_core.tcl": no such file or directory\n'
@@ -59,10 +61,11 @@ class EdaRetryTest(unittest.TestCase):
 
   def test_completed_run_is_never_retried(self) -> None:
     calls = []
+    waits = []
     text, attempts, persisted = run_with_retries(lambda attempt: calls.append(attempt) or OK_WITH_NOISE,
-                                                 completed=done, roots=ROOTS)
+                                                 completed=done, roots=ROOTS, sleep=waits.append)
     self.assertEqual(calls, [0])
-    self.assertEqual((attempts, persisted), ([], False))
+    self.assertEqual((attempts, persisted, waits), ([], False, []))
 
   def test_retry_until_clean_and_keep_every_log(self) -> None:
     logs = iter([UNREADABLE, SILENT, OK])
@@ -74,8 +77,13 @@ class EdaRetryTest(unittest.TestCase):
         log.write_text(text)
         return text
 
-      text, attempts, persisted = run_with_retries(run_once, completed=done, roots=ROOTS, log_path=log)
+      waits = []
+      text, attempts, persisted = run_with_retries(run_once, completed=done, roots=ROOTS, log_path=log,
+                                                   delays=(30.0, 60.0), sleep=waits.append)
       self.assertEqual(text, OK)
+      self.assertEqual(waits, [30.0, 60.0])
+      self.assertTrue(attempts[0].endswith("; waited 30 s before attempt 2"), attempts[0])
+      self.assertTrue(attempts[1].endswith("; waited 60 s before attempt 3"), attempts[1])
       self.assertFalse(persisted)
       self.assertEqual(len(attempts), 2)
       self.assertTrue(attempts[0].startswith("attempt 1: unreadable-file"))
@@ -86,19 +94,58 @@ class EdaRetryTest(unittest.TestCase):
 
   def test_persistent_failure_is_reported_after_the_cap(self) -> None:
     calls = []
+    waits = []
     text, attempts, persisted = run_with_retries(lambda attempt: calls.append(attempt) or RT_UNDEFINED,
-                                                 completed=done, roots=ROOTS)
+                                                 completed=done, roots=ROOTS, delays=(30.0, 60.0),
+                                                 sleep=waits.append)
     self.assertTrue(persisted)
     self.assertEqual(calls, list(range(MAX_RETRIES + 1)))
     self.assertEqual(len(attempts), MAX_RETRIES + 1)
+    # No wait after the last attempt: nothing runs after it.
+    self.assertEqual(waits, [30.0, 60.0])
+    self.assertNotIn("waited", attempts[-1])
+    self.assertEqual(record_reason(attempts[0]), record_reason(attempts[-1]))
 
   def test_design_error_is_not_retried(self) -> None:
     calls = []
+    waits = []
     text, attempts, persisted = run_with_retries(lambda attempt: calls.append(attempt) or DESIGN_ERROR,
-                                                 completed=done, roots=ROOTS)
+                                                 completed=done, roots=ROOTS, sleep=waits.append)
     self.assertEqual(calls, [0])
-    self.assertEqual(attempts, [])
+    self.assertEqual((attempts, waits), ([], []))
     self.assertFalse(persisted)
+
+
+class RetryDelayTest(unittest.TestCase):
+  def test_default_waits_are_30_then_60_seconds(self) -> None:
+    with mock.patch.dict(os.environ, {RETRY_DELAYS_ENV: ""}):
+      self.assertEqual(retry_delays(), RETRY_DELAYS)
+      self.assertEqual((retry_delay(1), retry_delay(2)), (30.0, 60.0))
+    # The last value also serves later reruns.
+    self.assertEqual(retry_delay(5, (30.0, 60.0)), 60.0)
+
+  def test_waits_from_the_environment(self) -> None:
+    with mock.patch.dict(os.environ, {RETRY_DELAYS_ENV: "5, 7.5"}):
+      self.assertEqual(retry_delays(), (5.0, 7.5))
+      waits = []
+      run_with_retries(lambda attempt: RT_UNDEFINED, completed=done, roots=ROOTS, sleep=waits.append)
+      self.assertEqual(waits, [5.0, 7.5])
+    with mock.patch.dict(os.environ, {RETRY_DELAYS_ENV: "0"}):
+      waits = []
+      _, attempts, _ = run_with_retries(lambda attempt: RT_UNDEFINED, completed=done, roots=ROOTS,
+                                        sleep=waits.append)
+      self.assertEqual(waits, [0.0, 0.0])
+      self.assertTrue(attempts[0].endswith("; waited 0 s before attempt 2"))
+
+  def test_a_wrong_value_stops_with_its_reason(self) -> None:
+    for value in ("30;60", "-1", "x", ","):
+      with mock.patch.dict(os.environ, {RETRY_DELAYS_ENV: value}), \
+           self.assertRaisesRegex(ValueError, RETRY_DELAYS_ENV):
+        retry_delays()
+
+  def test_record_reason(self) -> None:
+    self.assertEqual(record_reason("attempt 1: rt-undefined: x; waited 30 s before attempt 2"), "rt-undefined: x")
+    self.assertEqual(record_reason("attempt 3: rt-undefined: x"), "rt-undefined: x")
 
 
 if __name__ == "__main__":

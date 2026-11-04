@@ -475,7 +475,13 @@ Confirmed defaults:
   installation or one the tool generated under `.Xil`, `invalid command
   name "rt-undefined"`, `synth_design failed` with no error but `[Common
   17-69]`), at most two retries, every retried attempt recorded with its
-  complete log, and `tool-error` if the failure persists. A timeout stops
+  complete log, and `tool-error` if the failure persists. Before each rerun
+  the policy waits, outside the EDA lock: 30 s before the first, 60 s
+  before the second (`LM_EDA_RETRY_DELAYS`, seconds separated by commas,
+  `0` for none; the last value also serves later reruns). The record of a
+  retried attempt ends with the wait that followed it (`; waited 30 s
+  before attempt 2`). The failures of 2026-11-04 came in bursts: the three
+  runs of one case, within 30 seconds, all failed. A timeout stops
   the whole process tree of the tool before the lock is released
   (`tools/eda_proc.py`).
 - Runs are sequential, one tool process at a time. Each run holds the
@@ -846,7 +852,8 @@ the summary in `<campaign root>/summary.md`.
   case (each launcher case, the 1000-for-1024 run, each old-code case): a
   case that ends as `tool-error` (a transient signature of
   `tools/eda_retry.py` and no error of the project) runs again, at most
-  twice, each attempt in its own directory (`<check>/<case>/attempt<n>`),
+  twice, after the same waits (30 s, then 60 s), each attempt in its own
+  directory (`<check>/<case>/attempt<n>`),
   kept and archived with the pilot. A `fail` stops the pilot at once; the
   pilot fails if a case failed or is still a `tool-error` after its
   reruns. The old code is judged with the current rules of
@@ -864,7 +871,8 @@ the summary in `<campaign root>/summary.md`.
   The pilot reported only "did not complete synthesis".
 - **Memory thresholds:** the thresholds of the EDA lock in effect
   (`LM_EDA_MIN_FREE_MB_SYNTH`, `LM_EDA_MIN_FREE_MB_SIM`) are written to
-  `logs/steps.txt` at the start and shown in the summary.
+  `logs/steps.txt` at the start and shown in the summary, with the waits
+  before a rerun (`LM_EDA_RETRY_DELAYS`).
 - **Collisions in the netlist simulations:** the harness provokes
   collisions on purpose; the UNISIM block RAM models report each one as an
   assertion error ("Memory Collision Error on RAMB18E1", "[Unisim

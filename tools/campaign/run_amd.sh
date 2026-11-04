@@ -18,6 +18,8 @@
 #   LM_QUARTUS_DIR       [C:/intelFPGA_lite/23.1std/quartus] (checked only)
 #   VUNIT_MODELSIM_PATH  Questa [C:/questasim64_2021.1/win64]
 #   GHDL                 GHDL executable [ghdl on PATH, else C:/msys64/ucrt64/bin/ghdl]
+#   LM_EDA_RETRY_DELAYS  seconds to wait before the first, second rerun of a
+#                        transient tool failure [30,60] (tools/eda_retry.py)
 #
 # Steps:
 #   pilot           python -m tools.campaign.pilot (launcher exit codes,
@@ -85,13 +87,19 @@ stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 MEMORY=$("$PY" -c 'from tools.eda_lock import min_free_mb
 print("; ".join("%s %d MB (%s)" % ((k,) + (int(min_free_mb(k)[0]), min_free_mb(k)[1])) for k in ("synthesis", "simulation")))') \
   || fail "cannot read the memory thresholds of tools/eda_lock.py"
+# Waits before a rerun (tools/eda_retry.py); a wrong value stops here.
+RETRY_WAITS=$("$PY" -c 'from tools.eda_retry import retry_delays, RETRY_DELAYS_ENV
+print("%s s (%s)" % (", ".join("%g" % d for d in retry_delays()), RETRY_DELAYS_ENV))') \
+  || fail "wrong LM_EDA_RETRY_DELAYS (seconds separated by commas, for example 30,60)"
 {
   echo "$(stamp) start commit $(git rev-parse HEAD)"
   echo "python: $("$PY" --version 2>&1); ghdl: $("$GHDL" --version | head -1); vivado: $LM_VIVADO_DIR"
   echo "memory thresholds: $MEMORY"
+  echo "retry waits: $RETRY_WAITS"
 } > "$STEPS"
 echo "Campaign root: $ROOT"
 echo "Memory thresholds: $MEMORY"
+echo "Retry waits: $RETRY_WAITS"
 echo "Progress: $STEPS"
 
 step() {

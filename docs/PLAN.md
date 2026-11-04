@@ -855,6 +855,17 @@ the summary in `<campaign root>/summary.md`.
   `--campaign <name>_rerun`. A `fail` is never run again. The summary lists
   every rerun with its first and second result; a step whose only
   non-passing cases were tool-errors passes only if each rerun passed.
+- **Resuming a campaign:** `LM_CAMPAIGN_RESUME="<steps>"` runs only these
+  steps again in an existing campaign root whose pilot passed: a
+  vendor_synth step (`vivado`, `checks_vivado`, `checks_quartus`) is
+  evaluated again with the checks of the current commit, without running
+  the tool (`tools/campaign/resume.py`, `--evaluate-only`; the summary
+  before is kept as `summary.before_<time>.json`, the archive record
+  stays); `postsynth` runs again from scratch (the old work root kept as
+  `ps.before_<time>`). Then the tool-errors of these steps run again
+  (`rerun.py --steps`): a rerun that passed before is kept, except for a
+  step run from scratch. The other steps keep their results; the summary
+  names the commit of the resume.
 - **Retries in the pilot:** the pilot follows the same policy, case by
   case (each launcher case, the 1000-for-1024 run, each old-code case): a
   case that ends as `tool-error` (a transient signature of

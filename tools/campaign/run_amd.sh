@@ -20,6 +20,16 @@
 #   GHDL                 GHDL executable [ghdl on PATH, else C:/msys64/ucrt64/bin/ghdl]
 #   LM_EDA_RETRY_DELAYS  seconds to wait before the first, second rerun of a
 #                        transient tool failure [30,60] (tools/eda_retry.py)
+#   LM_CAMPAIGN_RESUME   resume an existing campaign root (its pilot passed)
+#                        with only these steps, separated by spaces [unset]:
+#                        vivado, checks_vivado, checks_quartus: the results
+#                        evaluated again with the current checks, no tool
+#                        run (tools/campaign/resume.py); postsynth: run again
+#                        from scratch (the old ps kept as ps.before_<time>).
+#                        Then the tool-errors of these steps run again, and
+#                        the summary is written again. The results of the
+#                        other steps stay as they are; logs/steps.txt records
+#                        the commit of the resume.
 #
 # Steps:
 #   pilot           python -m tools.campaign.pilot (launcher exit codes,
@@ -76,7 +86,18 @@ grep -q "install_dir = \"$LM_VIVADO_DIR\"" tools/vendor_synth/vivado_check.toml 
   || fail "tracked files differ from HEAD: commit first, the results record the commit"
 
 ROOT=${LM_CAMPAIGN_ROOT:-$("$PY" -c 'from tools.eda_workdir import work_root; print(work_root("c").as_posix())')}
-if [ -d "$ROOT" ] && [ -n "$(ls -A "$ROOT")" ]; then
+RESUME=${LM_CAMPAIGN_RESUME:-}
+TAG=$(date -u +%Y%m%dT%H%M%SZ)
+if [ -n "$RESUME" ]; then
+  for s in $RESUME; do
+    case $s in vivado|checks_vivado|checks_quartus|postsynth) ;;
+      *) fail "LM_CAMPAIGN_RESUME: $s cannot be resumed (vivado, checks_vivado, checks_quartus, postsynth)";;
+    esac
+  done
+  [ -f "$ROOT/logs/steps.txt" ] || fail "LM_CAMPAIGN_RESUME: $ROOT is not a campaign root (no logs/steps.txt)"
+  "$PY" -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1])).get("ok") else 1)' "$ROOT/pilot/pilot.json" \
+    2>/dev/null || fail "LM_CAMPAIGN_RESUME: the pilot of $ROOT did not pass"
+elif [ -d "$ROOT" ] && [ -n "$(ls -A "$ROOT")" ]; then
   fail "campaign root $ROOT is not empty (move or delete it; set LM_CAMPAIGN_ROOT for another one)"
 fi
 mkdir -p "$ROOT/logs" || fail "cannot create $ROOT"
@@ -91,12 +112,20 @@ print("; ".join("%s %d MB (%s)" % ((k,) + (int(min_free_mb(k)[0]), min_free_mb(k
 RETRY_WAITS=$("$PY" -c 'from tools.eda_retry import retry_delays, RETRY_DELAYS_ENV
 print("%s s (%s)" % (", ".join("%g" % d for d in retry_delays()), RETRY_DELAYS_ENV))') \
   || fail "wrong LM_EDA_RETRY_DELAYS (seconds separated by commas, for example 30,60)"
-{
-  echo "$(stamp) start commit $(git rev-parse HEAD)"
-  echo "python: $("$PY" --version 2>&1); ghdl: $("$GHDL" --version | head -1); vivado: $LM_VIVADO_DIR"
-  echo "memory thresholds: $MEMORY"
-  echo "retry waits: $RETRY_WAITS"
-} > "$STEPS"
+if [ -n "$RESUME" ]; then
+  {
+    echo "$(stamp) resume commit $(git rev-parse HEAD) steps: $RESUME"
+    echo "memory thresholds: $MEMORY"
+    echo "retry waits: $RETRY_WAITS"
+  } >> "$STEPS"
+else
+  {
+    echo "$(stamp) start commit $(git rev-parse HEAD)"
+    echo "python: $("$PY" --version 2>&1); ghdl: $("$GHDL" --version | head -1); vivado: $LM_VIVADO_DIR"
+    echo "memory thresholds: $MEMORY"
+    echo "retry waits: $RETRY_WAITS"
+  } > "$STEPS"
+fi
 echo "Campaign root: $ROOT"
 echo "Memory thresholds: $MEMORY"
 echo "Retry waits: $RETRY_WAITS"
@@ -104,6 +133,8 @@ echo "Progress: $STEPS"
 
 step() {
   local name=$1; shift
+  # A resumed step keeps the driver log of its earlier run.
+  [ -f "$ROOT/logs/$name.txt" ] && mv "$ROOT/logs/$name.txt" "$ROOT/logs/$name.before_$TAG.txt"
   echo "$(stamp) begin $name" | tee -a "$STEPS"
   "$@" > "$ROOT/logs/$name.txt" 2>&1
   local rc=$?
@@ -118,6 +149,23 @@ summarize() {
   echo "Summary: $ROOT/summary.md"
   return $rc
 }
+
+if [ -n "$RESUME" ]; then
+  FRESH=""
+  for s in $RESUME; do
+    if [ "$s" = postsynth ]; then
+      [ -d "$ROOT/ps" ] && mv "$ROOT/ps" "$ROOT/ps.before_$TAG"
+      step postsynth "$PY" sim/scripts/run_postsynth.py --campaign postsynth_vivado_2023.1_amd --work-root "$ROOT/ps"
+      FRESH="postsynth"
+    else
+      step "reevaluate_$s" "$PY" -m tools.campaign.resume "$ROOT" "$s"
+    fi
+  done
+  step rerun_tool_errors "$PY" -m tools.campaign.rerun "$ROOT" --steps $RESUME ${FRESH:+--fresh $FRESH}
+  echo "$(stamp) done (resume)" >> "$STEPS"
+  summarize
+  exit $?
+fi
 
 if ! step pilot "$PY" -m tools.campaign.pilot "$ROOT/pilot"; then
   echo "$(stamp) pilot failed: campaigns not started" | tee -a "$STEPS"

@@ -157,6 +157,88 @@ class RerunTest(unittest.TestCase):
       self.assertEqual(code, 1)
       self.assertEqual(summary["steps"]["vivado"]["counts"], {"pass": 1, "fail": 1})
 
+  def test_resumed_steps_rerun_only_what_is_new(self) -> None:
+    # Resume with checks_vivado and postsynth: the rerun of the vivado step is
+    # kept as it is; a checks_vivado rerun that passed is kept and not run
+    # again; postsynth ran from scratch, so its tool-errors all run again.
+    with tempfile.TemporaryDirectory() as tmp:
+      root = _campaign(tmp, ["tool-error"], ps_tool_error=True)
+      (root / "fc" / "summary.json").write_text(json.dumps({"results": [
+        {"job": "j", "part": "p", "case": "old", "status": "tool-error", "problems": []},
+        {"job": "j", "part": "p", "case": "died", "status": "tool-error", "problems": []}]}))
+      earlier = [
+        {"step": "vivado", "job": "artix7", "part": "xc7a35tfgg484-2", "case": "case0", "rerun_status": "pass"},
+        {"step": "checks_vivado", "job": "j", "part": "p", "case": "old", "rerun_status": "pass"},
+        {"step": "postsynth", "job": "postsynth", "part": "xc7a35tfgg484-2", "case": "crw_crw.1clk.16x64",
+         "rerun_status": "pass"}]
+      (root / "rerun").mkdir()
+      (root / "rerun" / "rerun.json").write_text(json.dumps({"ok": True, "items": earlier}))
+      stale = root / "rerun" / "fc" / "j" / "died"
+      stale.mkdir(parents=True)
+      (stale / "summary.json").write_text("{}")
+      calls = []
+
+      def fake_run(cmd, cwd):
+        work = Path(cmd[cmd.index("--work-root") + 1])
+        work.mkdir(parents=True)
+        if "run_postsynth.py" in cmd[1]:
+          (work / "results.json").write_text(json.dumps({"parts": {"xc7a35tfgg484-2": {"synth": {}, "sims": {
+            "ghdl": {"results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}}}}))
+        else:
+          (work / "summary.json").write_text(json.dumps({"results": [{"status": "pass", "problems": []}]}))
+        calls.append(cmd)
+        return mock.Mock(returncode=0)
+
+      with mock.patch.object(rerun.subprocess, "run", fake_run), contextlib.redirect_stdout(io.StringIO()):
+        code = rerun.main([str(root), "--steps", "checks_vivado", "postsynth", "--fresh", "postsynth"])
+      self.assertEqual(code, 0)
+      ran = sorted((c[c.index("--case") + 1] if "--case" in c else "ps") for c in calls)
+      self.assertEqual(ran, ["died", "ps"])
+      record = json.loads((root / "rerun" / "rerun.json").read_text(encoding="utf-8"))
+      self.assertEqual(sorted((i["step"], i["case"]) for i in record["items"]),
+                       [("checks_vivado", "died"), ("checks_vivado", "old"), ("postsynth", "crw_crw.1clk.16x64"),
+                        ("vivado", "case0")])
+      # The earlier rerun of the same case is kept beside, not deleted.
+      self.assertEqual(len(list(stale.parent.glob("died.before_*"))), 1)
+
+  def test_resume_is_in_the_summary(self) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+      root = _campaign(tmp, ["pass"], rerun_items=[])
+      with (root / "logs" / "steps.txt").open("a", encoding="utf-8") as handle:
+        handle.write("t resume commit def steps: checks_vivado postsynth\n"
+                     "memory thresholds: synthesis 6000 MB (LM_EDA_MIN_FREE_MB_SYNTH)\n")
+      code, summary, text = self._summary(root)
+      self.assertEqual(code, 0, text)
+      self.assertEqual(summary["resumes"], [{"commit": "def", "steps": ["checks_vivado", "postsynth"]}])
+      self.assertIn("Resumed on commit `def`: checks_vivado, postsynth", text)
+      self.assertIn("synthesis 6000 MB", summary["memory_thresholds"])
+
+  def test_reevaluation_keeps_the_archive_and_lists_the_changes(self) -> None:
+    from tools.campaign import resume
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      (root / "fc").mkdir()
+      before = {"results": [{"job": "j", "case": "died", "status": "fail"}, {"job": "j", "case": "ok", "status": "pass"}]}
+      (root / "fc" / "summary.json").write_text(json.dumps(before))
+      (root / "fc" / "summary_public.json").write_text(json.dumps({"archive": {"archive": "a.tar.xz"}, "results": []}))
+      seen = []
+
+      def fake_run(cmd, cwd):  # vendor_synth --evaluate-only rewrites both summaries
+        seen.append(cmd)
+        after = {"results": [{"job": "j", "case": "died", "status": "tool-error"}, {"job": "j", "case": "ok",
+                                                                                   "status": "pass"}]}
+        (root / "fc" / "summary.json").write_text(json.dumps(after))
+        (root / "fc" / "summary_public.json").write_text(json.dumps({"results": []}))
+        return mock.Mock(returncode=1)
+
+      code, changed = resume.reevaluate(root, "checks_vivado", run=fake_run)
+      self.assertEqual(code, 1)
+      self.assertIn("--evaluate-only", seen[0])
+      self.assertEqual(changed, [{"job": "j", "case": "died", "before": "fail", "after": "tool-error"}])
+      self.assertEqual(json.loads((root / "fc" / "summary_public.json").read_text())["archive"],
+                       {"archive": "a.tar.xz"})
+      self.assertEqual(len(list((root / "fc").glob("summary.before_*.json"))), 1)
+
   def test_steps_match_the_campaign_script(self) -> None:
     script = (Path(rerun.ROOT_DIR) / "tools" / "campaign" / "run_amd.sh").read_text(encoding="utf-8")
     for step, (sub, config, campaign) in rerun.SYNTH_STEPS.items():

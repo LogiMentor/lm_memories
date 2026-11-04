@@ -22,6 +22,7 @@ rerun passed (also when there was nothing to run again).
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import re
 import subprocess
@@ -119,19 +120,57 @@ def rerun_status(item: dict) -> tuple[str, list[str]]:
   return r["status"], r.get("problems", [])
 
 
+def _key(item: dict) -> tuple:
+  return (item["step"], item["job"], item["part"], item["case"])
+
+
 def main(argv: list[str] | None = None) -> int:
+  """python -m tools.campaign.rerun <root> [--steps STEP ...] [--fresh STEP ...]
+
+  --steps (a resumed campaign, run_amd.sh with LM_CAMPAIGN_RESUME): only the
+  tool-errors of these steps; the items of the other steps in rerun.json are
+  kept. An earlier rerun that passed is kept and not run again, unless its
+  step ran again from scratch (--fresh): then every tool-error of it runs.
+  """
   argv = sys.argv[1:] if argv is None else argv
   root = Path(argv[0])
+  options: dict[str, list[str]] = {"--steps": [], "--fresh": []}
+  current = None
+  for arg in argv[1:]:
+    if arg in options:
+      current = arg
+    elif current is None:
+      raise SystemExit(f"rerun: unexpected argument {arg}")
+    else:
+      options[current].append(arg)
+  steps, fresh = options["--steps"], set(options["--fresh"])
   todo = tool_errors(root)
+  kept: list[dict] = []
+  if steps:
+    earlier = (_load(root / "rerun" / "rerun.json") or {}).get("items", [])
+    kept = [i for i in earlier if i["step"] not in steps]
+    passed = {_key(i): i for i in earlier if i["step"] in steps and i["step"] not in fresh
+              and i.get("rerun_status") == "pass"}
+    todo = [i for i in todo if i["step"] in steps]
+    kept += [passed[_key(i)] for i in todo if _key(i) in passed]
+    todo = [i for i in todo if _key(i) not in passed]
+    for i in kept:
+      print(f"kept {i['step']} {i['job']} {i['case']}: rerun {i.get('rerun_status')} earlier", flush=True)
+  stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
   for item in todo:
+    work = Path(item["work_root"])
+    if work.exists() and any(work.iterdir()):
+      # An earlier rerun of a resumed campaign: kept beside, never deleted.
+      work.rename(work.with_name(f"{work.name}.before_{stamp}"))
     print(f"rerun {item['step']} {item['job']} {item['case']} (first: {item['first_status']})", flush=True)
     item["exit_code"] = subprocess.run(item["command"], cwd=ROOT_DIR).returncode
     item["rerun_status"], item["rerun_problems"] = rerun_status(item)
     print(f"  -> {item['rerun_status']}", flush=True)
   out = root / "rerun"
   out.mkdir(parents=True, exist_ok=True)
-  ok = all(item["rerun_status"] == "pass" for item in todo)
-  (out / "rerun.json").write_text(json.dumps({"ok": ok, "items": todo}, indent=1) + "\n", encoding="utf-8")
+  items = kept + todo
+  ok = all(item.get("rerun_status") == "pass" for item in items)
+  (out / "rerun.json").write_text(json.dumps({"ok": ok, "items": items}, indent=1) + "\n", encoding="utf-8")
   print(f"{len(todo)} tool-error case(s) run again; {'all passed' if ok else 'not all passed'}")
   return 0 if ok else 1
 

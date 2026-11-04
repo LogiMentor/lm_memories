@@ -145,14 +145,17 @@ def main(argv: list[str] | None = None) -> int:
   steps_text = (root / "logs" / "steps.txt").read_text(encoding="utf-8") if (root / "logs" / "steps.txt").is_file() else ""
   exit_codes = {m.group(1): int(m.group(2)) for m in re.finditer(r"end (\S+) rc=(\d+)", steps_text)}
   commit = re.search(r"start commit (\S+)", steps_text)
-  memory = re.search(r"memory thresholds: (.*)", steps_text)
-  waits = re.search(r"retry waits: (.*)", steps_text)
+  # A resumed campaign appends its own lines: the last ones are in effect.
+  memory = ([None] + list(re.finditer(r"memory thresholds: (.*)", steps_text)))[-1]
+  waits = ([None] + list(re.finditer(r"retry waits: (.*)", steps_text)))[-1]
+  resumes = [{"commit": m.group(1), "steps": m.group(2).split()}
+             for m in re.finditer(r"resume commit (\S+) steps: (.*)", steps_text)]
   pilot = _load(root / "pilot" / "pilot.json") or {"ok": False, "detail": "no pilot.json"}
   rerun = _load(root / "rerun" / "rerun.json")
   reruns = (rerun or {}).get("items", [])
   summary = {"commit": commit.group(1) if commit else "unknown",
              "memory_thresholds": memory.group(1).strip() if memory else "not recorded",
-             "retry_waits": waits.group(1).strip() if waits else "not recorded",
+             "retry_waits": waits.group(1).strip() if waits else "not recorded", "resumes": resumes,
              "pilot": pilot, "exit_codes": exit_codes, "steps": {}, "rerun": rerun}
   if pilot.get("ok"):
     by_step = {name: [i for i in reruns if i["step"] == name]
@@ -180,7 +183,11 @@ def main(argv: list[str] | None = None) -> int:
   (root / "summary.json").write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
 
   lines = [f"# AMD campaign: {'PASS' if summary['ok'] else 'FAIL'}", "",
-           f"Commit: `{summary['commit']}`", "",
+           f"Commit: `{summary['commit']}`", ""]
+  for r in resumes:
+    lines += [f"Resumed on commit `{r['commit']}`: {', '.join(r['steps'])} (results evaluated again or run "
+              "again; the other steps are those of the first commit).", ""]
+  lines += [
            f"Memory thresholds of the EDA lock: {summary['memory_thresholds']}", "",
            f"Waits before a rerun of a transient tool failure: {summary['retry_waits']}", "", "## Pilot", ""]
   lines += pilot_lines(pilot)

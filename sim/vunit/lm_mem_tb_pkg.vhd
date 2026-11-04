@@ -121,6 +121,11 @@ package lm_mem_tb_pkg is
 
   function f_tb_counts_image(c : t_tb_counts) return string;
 
+  -- A time as a whole number of picoseconds, with no integer overflow
+  -- (2**31 ps is only 2.1 ms): the collision messages carry their instant in
+  -- this form for run_postsynth.py.
+  function f_tb_ps_image(t : time) return string;
+
   -- True when every bit is 'U' or 'X' (an output no read has reached yet).
   function f_tb_all_undef(v : std_logic_vector) return boolean;
 
@@ -165,6 +170,18 @@ package body lm_mem_tb_pkg is
            " undefined_output_checks=" & integer'image(c.undef_out_checks) &
            " errors=" & integer'image(c.errors);
   end function f_tb_counts_image;
+
+  function f_tb_ps_image(t : time) return string is
+    constant C_US : natural := t / 1 us;
+    constant C_PS : natural := (t - C_US * 1 us) / 1 ps;
+    constant C_PS_IMAGE : string := integer'image(C_PS);
+    constant C_ZEROS : string(1 to 6) := "000000";
+  begin
+    if C_US = 0 then
+      return C_PS_IMAGE;
+    end if;
+    return integer'image(C_US) & C_ZEROS(1 to 6 - C_PS_IMAGE'length) & C_PS_IMAGE;
+  end function f_tb_ps_image;
 
   function f_tb_all_undef(v : std_logic_vector) return boolean is
   begin
@@ -425,8 +442,11 @@ package body lm_mem_tb_pkg is
       end loop;
       if v_any then
         v_counts.coll_ww := v_counts.coll_ww + 1;
+        -- The instant is part of the message: run_postsynth.py pairs each
+        -- collision reported by a vendor model with this one.
         report "lm_mem_tb_pkg: write/write collision on cells " & integer'image(base) &
-               " to " & integer'image(base + n - 1) & "; the cells of both writes become undefined"
+               " to " & integer'image(base + n - 1) & " at " & f_tb_ps_image(t) &
+               " ps; the cells of both writes become undefined"
           severity warning;
       end if;
       v_log(v_log_wr) := (used => true, port_id => port_id, base => base, n => n, t => t);
@@ -512,6 +532,7 @@ package body lm_mem_tb_pkg is
     procedure resolve(now_t : time; flush : boolean) is
       variable v_ready : boolean;
       variable v_rw    : boolean;
+      variable v_t_wr  : time;
       variable v_old   : boolean;
       variable v_w     : natural;
       variable v_rd    : t_tb_read;
@@ -527,8 +548,9 @@ package body lm_mem_tb_pkg is
           end if;
           if v_ready or flush then
             v_pend(i).used := false;
-            v_rw  := false;
-            v_old := false;
+            v_rw   := false;
+            v_t_wr := 0 ps;
+            v_old  := false;
             if not v_rd.oor then
               for j in v_log'range loop
                 if v_log(j).used and f_overlap(v_log(j).base, v_log(j).n, v_rd.base, v_rd.n) then
@@ -539,7 +561,8 @@ package body lm_mem_tb_pkg is
                   end if;
                   if (not v_cross_rdw) and (v_log(j).port_id /= v_pend(i).port_id) and
                      f_collide(v_log(j).t, v_rd.t) then
-                    v_rw := true;
+                    v_rw   := true;
+                    v_t_wr := v_log(j).t;
                   end if;
                 end if;
               end loop;
@@ -553,8 +576,11 @@ package body lm_mem_tb_pkg is
             elsif v_rw then
               v_counts.coll_rw := v_counts.coll_rw + 1;
               v_counts.reads_excl_rw := v_counts.reads_excl_rw + 1;
+              -- Instants of the read and of the colliding write, for
+              -- run_postsynth.py (pairing with vendor model messages).
               report "lm_mem_tb_pkg: read/write collision on " & v_pend(i).tag &
-                     " cell " & integer'image(v_rd.base) & "; read excluded"
+                     " cell " & integer'image(v_rd.base) & " (read at " & f_tb_ps_image(v_rd.t) &
+                     " ps, write at " & f_tb_ps_image(v_t_wr) & " ps); read excluded"
                 severity warning;
             elsif v_rd.undef then
               v_counts.reads_excl_undef := v_counts.reads_excl_undef + 1;

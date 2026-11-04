@@ -108,6 +108,14 @@ begin
         check_true(v_late.undef, "read at 80 ns (port A second): cells 1 to 3 defined");
         v_late := sv_after.snapshot(1, 3, 80 ns);
         check_true(v_late.undef, "read at 80 ns (port A first): cells 1 to 3 defined");
+      elsif run("ps_image_of_a_time") then
+        -- Instants of the collision messages (run_postsynth.py pairs them
+        -- with the vendor models): whole picoseconds, also beyond 2**31 ps.
+        check_equal(f_tb_ps_image(0 ps), "0", "0 ps");
+        check_equal(f_tb_ps_image(3500 ps), "3500", "3500 ps");
+        check_equal(f_tb_ps_image(1460 ns), "1460000", "1460 ns");
+        check_equal(f_tb_ps_image(20 us + 7 ps), "20000007", "20 us + 7 ps");
+        check_equal(f_tb_ps_image(5 ms + 123456 ps), "5000123456", "5 ms + 123456 ps");
       end if;
     end loop;
     test_runner_cleanup(runner);

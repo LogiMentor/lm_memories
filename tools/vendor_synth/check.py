@@ -8,6 +8,8 @@ results for that case and part; the tool exit code alone never makes a pass.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import tomllib
 from pathlib import Path
@@ -29,18 +31,87 @@ VENDOR_FILES = {
 # synth_design returns an error; they then exit with 1 (vivado_synth_command).
 SYNTH_FAILED_MARKER = "lm_vendor_synth: synth_design failed:"
 
-def vivado_synth_command(command: str) -> str:
-  """synth_design in a Vivado batch script, exiting with 1 when it fails.
+# Status file written by the Vivado scripts: one JSON line per event of each
+# synth_design ("started", then "ok" or "failed"), with the run id of the
+# attempt (environment variable RUN_ID_ENV, set by the caller), the error
+# message of a failure and a UTC timestamp. It is the evidence of the outcome
+# that does not depend on the exit code of the process (PLAN 3.15).
+STATUS_FILE = "synth_status.jsonl"
+RUN_ID_ENV = "LM_RUN_ID"
 
-  A failed synth_design in a -source script leaves the exit code of Vivado
-  2023.1 at 0 (campaign pilot of 2026-10-19: six expected stops, all exit
-  code 0, also through the launcher with "call"), so the script stops with
-  "exit 1" itself; the marker line says the tool reported the failure.
+_STATUS_TCL = r"""proc lm_json_string {text} {
+  set text [string map [list "\\" "\\\\" "\"" "\\\"" "\n" "\\n" "\r" "\\r" "\t" "\\t"] $text]
+  return [regsub -all {[\x01-\x1f]} $text { }]
+}
+proc lm_synth_status {outcome message} {
+  set run_id [expr {[info exists ::env(@RUN_ID_ENV@)] ? $::env(@RUN_ID_ENV@) : ""}]
+  set time [clock format [clock seconds] -format {%Y-%m-%dT%H:%M:%SZ} -gmt 1]
+  set handle [open {@STATUS@} a]
+  puts $handle "{\"run_id\": \"[lm_json_string $run_id]\", \"step\": \"synth_design\", \"outcome\": \"$outcome\", \"time\": \"$time\", \"message\": \"[lm_json_string $message]\"}"
+  close $handle
+}
+lm_synth_status started {}
+if {[catch {@COMMAND@} result]} {
+  lm_synth_status failed $result
+  puts "@MARKER@ $result"
+  exit 1
+}
+lm_synth_status ok {}"""
+
+
+def vivado_synth_command(command: str, status_path: str) -> str:
+  """synth_design in a Vivado batch script, with its status file.
+
+  status_path: path of the status file, as a Tcl path (forward slashes).
+  The outcome goes to the status file (STATUS_FILE); a failure also prints
+  the marker and ends the script with "exit 1". Vivado 2023.1 exits with 1
+  after a failed synth_design anyway; the exit code reaches the caller only
+  through a launcher that keeps it (PLAN 3.15), so the status file is the
+  evidence and the exit code a second one where it is reliable.
   """
-  return (f"if {{[catch {{{command}}} result]}} {{\n"
-          f"  puts \"{SYNTH_FAILED_MARKER} $result\"\n"
-          f"  exit 1\n"
-          f"}}")
+  return (_STATUS_TCL.replace("@RUN_ID_ENV@", RUN_ID_ENV).replace("@STATUS@", status_path)
+          .replace("@MARKER@", SYNTH_FAILED_MARKER).replace("@COMMAND@", command))
+
+
+def read_synth_status(path: Path, run_id: str | None) -> tuple[dict[str, Any] | None, list[str]]:
+  """Outcome of the last synth_design of the attempt run_id in the status file.
+
+  Returns (record, problems). record is the last "ok" or "failed" event of
+  that run id, or the "started" event when synth_design never returned (the
+  tool crashed or was stopped); None when the file has no event of this run.
+  Events of other run ids (an earlier attempt or run) are ignored.
+  """
+  if not run_id:
+    return None, ["no run id for this attempt, so the status file cannot be matched to it"]
+  if not path.is_file():
+    return None, [f"no status file {path.name}: the script did not record the outcome of synth_design"]
+  problems, events = [], []
+  for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+    if not line.strip():
+      continue
+    try:
+      event = json.loads(line)
+    except json.JSONDecodeError:
+      problems.append(f"{path.name}:{number}: not a JSON line")
+      continue
+    if isinstance(event, dict) and event.get("run_id") == run_id and event.get("step") == "synth_design":
+      events.append(event)
+  if not events:
+    problems.append(f"{path.name}: no event of run {run_id}")
+    return None, problems
+  finished = [event for event in events if event.get("outcome") in ("ok", "failed")]
+  return (finished[-1] if finished else events[-1]), problems
+
+
+def vivado_exit_code_reliable(os_name: str = os.name) -> bool:
+  """True where the exit code of a Vivado run is measured to reach vendor_synth.
+
+  Measured with Vivado 2023.1 on Windows (PLAN 3.15): through launch_tool.bat
+  the exit code of Vivado arrives; through the former launch_tool.cmd it was
+  always 0. Not measured on Linux (bash launcher with exec), so there it is
+  recorded but not required.
+  """
+  return os_name == "nt"
 
 
 
@@ -277,6 +348,8 @@ def check_expected_failure(
   sources: list[Path] | None = None,
   assert_mode: bool = False,
   return_code: int | None = None,
+  status: tuple[dict[str, Any] | None, list[str]] | None = None,
+  exit_code_required: bool = True,
 ) -> tuple[list[str], dict[str, Any]]:
   """Expected result "synthesis stops at this check".
 
@@ -295,8 +368,12 @@ def check_expected_failure(
       range);
     Any other line (an INFO or WARNING, or an error elsewhere) does not count.
   - the tool reports the stop ("synth_design failed", "Analysis & Synthesis
-    was unsuccessful"), does not report completion, and, when the exit code
-    is known, it is not 0.
+    was unsuccessful") and does not report completion;
+  - Vivado: the status file of this attempt records synth_design as
+    "failed" (status: the result of read_synth_status);
+  - the exit code is not 0 where it is reliable (exit_code_required:
+    vivado_exit_code_reliable for Vivado; Quartus keeps the requirement).
+    Where it is not required, it is only recorded in the facts.
   Returns (problems, facts); facts holds the tool's actual messages.
   """
   raw = expectation.get("expect_failure", [])
@@ -346,13 +423,21 @@ def check_expected_failure(
     problems.append("synthesis completed, but it was expected to stop")
   elif not stopped:
     problems.append("the tool did not report a stop of synthesis")
-  if return_code == 0:
-    problems.append("tool exit code 0, but synthesis was expected to stop")
+  outcome = None
+  if not _quartus(tool):
+    record, status_problems = status if status is not None else (None, ["no status file was read"])
+    outcome = record.get("outcome") if record else None
+    if outcome != "failed":
+      problems.append(f"status file: synth_design of this run is {outcome or 'not recorded'}, expected failed"
+                      + (f" ({'; '.join(status_problems)})" if status_problems else ""))
+  if exit_code_required and return_code in (0, None):
+    problems.append(f"tool exit code {return_code}, but synthesis was expected to stop")
   if not accepted:
     problems.append(f"no error of the tool names the failing check (expected: {expected})")
   if not elaborated:
     problems.append("no evidence that the tool elaborated the file of the check")
   facts = {"stopped": stopped and not completed, "elaborated": elaborated, "fallback_messages": accepted[:3],
            "errors": errors[:5], "check_lines": [f"{p.as_posix()}:{a}" for p, a, _ in places],
-           "mode": "quartus" if _quartus(tool) else ("vivado -assert" if assert_mode else "vivado")}
+           "mode": "quartus" if _quartus(tool) else ("vivado -assert" if assert_mode else "vivado"),
+           "status_outcome": outcome, "exit_code": return_code, "exit_code_required": exit_code_required}
   return problems, facts

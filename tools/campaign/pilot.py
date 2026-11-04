@@ -32,10 +32,12 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import uuid
 from pathlib import Path
 
 from tools.eda_lock import heavy_tool_lock
 from tools.eda_proc import run_tool
+from tools.vendor_synth.check import RUN_ID_ENV
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PILOT_CONFIG = ROOT_DIR / "tools" / "campaign" / "pilot.toml"
@@ -97,6 +99,9 @@ def check_generic_1000(base: Path) -> dict:
   record_file = case_dir / "run.json"
   record = json.loads(record_file.read_text(encoding="utf-8"))
   record["started_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+  # The script records the outcome of synth_design under this run id.
+  record["run_id"] = uuid.uuid4().hex
+  env = {**os.environ, RUN_ID_ENV: record["run_id"]}
   vivado = VIVADO_DIR / "bin" / ("vivado.bat" if sys.platform == "win32" else "vivado")
   cmd = (["cmd", "/c", str(vivado)] if sys.platform == "win32" else [str(vivado)]) + [
     "-mode", "batch", "-nojournal", "-source", script.resolve().as_posix()]
@@ -104,7 +109,8 @@ def check_generic_1000(base: Path) -> dict:
        heavy_tool_lock("pilot: r_w_32x1024 with g_ram_depth=1000 in the script", kind="synthesis"):
     handle.write("command: " + " ".join(cmd) + "\n")
     handle.flush()
-    record["return_code"] = run_tool(cmd, cwd=case_dir, stdout=handle, stderr=subprocess.STDOUT, timeout=1800)
+    record["return_code"] = run_tool(cmd, cwd=case_dir, env=env, stdout=handle, stderr=subprocess.STDOUT,
+                                     timeout=1800)
   record["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
   record_file.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
   vendor_synth(["--config", str(PILOT_CONFIG), "--job", "pilot-artix7", "--case", "r_w_32x1024",

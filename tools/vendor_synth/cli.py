@@ -20,6 +20,7 @@ import shlex
 import shutil
 import subprocess
 import textwrap
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -414,15 +415,20 @@ def _launcher_command(job: dict[str, Any], command: list[str], work_dir: Path) -
     return command
 
   if os.name == "nt":
-    launcher = work_dir / "launch_tool.cmd"
+    # A .bat file, not .cmd: cmd.exe applies the rules of the outermost
+    # script to every batch file it calls, and in a .cmd script "set" resets
+    # ERRORLEVEL to 0. loader.bat (vivado.bat) runs "set" after the tool
+    # exits, so through launch_tool.cmd every Vivado run came back with 0
+    # (measured with Vivado 2023.1, PLAN 3.15); through launch_tool.bat the
+    # exit code of Vivado arrives.
+    launcher = work_dir / "launch_tool.bat"
     lines = ["@echo off"]
     if setup_script is not None:
       lines.append(f"call {_cmd_quote(str(setup_script))}")
       lines.append("if errorlevel 1 exit /b %ERRORLEVEL%")
     quoted = " ".join(_cmd_quote(arg) for arg in command)
     # "call": without it cmd.exe hands control to a .bat tool (vivado.bat)
-    # and never returns, so its exit code is not the tool's (measured with
-    # Vivado 2023.1: 0 or 123 after a failed synth_design, 1 with call).
+    # and never returns to the next line.
     lines.append(("call " if _uses_windows_batch(command) else "") + quoted)
     lines.append("exit /b %ERRORLEVEL%")
     launcher.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -788,7 +794,8 @@ def _vivado_script(
     f" -generic {{{name}={_tcl_generic(value)}}}" for name, value in (generics or {}).items()
   )
   synth_line = check.vivado_synth_command(
-    f"synth_design -mode out_of_context -top {top} -part {{{part}}}{generic_args}{assert_arg}")
+    f"synth_design -mode out_of_context -top {top} -part {{{part}}}{generic_args}{assert_arg}",
+    _tcl_path(reports / check.STATUS_FILE))
   text = f"""# SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 {thread_line}set script_dir {{{script_dir}}}
@@ -1008,7 +1015,7 @@ def _failure_message(paths: list[Path]) -> str:
 
 
 def _report_files(case_dir: Path) -> list[Path]:
-  ignored = {".vhd", ".tcl", ".cmd", ".sh"}
+  ignored = {".vhd", ".tcl", ".bat", ".cmd", ".sh"}
   return [
     path for path in case_dir.rglob("*")
     if path.is_file() and path.suffix.lower() not in ignored
@@ -1068,17 +1075,22 @@ def _evaluate(
 
   run: the record of the run (run.json): return code, start time, retries.
   A pass needs positive evidence of a complete run of this case: the tool's
-  completion message, exit code 0, no error of the project, and reports
-  written by this run that have every expected row.
+  completion message, exit code 0, synth_design recorded as "ok" for this
+  attempt in the status file, no error of the project, and reports written
+  by this run that have every expected row.
   """
   run = run or {}
   tool = _tool(job)
+  vivado = tool in ("vivado", "xilinx")
   part = str(job.get("part") or job.get("device") or "")
   return_code = run.get("return_code")
+  # Outcome of synth_design recorded by the script for this attempt.
+  status = check.read_synth_status(reports / check.STATUS_FILE, run.get("run_id")) if vivado else None
   expectation = check.find_expectation(check.load_expected(_vendor(job)), case["name"], part)
   if expectation is not None and ("expect_failure" in expectation or "expect_failure_constant" in expectation):
-    problems, facts = check.check_expected_failure(tool, log_text, expectation, sources,
-                                                   assert_mode=bool(job.get("assert")), return_code=return_code)
+    problems, facts = check.check_expected_failure(
+      tool, log_text, expectation, sources, assert_mode=bool(job.get("assert")), return_code=return_code,
+      status=status, exit_code_required=check.vivado_exit_code_reliable() if vivado else True)
     log = check.parse_vivado_log(log_text, top) if tool in ("vivado", "xilinx") else {}
     # The stop must be for the requested generics (Vivado prints them before the error).
     module = _generics_module(case, top)
@@ -1102,6 +1114,10 @@ def _evaluate(
     incomplete.append(error)
   if return_code != 0:
     incomplete.append(f"tool exit code {return_code}")
+  record, status_problems = status
+  if not record or record.get("outcome") != "ok":
+    incomplete.append(f"status file: synth_design of this run is {record.get('outcome') if record else 'not recorded'}"
+                      + (f" ({'; '.join(status_problems)})" if status_problems else ""))
   if not util_file.is_file():
     incomplete.append("no utilization report")
   elif not _report_is_fresh(util_file, run.get("started_at")):
@@ -1176,6 +1192,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     "script": str(script_file),
     "log": str(log_file),
     "command": command,
+    "run_id": None,
     "return_code": None,
     "retries": [],
     "problems": [],
@@ -1245,6 +1262,9 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
         old.unlink()
     result["started_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
     result["return_code"] = None
+    # The status file written by the script names this attempt.
+    result["run_id"] = uuid.uuid4().hex
+    env[check.RUN_ID_ENV] = result["run_id"]
     with log_file.open("w", encoding="utf-8", errors="ignore") as handle:
       handle.write("command: " + " ".join(command) + "\n")
       handle.flush()
@@ -1269,7 +1289,8 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
                                                         log_path=log_file)
 
   result["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
-  record = {key: result[key] for key in ("provenance", "started_at", "completed_at", "return_code", "retries")}
+  record = {key: result[key] for key in ("provenance", "run_id", "started_at", "completed_at", "return_code",
+                                         "retries")}
   record.update(timed_out=timed_out, persisted=persisted)
   record_file.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
   if timed_out:

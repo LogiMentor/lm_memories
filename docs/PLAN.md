@@ -797,7 +797,9 @@ Two reviews of PR #4 at `5a5761a` found no blocking problem, 9 important,
 - **Expected stops:** a real error that names the check; Vivado without
   `-assert` needs `[Synth 8-11323]` at the constant, with `-assert`
   `[Synth 8-63]` with the message; Quartus `Error (10652)` with the message
-  or an error at the constant (`10657`, `10405`).
+  or an error at the constant (`10657`, `10405`). Vivado also needs
+  "failed" in the status file of the attempt and, on Windows, a non-zero
+  exit code (section 3.15).
 - **Mutation check:** structured VUnit results and a passing baseline.
 - **Static checks:** every check of a generic in `src/` is a static check,
   also in `lm_mem_ccd_resync`, `lm_mem_ram_r_w_infer`, the primitive
@@ -841,21 +843,71 @@ the summary in `<campaign root>/summary.md`.
   it (`exit /b %ERRORLEVEL%`) do not run and the caller sees an exit code
   that is not Vivado's: measured with Vivado 2023.1, 0 or 123 after a failed
   `synth_design`, 1 with `call` or when `vivado.bat` is run directly, for a
-  script that ends with a Tcl `error`. Fixed here in the launcher of
+  script that ends with a Tcl `error` (how that measurement started the
+  script is not recorded; through a `.cmd` file the exit code is always 0,
+  next point). Fixed here in the launcher of
   `tools/vendor_synth`. To check in the scripts of the other LogiMentor
   repositories that start Vivado (or any `.bat` tool, such as `xsim.bat` and
   `settings64.bat`) from a batch file and use its exit code.
-- **Vivado exits with 0 after a failed `synth_design`** in a `-source`
-  script, also with `call` (campaign pilot of 2026-10-19, commit `4fb1ae7`:
-  five expected stops, three without `-assert` and two with it, each with
-  the expected `[Synth 8-11323]` or `[Synth 8-63]` at the check, then
-  `synth_design failed` and `[Common 17-69]` in the log, all exit code 0;
-  the checks were right, only the exit code was wrong). The pilot now also
-  runs `bad_fifo_almost_empty_15` with `-assert`, so each of the three
-  cases is checked in both modes. The scripts here run `synth_design`
-  inside `catch` and end with `exit 1` when it fails (`vivado_synth_command` in
-  `tools/vendor_synth/check.py`). The same check applies to every LogiMentor
-  script that relies on the exit code of a Vivado batch run.
+- **A `.cmd` launcher loses the exit code of `vivado.bat`.** cmd.exe applies
+  the rules of the outermost script to every batch file it calls, and in a
+  script started as `.cmd`, `set` resets ERRORLEVEL to 0 (in a `.bat` it
+  does not). `loader.bat`, called by `vivado.bat`, runs
+  `set RDI_ARGS_FUNCTION=` and `set prodversionout=` after the tool exits,
+  then `exit /b %ERRORLEVEL%`: through `launch_tool.cmd` every Vivado run
+  came back with 0, whatever Vivado returned. This, not Vivado, made the
+  campaign pilots of 2026-10-19 (commit `4fb1ae7`) and 2026-11-04 (commit
+  `3e2c02e`) fail: every expected stop was in the log at the right check,
+  with exit code 0. The earlier note here ("Vivado exits with 0 after a
+  failed `synth_design`") was wrong: Vivado 2023.1 exits with 1. Fixed in
+  `tools/vendor_synth`: the launcher is `launch_tool.bat`; a test runs
+  cmd.exe with a fake tool that ends like `loader.bat`
+  (`WindowsLauncherExitCodeTest`). To check in every LogiMentor script that
+  starts a Xilinx `.bat` tool from a `.cmd` file and uses its exit code.
+
+  Measured on 2026-11-04 with Vivado 2023.1 on Windows 11, one tiny case
+  (`lm_mem_ccd_resync`, `g_meta_levels=1`), exit code seen by the caller:
+
+  | Script | cmd prompt: `vivado.bat ...`, `echo %ERRORLEVEL%` | `cmd /c launch_tool.cmd` (`call vivado.bat`) | `cmd /c launch_tool.bat` (`call vivado.bat`) | `cmd /c vivado.bat` from Python |
+  | --- | --- | --- | --- | --- |
+  | `exit 3` | 3 | 0 | 3 | 3 |
+  | failing `synth_design`, no `catch` | 1 | 0 | 1 | 1 |
+  | failing `synth_design` in `catch`, `exit 1` | 1 | 0 | 1 | 1 |
+
+  **Where the exit code is reliable:** on Windows, through
+  `launch_tool.bat` (vendor_synth) and `cmd /c vivado.bat`
+  (`run_postsynth.py`, the pilot): measured above. Through a `.cmd` file:
+  never (always 0). On Linux (bash launcher with `exec`, or `vivado`
+  directly): not measured, no Vivado installation on Linux here.
+  Quartus (`quartus_sh`, an executable, no batch file): not measured in
+  this table.
+
+  **Evidence of a stop, from now on:** the Vivado scripts write a status
+  file (`synth_status.jsonl`, `vivado_synth_command` in
+  `tools/vendor_synth/check.py`): one JSON line per event of each
+  `synth_design` ("started", then "ok" or "failed", with the error message,
+  a UTC time and the run id of the attempt, passed in `LM_RUN_ID`). An
+  expected stop passes only with "failed" for this attempt in the status
+  file, the error of the check in the log (file and line without
+  `-assert`, the message with it), and a non-zero exit code where it is
+  reliable (`vivado_exit_code_reliable`: Windows; elsewhere it is recorded,
+  not required). A pass needs "ok" there as well as exit code 0. Quartus has
+  no status file and keeps the exit-code requirement.
+- **"couldn't read file" from Vivado's own Tcl.** The campaign of
+  2026-11-04 lost three attempts of one case to
+  `couldn't read file ".../.Xil/Vivado-<pid>/realtime\<top>.tcl": No error`,
+  a file Vivado had just written under the work directory in `%TEMP%`. The
+  probes of the same day (work directory also in `%TEMP%`) hit "couldn't
+  read file" in 6 of 14 synthesis attempts, under `.Xil` and also on files
+  of the installation that exist (`scripts/rt/data/lib_core.tcl`,
+  `common.tcl`, `scripts/rt/fpga_tcl/rtSynthParallelPrep.tcl`: "no such
+  file or directory"), and `invalid command name "rt-undefined"` in one
+  more. The pilot of 2026-10-19
+  had none. The antivirus on this machine is HP Wolf Pro Security (Windows
+  Defender is off); a scanner holding new files, and files being read by
+  many processes, fits the pattern but is not proven. The default work root
+  on Windows is now `C:/lmeda` (outside `%TEMP%`, `tools/eda_workdir.py`);
+  the retry policy (section 3.6) retries these signatures three times.
 
 ## Appendix: how the reproduction was run
 

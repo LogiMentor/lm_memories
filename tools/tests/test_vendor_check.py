@@ -37,14 +37,30 @@ UTIL_TEMPLATE = """\
 """
 
 FAKE_VIVADO = r'''
-import os, re, sys
+import json, os, re, sys
 script = open(sys.argv[sys.argv.index("-source") + 1]).read()
 cfg = os.environ["FAKE_VIVADO"]
 state = os.path.join(os.path.dirname(cfg), "calls.txt")
 calls = int(open(state).read()) if os.path.exists(state) else 0
 open(state, "w").write(str(calls + 1))
 spec = eval(open(cfg).read())
+status_path = re.search(r"\[open \{([^}]+)\} a\]", script).group(1)
+
+def status(outcome, message=""):
+    # As the script of vendor_synth writes it; status_outcome overrides "ok"
+    # ("missing": no event at all, "other-run": an event of another run id).
+    if outcome == "ok" and "status_outcome" in spec:
+        outcome = spec["status_outcome"]
+    if outcome == "missing":
+        return
+    run_id = "someone-else" if outcome == "other-run" else os.environ.get("LM_RUN_ID", "")
+    with open(status_path, "a") as handle:
+        handle.write(json.dumps({"run_id": run_id, "step": "synth_design", "outcome": outcome if outcome != "other-run"
+                                 else "ok", "time": "2026-11-04T00:00:00Z", "message": message}) + "\n")
+
 print("****** Vivado v2023.1 (64-bit)")
+if spec.get("status_outcome") != "missing":
+    status("started")
 if calls < spec.get("fail_reads", 0):
     kinds = spec.get("fail_kinds", ["read"])
     kind = kinds[calls % len(kinds)]
@@ -55,6 +71,7 @@ if calls < spec.get("fail_reads", 0):
     else:
         print("synth_design failed")
     print("ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
+    status("failed", "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
     sys.exit(1)
 os.makedirs(".Xil", exist_ok=True)  # tool scratch, removed after a passing run
 open(os.path.join(".Xil", "junk.tcl"), "w").write("x")
@@ -72,6 +89,7 @@ if spec.get("truncate"):
 util = re.search(r"report_utilization -file \{([^}]+)\}", script).group(1)
 open(util, "w").write(spec["util"])
 print("synth_design completed successfully")
+status("ok")
 sys.exit(spec.get("exit_code", 0))
 '''
 
@@ -280,6 +298,17 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(result["status"], "tool-error", result["problems"])
     self.assertIn("no utilization report", result["problems"][0])
 
+  def test_pass_needs_ok_in_the_status_file_of_this_attempt(self) -> None:
+    # Missing status, or an "ok" of another run id (an earlier attempt or run).
+    # With "other-run" this attempt has only its "started" event.
+    for outcome, shown in (("missing", "not recorded"), ("other-run", "started")):
+      (self.root / "calls.txt").unlink(missing_ok=True)
+      result = self._run(self._good_spec(status_outcome=outcome))
+      self.assertEqual(result["status"], "tool-error", (outcome, result["problems"]))
+      self.assertIn(f"status file: synth_design of this run is {shown}", result["problems"][0])
+    record = json.loads((Path(result["work_dir"]) / "run.json").read_text(encoding="utf-8"))
+    self.assertRegex(record["run_id"], r"^[0-9a-f]{32}$")
+
   def test_nonzero_exit_code_is_not_a_pass(self) -> None:
     result = self._run(self._good_spec(exit_code=3))
     self.assertEqual(result["status"], "tool-error")
@@ -360,6 +389,8 @@ class VendorRunTest(unittest.TestCase):
 class ExpectedFailureTest(unittest.TestCase):
   EXPECT = {"expect_failure": ["no validated two-writer RAM architecture"],
             "expect_failure_constant": "C_LM_MEM_TDP_NOT_SUPPORTED"}
+  # read_synth_status of a script that recorded the failure of synth_design.
+  FAILED = ({"run_id": "r1", "step": "synth_design", "outcome": "failed", "message": "Synthesis failed"}, [])
   SOURCE = ("library ieee;\n"
             "architecture a_rtl of e is\n"
             "  constant C_OK : boolean := false;\n"
@@ -388,14 +419,15 @@ class ExpectedFailureTest(unittest.TestCase):
 
   def test_vivado_range_error_at_the_constant_passes(self) -> None:
     problems, facts = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src],
-                                                   return_code=1)
+                                                   return_code=1, status=self.FAILED)
     self.assertEqual(problems, [])
     self.assertEqual(facts["check_lines"], [f"{self.src.as_posix()}:4"])
     self.assertIn("Synth 8-11323", facts["fallback_messages"][0])
 
   def test_vivado_range_error_elsewhere_fails(self) -> None:
     for log in (self._range_error(self.src, 3), self._range_error(self.other, 4)):
-      problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src])
+      problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], return_code=1,
+                                                 status=self.FAILED)
       self.assertEqual(len(problems), 1, problems)
       self.assertIn("names the failing check", problems[0])
 
@@ -419,15 +451,65 @@ class ExpectedFailureTest(unittest.TestCase):
     # The scripts print the marker and exit with 1 when synth_design fails.
     log = self._range_error(self.src, 4).replace("synth_design failed\n",
                                                  check.SYNTH_FAILED_MARKER + " Synthesis failed\n")
-    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], return_code=1)
+    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], return_code=1,
+                                                   status=self.FAILED)
     self.assertEqual(problems, [])
     self.assertTrue(facts["stopped"])
-    self.assertIn("exit 1", check.vivado_synth_command("synth_design -top e"))
+    self.assertIn("exit 1", check.vivado_synth_command("synth_design -top e", "C:/w/s.jsonl"))
 
-  def test_exit_code_zero_is_not_a_stop(self) -> None:
+  def test_exit_code_zero_is_not_a_stop_where_it_is_reliable(self) -> None:
     problems, _ = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT, [self.src],
-                                               return_code=0)
+                                               return_code=0, status=self.FAILED)
     self.assertEqual(problems, ["tool exit code 0, but synthesis was expected to stop"])
+    # Where the exit code is not measured to be reliable it is recorded only.
+    problems, facts = check.check_expected_failure("vivado", self._range_error(self.src, 4), self.EXPECT,
+                                                   [self.src], return_code=0, status=self.FAILED,
+                                                   exit_code_required=False)
+    self.assertEqual(problems, [])
+    self.assertEqual((facts["exit_code"], facts["exit_code_required"]), (0, False))
+    self.assertTrue(check.vivado_exit_code_reliable("nt"))
+    self.assertFalse(check.vivado_exit_code_reliable("posix"))
+
+  def test_a_stop_needs_failed_in_the_status_file(self) -> None:
+    # Campaign of 2026-11-04: the exit code was lost on the way; the status
+    # file is the evidence that does not depend on it.
+    log = self._range_error(self.src, 4)
+    for status, shown in ((None, "not recorded"), ((None, ["no status file synth_status.jsonl"]), "not recorded"),
+                          (({"outcome": "ok"}, []), "is ok"), (({"outcome": "started"}, []), "is started")):
+      problems, _ = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], return_code=1,
+                                                 status=status)
+      self.assertEqual(len(problems), 1, (status, problems))
+      self.assertIn("status file", problems[0])
+      self.assertIn(shown, problems[0])
+
+  def test_status_file_of_the_attempt(self) -> None:
+    path = Path(self.tmp.name) / check.STATUS_FILE
+    events = [{"run_id": "old", "step": "synth_design", "outcome": "failed", "message": "earlier attempt"},
+              {"run_id": "r1", "step": "synth_design", "outcome": "started", "message": ""},
+              {"run_id": "r1", "step": "synth_design", "outcome": "failed", "message": "Synthesis failed"}]
+    path.write_text("".join(json.dumps(e) + "\n" for e in events) + "not json\n", encoding="utf-8")
+    record, problems = check.read_synth_status(path, "r1")
+    self.assertEqual((record["outcome"], record["message"]), ("failed", "Synthesis failed"))
+    self.assertEqual(problems, [f"{check.STATUS_FILE}:4: not a JSON line"])
+    # Only events of another attempt: nothing for this one.
+    record, problems = check.read_synth_status(path, "r2")
+    self.assertIsNone(record)
+    self.assertIn("no event of run r2", problems[-1])
+    # synth_design started but never returned (a crash): "started".
+    path.write_text(json.dumps(events[1]) + "\n", encoding="utf-8")
+    self.assertEqual(check.read_synth_status(path, "r1")[0]["outcome"], "started")
+    self.assertIsNone(check.read_synth_status(path, None)[0])
+    self.assertIsNone(check.read_synth_status(path.with_name("none.jsonl"), "r1")[0])
+
+  def test_status_lines_of_the_script(self) -> None:
+    text = check.vivado_synth_command('synth_design -top e -generic {g_vendor=""}', "C:/w/reports/s.jsonl")
+    self.assertIn("set handle [open {C:/w/reports/s.jsonl} a]", text)
+    self.assertIn('if {[catch {synth_design -top e -generic {g_vendor=""}} result]} {', text)
+    self.assertIn(f"::env({check.RUN_ID_ENV})", text)
+    # started before synth_design, failed or ok after it.
+    self.assertLess(text.index("lm_synth_status started {}"), text.index("if {[catch {synth_design"))
+    self.assertLess(text.index("lm_synth_status failed $result"), text.index("  exit 1"))
+    self.assertTrue(text.endswith("lm_synth_status ok {}"))
 
   def test_tool_failure_before_elaboration_is_not_elaborated(self) -> None:
     log = ("Command: synth_design -top e -assert\n"
@@ -450,7 +532,8 @@ class ExpectedFailureTest(unittest.TestCase):
            'for this tool." [x.vhd:31]\n'
            'synth_design failed\n'
            'ERROR: [Common 17-69] Command failed: Synthesis failed\n')
-    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], assert_mode=True)
+    problems, facts = check.check_expected_failure("vivado", log, self.EXPECT, [self.src], assert_mode=True,
+                                                   return_code=1, status=self.FAILED)
     self.assertEqual(problems, [])
     self.assertTrue(facts["stopped"])
     self.assertEqual(len(facts["fallback_messages"]), 1)
@@ -483,9 +566,12 @@ class ExpectedFailureTest(unittest.TestCase):
     log = (f'Error (10405): VHDL error at {self.src.name}(4): value "1" is out of target constraint range (0 to 0) '
            'for C_LM_MEM_TDP_NOT_SUPPORTED\n'
            'Error: Quartus Prime Analysis & Synthesis was unsuccessful. 1 error, 0 warnings\n')
-    problems, facts = check.check_expected_failure("quartus", log, self.EXPECT, [self.src])
+    problems, facts = check.check_expected_failure("quartus", log, self.EXPECT, [self.src], return_code=2)
     self.assertEqual(problems, [])
     self.assertEqual(len(facts["errors"]), 1)
+    # Quartus has no status file; its exit code stays required.
+    problems, _ = check.check_expected_failure("quartus", log, self.EXPECT, [self.src], return_code=0)
+    self.assertEqual(problems, ["tool exit code 0, but synthesis was expected to stop"])
 
   def test_quartus_constant_named_elsewhere_fails(self) -> None:
     log = ('Error (10405): VHDL error at x.vhd(30): value "1" is out of target constraint range (0 to 0) '
@@ -497,7 +583,7 @@ class ExpectedFailureTest(unittest.TestCase):
   def test_stop_without_fallback_message_fails(self) -> None:
     log = ("Error (12006): Node instance inst instantiates undefined entity foo\n"
            "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 1 error, 0 warnings\n")
-    problems, _ = check.check_expected_failure("quartus", log, self.EXPECT, [self.src])
+    problems, _ = check.check_expected_failure("quartus", log, self.EXPECT, [self.src], return_code=2)
     self.assertEqual(len(problems), 2, problems)
     self.assertIn("names the failing check", problems[0])
 

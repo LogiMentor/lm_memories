@@ -73,11 +73,15 @@ class ReuseTest(unittest.TestCase):
 
 class ScriptTest(unittest.TestCase):
   def test_failed_synthesis_exits_with_1(self) -> None:
-    # Vivado 2023.1 exits with 0 after a failed synth_design in a -source script.
+    # The script records the outcome and exits with 1 itself; Vivado 2023.1
+    # also exits with 1 after a failed synth_design (PLAN 3.15).
     g = dict(ps.RAM_CONFIGS)["crw_crw.1clk.16x64"]
     script = ps.synth_inputs("xc7a35tfgg484-2", "k", g, Path(tempfile.gettempdir()))["script_text"]
     self.assertIn("if {[catch {synth_design -mode out_of_context -top lm_ps_k", script)
     self.assertIn("  exit 1\n}", script)
+    # The outcome of synth_design goes to the status file of the work directory.
+    self.assertRegex(script, r"set handle \[open \{[^}]*/synth_status\.jsonl\} a\]")
+    self.assertIn("synth_status.jsonl", ps.KEEP_SYNTH)
 
 
 class SelectionTest(unittest.TestCase):

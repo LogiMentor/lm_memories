@@ -47,6 +47,7 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -66,7 +67,7 @@ from tools.vendor_synth import check  # noqa: E402
 GHDL = os.environ.get("GHDL", "ghdl")
 PARTS = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
 # Kept in each synthesis directory after a passing campaign.
-KEEP_SYNTH = ("synth.json", "vivado*.log", "utilization.rpt", "run.tcl")
+KEEP_SYNTH = ("synth.json", "vivado*.log", "utilization.rpt", "run.tcl", "synth_status.jsonl")
 ADAPTER_RTL = ROOT_DIR / "sim" / "vunit" / "lm_mem_tb_dut.vhd"
 HARNESS_FILESET = "tb_harness"
 RESULT_RE = re.compile(r"lm_mem_tb_harness \S+ \[[^\]]*\]: (.*)")
@@ -212,7 +213,7 @@ begin
 TIMEOUT_RC = -1
 
 
-def run_logged(cmd: list[str], cwd: Path, log: Path, timeout: int = 7200) -> int:
+def run_logged(cmd: list[str], cwd: Path, log: Path, timeout: int = 7200, env: dict[str, str] | None = None) -> int:
   """Run a tool with its output appended to log; TIMEOUT_RC after a timeout.
 
   On a timeout the whole process tree of the tool is stopped first
@@ -222,7 +223,7 @@ def run_logged(cmd: list[str], cwd: Path, log: Path, timeout: int = 7200) -> int
     handle.write("$ " + " ".join(cmd) + "\n")
     handle.flush()
     try:
-      return run_tool(cmd, cwd=cwd, stdout=handle, stderr=subprocess.STDOUT, timeout=timeout)
+      return run_tool(cmd, cwd=cwd, env=env, stdout=handle, stderr=subprocess.STDOUT, timeout=timeout)
     except subprocess.TimeoutExpired:
       handle.write(f"\ntimeout after {timeout} seconds: the tool was stopped\n")
       return TIMEOUT_RC
@@ -235,9 +236,10 @@ def synth_inputs(part: str, key: str, g: dict, work: Path, common_clock: bool = 
   wrapper_text = wrapper_vhdl(key, g, common_clock)
   library = [s.path for s in load().files("synth-amd", "vivado")] + [ADAPTER_RTL]
   reads = "\n".join(f"read_vhdl -vhdl2008 {{{tcl(s)}}}" for s in [*library, wrapper])
-  # Exits with 1 when synth_design fails (Vivado itself exits with 0).
+  # Records the outcome in the status file and exits with 1 when synth_design fails.
   synth_line = check.vivado_synth_command(
-    f"synth_design -mode out_of_context -top lm_ps_{key} -part {{{part}}} -flatten_hierarchy full")
+    f"synth_design -mode out_of_context -top lm_ps_{key} -part {{{part}}} -flatten_hierarchy full",
+    tcl(work / check.STATUS_FILE))
   script_text = f"""set_param general.maxThreads 2
 catch {{ set_param messaging.defaultLimit 1000000 }}
 {reads}
@@ -254,9 +256,10 @@ exit
 
 def synthesize(vivado_dir: Path, part: str, key: str, g: dict, work: Path, common_clock: bool = False) -> dict:
   """Synthesize one configuration. ok needs positive evidence of a complete run:
-  "synth_design completed successfully", exit code 0, no project error, 0
-  CRITICAL WARNINGs, a complete utilization report and a netlist written by
-  this run."""
+  "synth_design completed successfully", exit code 0, synth_design recorded
+  as "ok" for this attempt in the status file, no project error, 0 CRITICAL
+  WARNINGs, a complete utilization report and a netlist written by this
+  run."""
   work.mkdir(parents=True, exist_ok=True)
   inputs = synth_inputs(part, key, g, work, common_clock)
   netlist = inputs["netlist"]
@@ -267,16 +270,20 @@ def synthesize(vivado_dir: Path, part: str, key: str, g: dict, work: Path, commo
   log = work / "vivado.log"
   cmd = (["cmd", "/c", str(vivado_dir / "bin" / "vivado.bat")] if os.name == "nt" else
          [str(vivado_dir / "bin" / "vivado")]) + ["-mode", "batch", "-nojournal", "-source", tcl(script)]
+  status_file = work / check.STATUS_FILE
   code = None
+  run_id = None
 
   def run_once(attempt: int) -> str:
-    nonlocal code
+    nonlocal code, run_id
     # Outputs of an earlier attempt or run must never count for this one.
-    for old in (netlist, util):
+    for old in (netlist, util, status_file):
       old.unlink(missing_ok=True)
     log.write_text("", encoding="utf-8")
+    run_id = uuid.uuid4().hex
+    env = {**os.environ, check.RUN_ID_ENV: run_id}
     with heavy_tool_lock(f"postsynth vivado {part} {key}", kind="synthesis"):
-      code = run_logged(cmd, work, log)
+      code = run_logged(cmd, work, log, env=env)
     return log.read_text(encoding="utf-8", errors="ignore")
 
   def completed(text: str) -> bool:
@@ -294,6 +301,10 @@ def synthesize(vivado_dir: Path, part: str, key: str, g: dict, work: Path, commo
     problems.append(f"Vivado exit code {code}")
   if not parsed["completed"]:
     problems.append("no 'synth_design completed successfully' in the log")
+  record, status_problems = check.read_synth_status(status_file, run_id)
+  if not record or record.get("outcome") != "ok":
+    problems.append(f"status file: synth_design of this run is {record.get('outcome') if record else 'not recorded'}"
+                    + (f" ({'; '.join(status_problems)})" if status_problems else ""))
   if parsed["project_error"] or parsed["errors"]:
     problems.append(parsed["project_error"] or parsed["errors"][0])
   if persisted:

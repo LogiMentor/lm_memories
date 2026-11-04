@@ -49,10 +49,13 @@ class VendorSynthTests(unittest.TestCase):
       top = Path(summary["results"][0]["work_dir"]) / (summary["results"][0]["top"] + ".vhd")
       self.assertIn("read_vhdl -vhdl2008", script)
       self.assertIn("lm_mem_ram_r_w_infer", top.read_text(encoding="utf-8"))
-      # Vivado 2023.1 exits with 0 after a failed synth_design in a -source
-      # script (campaign pilot of 2026-10-19): the script exits with 1 itself.
+      # The script records the outcome of synth_design in the status file of
+      # the attempt and exits with 1 when it fails (PLAN 3.15).
       self.assertIn("if {[catch {synth_design -mode out_of_context", script)
       self.assertIn("  exit 1\n}", script)
+      self.assertRegex(script, r"set handle \[open \{[^}]*/infer_r_w_bram_32x1024/reports/synth_status\.jsonl\} a\]")
+      self.assertIn("lm_synth_status failed $result", script)
+      self.assertIn("::env(LM_RUN_ID)", script)
 
   def test_vivado_threads_one_uses_default_thread_setting(self):
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -223,7 +226,8 @@ cases = ["infer_r_w_bram_32x1024"]
       summary = json.loads((work / "summary.json").read_text(encoding="utf-8"))
       command = summary["results"][0]["command"]
       if os.name == "nt":
-        launcher = Path(summary["results"][0]["work_dir"]) / "launch_tool.cmd"
+        # .bat, not .cmd: in a .cmd script "set" resets ERRORLEVEL (PLAN 3.15).
+        launcher = Path(summary["results"][0]["work_dir"]) / "launch_tool.bat"
         text = launcher.read_text(encoding="utf-8")
         self.assertEqual(command[-1], str(launcher))
         self.assertIn(str(executable), text)
@@ -277,7 +281,7 @@ cases = ["infer_r_w_bram_32x1024"]
       summary = json.loads((work / "summary.json").read_text(encoding="utf-8"))
       command = summary["results"][0]["command"]
       work_dir = Path(summary["results"][0]["work_dir"])
-      launcher = work_dir / ("launch_tool.cmd" if os.name == "nt" else "launch_tool.sh")
+      launcher = work_dir / ("launch_tool.bat" if os.name == "nt" else "launch_tool.sh")
       self.assertTrue(launcher.exists())
       self.assertEqual(command[-1], str(launcher))
 
@@ -359,6 +363,30 @@ cases = ["infer_r_w_bram_32x1024"]
       self.assertEqual(result, 1)
       self.assertEqual(summary["results"][0]["status"], "tool-error")
       self.assertIn("Vivado Synthesis failed", summary["results"][0]["message"])
+
+
+@unittest.skipUnless(os.name == "nt", "cmd.exe only")
+class WindowsLauncherExitCodeTest(unittest.TestCase):
+  # Campaign of 2026-11-04: every Vivado run came back with 0 through
+  # launch_tool.cmd. loader.bat (called by vivado.bat) runs "set" after the
+  # tool exits, and in a script started as .cmd, "set" resets ERRORLEVEL.
+  # The fake tool ends like loader.bat.
+  TOOL = "@echo off\r\nsetlocal\r\ncmd /c exit 3\r\nendlocal\r\nset LM_FAKE_LOADER=\r\nexit /b %ERRORLEVEL%\r\n"
+
+  def test_exit_code_of_a_bat_tool_reaches_the_caller(self) -> None:
+    from tools.eda_proc import run_tool
+    from tools.vendor_synth.cli import _launcher_command
+    with tempfile.TemporaryDirectory() as tmpdir:
+      root = Path(tmpdir)
+      tool = root / "vivado.bat"
+      tool.write_text(self.TOOL, encoding="utf-8")
+      command = _launcher_command({"tool": "vivado"}, [str(tool)], root)
+      self.assertTrue(command[-1].endswith("launch_tool.bat"), command)
+      self.assertEqual(run_tool(command, cwd=root), 3)
+      # The same launcher as .cmd loses it: the trap this test guards against.
+      as_cmd = root / "launch_tool.cmd"
+      as_cmd.write_text(Path(command[-1]).read_text(encoding="utf-8"), encoding="utf-8")
+      self.assertEqual(run_tool(["cmd", "/c", str(as_cmd)], cwd=root), 0)
 
 
 if __name__ == "__main__":

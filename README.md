@@ -58,7 +58,11 @@ Support and validation status is tracked in
   complete run: the tool's completion message, exit code 0, complete
   reports or counters of this run, and the same inputs (hash of the
   sources and the manifest) when a result is evaluated again or a netlist
-  reused.
+  reused. Vivado scripts also write a status file (`synth_status.jsonl`:
+  outcome of each `synth_design`, error message, time, run id of the
+  attempt); a pass needs "ok" there, an expected stop needs "failed", the
+  error of the check in the log, and a non-zero exit code where the exit
+  code is measured to be reliable (Windows; `docs/PLAN.md` 3.15).
 - The runs that feed `docs/results/` are campaigns (`--campaign NAME`):
   nothing is pruned, the logs of every attempt are archived, compressed,
   outside the repository (`LM_EDA_ARCHIVE_DIR`, default `lm_eda_archive` in

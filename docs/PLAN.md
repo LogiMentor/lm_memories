@@ -914,8 +914,15 @@ the summary in `<campaign root>/summary.md`.
   had none. The antivirus on this machine is HP Wolf Pro Security (Windows
   Defender is off); a scanner holding new files, and files being read by
   many processes, fits the pattern but is not proven. The default work root
-  on Windows is now `C:/lmeda` (outside `%TEMP%`, `tools/eda_workdir.py`);
-  the retry policy (section 3.6) retries these signatures three times.
+  on Windows is now `C:/lmeda` (outside `%TEMP%`, `tools/eda_workdir.py`),
+  but that alone does not help: the pilot run under
+  `C:/lmeda/verify_pilot_20261104T091856Z` (commit `16320b8`) lost 6 of
+  its 13 attempts the same way (under `.Xil` in `C:/lmeda` and in the
+  installation, plus one "rt-undefined"); the retry policy (section 3.6,
+  three attempts) recovered every case. With that failure rate a campaign
+  of about a hundred runs will end some cases as `tool-error`; the
+  exclusion of the work root and of the Vivado installation from the
+  antivirus scan is the next thing to try.
 
 ## Appendix: how the reproduction was run
 

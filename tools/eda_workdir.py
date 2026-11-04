@@ -5,8 +5,10 @@
 - Root: $LM_EDA_WORKDIR; by default C:/lmeda on Windows and "lmeda" in the
   system temporary directory elsewhere. Not %TEMP% on Windows: the AMD
   campaign of 2026-11-04 failed three attempts of one case with "couldn't
-  read file" on a file Vivado had just written under .Xil in %TEMP%, a
-  pattern of a file scanner on new files there (PLAN 3.15). Keep the root
+  read file" on a file Vivado had just written under .Xil in %TEMP%. Moving
+  the root does not avoid that error by itself (it also hits files of the
+  Vivado installation, PLAN 3.15); it gives one fixed directory to exclude
+  from the antivirus scan. Keep the root
   short: Vivado builds paths under .Xil from the work directory and fails
   beyond 260 characters on Windows ([Common 17-680]).
 - Each script has its own subdirectory: work_root("vs") for vendor_synth,

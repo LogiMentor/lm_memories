@@ -842,6 +842,26 @@ the summary in `<campaign root>/summary.md`.
   `--campaign <name>_rerun`. A `fail` is never run again. The summary lists
   every rerun with its first and second result; a step whose only
   non-passing cases were tool-errors passes only if each rerun passed.
+- **Retries in the pilot:** the pilot follows the same policy, case by
+  case (each launcher case, the 1000-for-1024 run, each old-code case): a
+  case that ends as `tool-error` (a transient signature of
+  `tools/eda_retry.py` and no error of the project) runs again, at most
+  twice, each attempt in its own directory (`<check>/<case>/attempt<n>`),
+  kept and archived with the pilot. A `fail` stops the pilot at once; the
+  pilot fails if a case failed or is still a `tool-error` after its
+  reruns. The old code is judged with the current rules of
+  `eda_retry.py` on its log, not with the older rules of its own
+  vendor_synth. The summary lists each case with its result, attempts,
+  tool runs (vendor_synth also retries inside one attempt) and transient
+  signatures. Three launches on `c1a6ac4` (2026-11-04) failed the pilot on
+  transient errors only: once `rt-undefined` in the single run of the
+  1000-for-1024 check (not retried then), once
+  `bad_r_w_infer_latency3` of the old code, whose three runs within 30
+  seconds could not read `rtSynthParallelPrep.tcl` (twice) and
+  `rtSynthCleanup.tcl` of the installation (files present, dated
+  2023-05-07). Synthesis stopped before elaboration (no generic bound, no
+  error of the design), and the same case completed in the launch before.
+  The pilot reported only "did not complete synthesis".
 - **Memory thresholds:** the thresholds of the EDA lock in effect
   (`LM_EDA_MIN_FREE_MB_SYNTH`, `LM_EDA_MIN_FREE_MB_SIM`) are written to
   `logs/steps.txt` at the start and shown in the summary.

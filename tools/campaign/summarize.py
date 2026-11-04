@@ -106,6 +106,36 @@ def _mutation(root: Path) -> dict:
           "failures": bad, "archive": data.get("archive")}
 
 
+def _cell(text: str) -> str:
+  return text.replace("|", "\\|").replace("\n", " ")
+
+
+def pilot_lines(pilot: dict) -> list[str]:
+  """The pilot section: the result of each check, then each case with its attempts (tools/campaign/pilot.py)."""
+  lines = []
+  for name in ("launcher", "generic_1000_for_1024", "old_code"):
+    entry = pilot.get(name)
+    if entry is None:
+      lines.append(f"- {name}: not run")
+      continue
+    lines.append(f"- {name}: {'ok' if entry['ok'] else 'FAILED'}")
+    lines += [f"  - {p}" for p in entry["problems"]]
+  cases = pilot.get("cases")
+  if not cases:
+    return lines
+  lines += ["", f"Each case that ended as tool-error ran again, at most {pilot.get('max_retries', '?')} times; "
+            "a fail stops the pilot. Tool runs: the attempts of the pilot and the retries of vendor_synth "
+            "inside each attempt. Signatures: every transient failure met (tools/eda_retry.py).", "",
+            "| Check | Case | Result | Attempts | Tool runs | Transient signatures | Problems |",
+            "| --- | --- | --- | --- | --- | --- | --- |"]
+  for c in cases:
+    signatures = "<br>".join(_cell(s[:160]) for s in c["signatures"]) or "-"
+    problems = _cell("; ".join(c["problems"])[:200]) or "-"
+    lines.append(f"| {c['check']} | {c['case']} | {c['status']} | {c['attempts']} | {c['tool_runs']} | "
+                 f"{signatures} | {problems} |")
+  return lines
+
+
 def main(argv: list[str] | None = None) -> int:
   argv = sys.argv[1:] if argv is None else argv
   root = Path(argv[0])
@@ -147,13 +177,7 @@ def main(argv: list[str] | None = None) -> int:
   lines = [f"# AMD campaign: {'PASS' if summary['ok'] else 'FAIL'}", "",
            f"Commit: `{summary['commit']}`", "",
            f"Memory thresholds of the EDA lock: {summary['memory_thresholds']}", "", "## Pilot", ""]
-  for name in ("launcher", "generic_1000_for_1024", "old_code"):
-    entry = pilot.get(name)
-    if entry is None:
-      lines.append(f"- {name}: not run")
-      continue
-    lines.append(f"- {name}: {'ok' if entry['ok'] else 'FAILED'}")
-    lines += [f"  - {p}" for p in entry["problems"]]
+  lines += pilot_lines(pilot)
   lines += ["", "## Steps", "", "| Step | Exit code | Result | Archive (SHA-256) |", "| --- | --- | --- | --- |"]
   for name, s in summary["steps"].items():
     detail = {k: s[k] for k in ("counts", "total", "runs", "reruns", "passed", "detected", "baseline") if k in s}

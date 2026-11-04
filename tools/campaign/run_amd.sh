@@ -21,8 +21,10 @@
 #
 # Steps:
 #   pilot           python -m tools.campaign.pilot (launcher exit codes,
-#                   string generics, 1000 for 1024, old code); if it fails,
-#                   the script stops with exit code 1
+#                   string generics, 1000 for 1024, old code); a case that
+#                   ends as tool-error runs again, at most twice; if a case
+#                   fails or stays a tool-error, the script stops with exit
+#                   code 1
 #   vivado          vendor_synth, vivado_check.toml (55 cases)
 #   checks_vivado   vendor_synth, fallback_check.toml (with and without -assert)
 #   checks_quartus  vendor_synth, quartus_check.toml

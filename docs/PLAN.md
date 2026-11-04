@@ -893,6 +893,14 @@ the summary in `<campaign root>/summary.md`.
   reliable (`vivado_exit_code_reliable`: Windows; elsewhere it is recorded,
   not required). A pass needs "ok" there as well as exit code 0. Quartus has
   no status file and keeps the exit-code requirement.
+- **Two writers on `vivado.log`.** Without `-log`, Vivado writes
+  `vivado.log` in its working directory. `run_postsynth.py` captured the
+  console output into the same file, and the two writers interleaved their
+  lines: on 2026-11-04 a synthesis that ended well (status file "ok") lost
+  its "synth_design completed successfully" line and was judged failed.
+  Vivado now writes `vivado_tool.log` (`-log`). To check in every script
+  that captures the console of Vivado into a file in its working
+  directory.
 - **"couldn't read file" from Vivado's own Tcl.** The campaign of
   2026-11-04 lost three attempts of one case to
   `couldn't read file ".../.Xil/Vivado-<pid>/realtime\<top>.tcl": No error`,

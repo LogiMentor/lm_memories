@@ -11,6 +11,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("run_postsynth", ROOT_DIR / "sim" / "scripts" / "run_postsynth.py")
@@ -82,6 +83,22 @@ class ScriptTest(unittest.TestCase):
     # The outcome of synth_design goes to the status file of the work directory.
     self.assertRegex(script, r"set handle \[open \{[^}]*/synth_status\.jsonl\} a\]")
     self.assertIn("synth_status.jsonl", ps.KEEP_SYNTH)
+
+  def test_vivado_log_is_not_the_console_log(self) -> None:
+    # 2026-11-04: Vivado wrote its default vivado.log in the working directory,
+    # the file run_logged appends the console output to; the lines interleaved
+    # and "synth_design completed successfully" was lost.
+    g = dict(ps.RAM_CONFIGS)["crw_crw.1clk.16x64"]
+    commands = []
+    with tempfile.TemporaryDirectory() as tmp, \
+         mock.patch.object(ps, "heavy_tool_lock", lambda *a, **k: contextlib.nullcontext()), \
+         mock.patch.object(ps, "run_logged", lambda cmd, cwd, log, **k: commands.append((cmd, log)) or 1):
+      ps.synthesize(Path("C:/Xilinx/Vivado/2023.1"), "xc7a35tfgg484-2", "k", g, Path(tmp))
+    cmd, console = commands[0]
+    tool_log = Path(cmd[cmd.index("-log") + 1])
+    self.assertEqual(tool_log.name, ps.TOOL_LOG)
+    self.assertNotEqual(tool_log.name, console.name)
+    self.assertEqual(console.name, "vivado.log")
 
 
 class SelectionTest(unittest.TestCase):

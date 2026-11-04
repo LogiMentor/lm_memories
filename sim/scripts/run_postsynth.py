@@ -68,6 +68,8 @@ GHDL = os.environ.get("GHDL", "ghdl")
 PARTS = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
 # Kept in each synthesis directory after a passing campaign.
 KEEP_SYNTH = ("synth.json", "vivado*.log", "utilization.rpt", "run.tcl", "synth_status.jsonl")
+# Log file of Vivado itself; vivado.log holds the console output of the run.
+TOOL_LOG = "vivado_tool.log"
 ADAPTER_RTL = ROOT_DIR / "sim" / "vunit" / "lm_mem_tb_dut.vhd"
 HARNESS_FILESET = "tb_harness"
 RESULT_RE = re.compile(r"lm_mem_tb_harness \S+ \[[^\]]*\]: (.*)")
@@ -268,8 +270,14 @@ def synthesize(vivado_dir: Path, part: str, key: str, g: dict, work: Path, commo
   script.write_text(inputs["script_text"], encoding="utf-8")
   util = work / "utilization.rpt"
   log = work / "vivado.log"
+  # Vivado writes its own log to a separate file: by default it is vivado.log
+  # in the working directory, the file that run_logged writes the console
+  # output to, and the two writers interleaved their lines (the completion
+  # message was lost, 2026-11-04).
+  tool_log = work / TOOL_LOG
   cmd = (["cmd", "/c", str(vivado_dir / "bin" / "vivado.bat")] if os.name == "nt" else
-         [str(vivado_dir / "bin" / "vivado")]) + ["-mode", "batch", "-nojournal", "-source", tcl(script)]
+         [str(vivado_dir / "bin" / "vivado")]) + ["-mode", "batch", "-nojournal", "-log", tcl(tool_log),
+                                                  "-source", tcl(script)]
   status_file = work / check.STATUS_FILE
   code = None
   run_id = None

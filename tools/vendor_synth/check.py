@@ -103,6 +103,25 @@ def read_synth_status(path: Path, run_id: str | None) -> tuple[dict[str, Any] | 
   return (finished[-1] if finished else events[-1]), problems
 
 
+def synth_died(path: Path, run_id: str | None, log_text: str = "") -> str | None:
+  """Why the tool died inside synth_design, or None.
+
+  The script writes "started" before synth_design and "ok" or "failed" after
+  it returns. A run of this run id that ends with "started" never returned
+  from synth_design: the tool died (2026-11-04: Vivado printed the stop of
+  the check, "synth_design failed", then "called Tcl_Close on channel with
+  refCount > 0" and exited with 3). Whatever the log says, such a run has no
+  result. A missing file or run id is not a death (read_synth_status reports
+  it).
+  """
+  record, _ = read_synth_status(path, run_id)
+  if record is None or record.get("outcome") != "started":
+    return None
+  lines = [line.strip() for line in log_text.splitlines() if line.strip()]
+  last = f"; last log line: {lines[-1][:120]}" if lines else ""
+  return f"synth_design started at {record.get('time', '?')} and never returned (status file){last}"
+
+
 def vivado_exit_code_reliable(os_name: str = os.name) -> bool:
   """True where the exit code of a Vivado run is measured to reach vendor_synth.
 

@@ -116,6 +116,29 @@ class EdaRetryTest(unittest.TestCase):
     self.assertFalse(persisted)
 
 
+class ToolDiedTest(unittest.TestCase):
+  # The stop of a static check printed, then the tool died (2026-11-04).
+  DIED = ('ERROR: [Synth 8-63] RTL assertion: "lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth"\n'
+          "synth_design failed\ncalled Tcl_Close on channel with refCount > 0\n")
+
+  def test_a_died_tool_is_retried_whatever_its_log(self) -> None:
+    self.assertIsNotNone(project_error(self.DIED))
+    self.assertIsNone(retry_reason(self.DIED, completed=False, roots=ROOTS))
+    self.assertEqual(retry_reason(self.DIED, completed=False, roots=ROOTS, died="started, never returned"),
+                     "tool-died: started, never returned")
+    # A completed run is a result, even if the caller thinks the tool died.
+    self.assertIsNone(retry_reason(OK, completed=True, roots=ROOTS, died="x"))
+
+  def test_run_with_retries_asks_the_caller(self) -> None:
+    deaths = iter(["started, never returned", None])
+    logs = iter([self.DIED, DESIGN_ERROR])
+    text, attempts, persisted = run_with_retries(lambda attempt: next(logs), completed=done, roots=ROOTS,
+                                                 died=lambda text: next(deaths), delays=(0.0,), sleep=lambda s: None)
+    self.assertEqual(text, DESIGN_ERROR)
+    self.assertEqual(attempts, ["attempt 1: tool-died: started, never returned; waited 0 s before attempt 2"])
+    self.assertFalse(persisted)
+
+
 class RetryDelayTest(unittest.TestCase):
   def test_default_waits_are_30_then_60_seconds(self) -> None:
     with mock.patch.dict(os.environ, {RETRY_DELAYS_ENV: ""}):

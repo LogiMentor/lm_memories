@@ -11,9 +11,15 @@ this order, for each attempt:
 1. A completed run is a result and is never retried, whatever its log says
    (completed: a predicate of the caller, for example "synth_design
    completed successfully" and exit code 0).
-2. A run with an error of the project (any error message other than the
+2. A run in which the tool died during its step is retried, whatever its log
+   says (died: a predicate of the caller, for example the status file of
+   synth_design still at "started", tools/vendor_synth/check.py). The run
+   has no result, even when the log already shows an error of the project:
+   on 2026-11-04 Vivado printed the expected stop of a static check and
+   then died before synth_design returned (signature "tool-died").
+3. A run with an error of the project (any error message other than the
    generic "command failed" of the tool) is a result and is never retried.
-3. Otherwise the run is retried if its log has one of the signatures below.
+4. Otherwise the run is retried if its log has one of the signatures below.
    "couldn't read file" counts only for a file of the tool installation
    (roots, given by the caller) or one the tool generated (a path through a
    .Xil directory).
@@ -143,9 +149,16 @@ def transient_reason(text: str, roots: Iterable[str | Path] = ()) -> str | None:
   return None
 
 
-def retry_reason(text: str, completed: bool, roots: Iterable[str | Path] = ()) -> str | None:
-  """Why this attempt must be run again, or None if its log is a result."""
-  if completed or project_error(text) is not None:
+def retry_reason(text: str, completed: bool, roots: Iterable[str | Path] = (), died: str | None = None) -> str | None:
+  """Why this attempt must be run again, or None if its log is a result.
+
+  died: why the tool died during its step (the caller knows), or None.
+  """
+  if completed:
+    return None
+  if died is not None:
+    return f"tool-died: {died}"
+  if project_error(text) is not None:
     return None
   return transient_reason(text, roots)
 
@@ -193,13 +206,15 @@ def run_with_retries(
   roots: Iterable[str | Path] = (),
   log_path: Path | None = None,
   max_retries: int = MAX_RETRIES,
+  died: Callable[[str], str | None] = lambda text: None,
   delays: tuple[float, ...] | None = None,
   sleep: Callable[[float], None] = time.sleep,
 ) -> tuple[str, list[str], bool]:
   """Run a tool until its log is a result, at most 1 + max_retries times.
 
   run_once(attempt) runs the tool once, writing its log to log_path if given,
-  and returns the log text; completed(text) tells whether that run completed.
+  and returns the log text; completed(text) tells whether that run completed,
+  died(text) why the tool died during its step (rule 2) or None.
   Before each rerun it waits retry_delay (delays: default retry_delays()).
   Returns the last log text, one record per retried attempt ("attempt <n>:
   <reason>", with "; waited <s> s before attempt <n+1>" when a rerun
@@ -211,7 +226,8 @@ def run_with_retries(
   delays = retry_delays() if delays is None else delays
   for attempt in range(max_retries + 1):
     text = run_once(attempt)
-    reason = retry_reason(text, completed(text), roots)
+    done = completed(text)
+    reason = retry_reason(text, done, roots, None if done else died(text))
     if reason is None:
       return text, attempts, False
     if log_path is not None and log_path.is_file():

@@ -73,6 +73,20 @@ if calls < spec.get("fail_reads", 0):
     print("ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
     status("failed", "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
     sys.exit(1)
+if "stop" in spec:
+    # An expected stop of a static check, as Vivado prints it. While calls <
+    # die_calls, Vivado dies before synth_design returns (campaign of
+    # 2026-11-04): no "failed" in the status file, exit code 3.
+    print("Command: synth_design -mode out_of_context -top " + re.search(r"-top (\S+)", script).group(1))
+    for line in spec["stop"]:
+        print(line)
+    print("synth_design failed")
+    if calls < spec.get("die_calls", 0):
+        print("called Tcl_Close on channel with refCount > 0")
+        sys.exit(3)
+    status("failed", "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
+    print("lm_vendor_synth: synth_design failed: Vivado Synthesis failed")
+    sys.exit(1)
 os.makedirs(".Xil", exist_ok=True)  # tool scratch, removed after a passing run
 open(os.path.join(".Xil", "junk.tcl"), "w").write("x")
 top = re.search(r"-top (\S+)", script).group(1)
@@ -187,7 +201,7 @@ class VendorRunTest(unittest.TestCase):
     self.tmp.cleanup()
 
   def _run(self, spec: dict, case: str = "r_w_16x64", part: str = "xc7a35tfgg484-2", executable=None,
-           extra_args: tuple[str, ...] = ()) -> dict:
+           extra_args: tuple[str, ...] = (), job_extra: dict | None = None) -> dict:
     self.spec.write_text(repr(spec), encoding="utf-8")
     config = self.root / "config.json"
     work = self.root / "work"
@@ -196,7 +210,7 @@ class VendorRunTest(unittest.TestCase):
       "jobs": [{
         "name": "fake", "enabled": True, "tool": "vivado", "vendor": "amd", "family": "artix7",
         "part": part, "command": executable or [sys.executable, str(self.fake)], "cases": [case],
-        "install_dir": spec["install_dir"],
+        "install_dir": spec["install_dir"], **(job_extra or {}),
       }],
     }), encoding="utf-8")
     code = main(["--config", str(config), *extra_args])
@@ -292,14 +306,17 @@ class VendorRunTest(unittest.TestCase):
   def test_truncated_log_is_not_a_pass(self) -> None:
     result = self._run(self._good_spec(truncate=True))
     self.assertEqual(result["status"], "tool-error")
-    self.assertIn("synth_design completed successfully", result["problems"][0])
+    # The tool died inside synth_design (status file still "started"): run again, then tool-error.
+    self.assertEqual(len(result["retries"]), 3)
+    self.assertTrue(all("tool-died: synth_design started" in r for r in result["retries"]), result["retries"])
+    self.assertTrue(any("synth_design completed successfully" in p for p in result["problems"]), result["problems"])
 
   def test_truncated_run_does_not_reuse_the_reports_of_an_earlier_run(self) -> None:
     self.assertEqual(self._run(self._good_spec())["status"], "pass")
     (self.root / "calls.txt").unlink()
     result = self._run(self._good_spec(truncate=True), extra_args=("--no-clean",))
     self.assertEqual(result["status"], "tool-error", result["problems"])
-    self.assertIn("no utilization report", result["problems"][0])
+    self.assertTrue(any("no utilization report" in p for p in result["problems"]), result["problems"])
 
   def test_pass_needs_ok_in_the_status_file_of_this_attempt(self) -> None:
     # Missing status, or an "ok" of another run id (an earlier attempt or run).
@@ -311,6 +328,56 @@ class VendorRunTest(unittest.TestCase):
       self.assertIn(f"status file: synth_design of this run is {shown}", result["problems"][0])
     record = json.loads((Path(result["work_dir"]) / "run.json").read_text(encoding="utf-8"))
     self.assertRegex(record["run_id"], r"^[0-9a-f]{32}$")
+
+  # The stop of bad_fifo_almost_full_0 with -assert, as in the campaign of 2026-11-04
+  # (C:/r: the repository).
+  FIFO_STOP = [line.replace("C:/r/", Path(__file__).resolve().parents[2].as_posix() + "/") for line in [
+    "INFO: [Synth 8-638] synthesizing module 'lm_mem_fifo_sync' [C:/r/src/fifo/lm_mem_fifo_sync.vhd:45]",
+    "\tParameter g_data_w bound to: 32 - type: integer ",
+    "\tParameter g_depth bound to: 16 - type: integer ",
+    "\tParameter g_almost_full_limit bound to: 0 - type: integer ",
+    "INFO: [Synth 8-638] synthesizing module 'lm_mem_fifo' [C:/r/src/fifo/lm_mem_fifo.vhd:53]",
+    'ERROR: [Synth 8-63] RTL assertion: "lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth" '
+    "[C:/r/src/common/lm_mem_pkg.vhd:101]",
+    "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [C:/r/src/fifo/lm_mem_fifo.vhd:53]",
+  ]]
+
+  def test_a_stop_where_vivado_died_runs_again(self) -> None:
+    # The check stopped, then Vivado died before synth_design returned: the
+    # status file stays at "started". Not a fail: a tool-error, run again.
+    spec = self._good_spec(stop=self.FIFO_STOP, die_calls=1)
+    result = self._run(spec, case="bad_fifo_almost_full_0", job_extra={"assert": True})
+    self.assertEqual(result["status"], "pass", result["problems"])
+    self.assertEqual(len(result["retries"]), 1)
+    self.assertIn("tool-died: synth_design started at", result["retries"][0])
+    self.assertIn("last log line: called Tcl_Close on channel with refCount > 0", result["retries"][0])
+    self.assertEqual((self.root / "calls.txt").read_text(), "2")
+
+  def test_a_stop_where_vivado_always_dies_is_a_tool_error(self) -> None:
+    spec = self._good_spec(stop=self.FIFO_STOP, die_calls=9)
+    result = self._run(spec, case="bad_fifo_almost_full_0", job_extra={"assert": True})
+    self.assertEqual(result["status"], "tool-error", result["problems"])
+    self.assertEqual(len(result["retries"]), 3)
+    self.assertIn("status file: synth_design of this run is started", "; ".join(result["problems"]))
+
+  def test_a_died_stop_evaluated_again_is_a_tool_error(self) -> None:
+    # --evaluate-only on the log of the campaign: tool-error, not fail.
+    spec = self._good_spec(stop=self.FIFO_STOP, die_calls=9)
+    self._run(spec, case="bad_fifo_almost_full_0", job_extra={"assert": True})
+    record_file = self.root / "work" / "fake" / "bad_fifo_almost_full_0" / "run.json"
+    record = json.loads(record_file.read_text(encoding="utf-8"))
+    record["persisted"] = False  # as if the run had been evaluated before this policy
+    record_file.write_text(json.dumps(record), encoding="utf-8")
+    result = self._run(spec, case="bad_fifo_almost_full_0", job_extra={"assert": True},
+                       extra_args=("--evaluate-only",))
+    self.assertEqual(result["status"], "tool-error", result["problems"])
+    self.assertIn("tool-died", result["problems"][0])
+
+  def test_a_stop_that_returned_is_not_run_again(self) -> None:
+    spec = self._good_spec(stop=self.FIFO_STOP)
+    result = self._run(spec, case="bad_fifo_almost_full_0", job_extra={"assert": True})
+    self.assertEqual(result["status"], "pass", result["problems"])
+    self.assertEqual(result["retries"], [])
 
   def test_nonzero_exit_code_is_not_a_pass(self) -> None:
     result = self._run(self._good_spec(exit_code=3))

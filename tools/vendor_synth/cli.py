@@ -1096,8 +1096,11 @@ def _evaluate(
     module = _generics_module(case, top)
     if log and module is not None:
       problems += check.check_generics(case.get("generics", {}), log["module_generics"].get(module.lower(), {}))
-    # A tool that stopped before elaborating the design says nothing about the check.
-    status = "pass" if not problems else ("fail" if facts["elaborated"] else "tool-error")
+    # A tool that stopped before elaborating the design, or died before
+    # synth_design returned (status file still "started"), says nothing
+    # about the check.
+    died = bool(vivado and status[0] and status[0].get("outcome") == "started")
+    status = "pass" if not problems else ("fail" if facts["elaborated"] and not died else "tool-error")
     return {"status": status, "problems": problems, "metrics": facts, "log": log}
   if tool not in ("vivado", "xilinx"):
     return {"status": "unchecked", "problems": [f"no result extraction for tool {tool} yet"], "metrics": {}, "log": {}}
@@ -1231,7 +1234,9 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     else:
       # The policy of a real run, applied again to the log that is evaluated.
       done = record.get("return_code") == 0 and check.tool_completed(_tool(job), text)
-      reason = retry_reason(text, completed=done, roots=_tool_roots(job))
+      died = (check.synth_died(reports / check.STATUS_FILE, record.get("run_id"), text)
+              if _tool(job) in ("vivado", "xilinx") else None)
+      reason = retry_reason(text, completed=done, roots=_tool_roots(job), died=died)
       if reason:
         evaluation["status"] = "tool-error"
         evaluation["problems"].insert(0, f"transient tool failure in the log: {reason}")
@@ -1283,10 +1288,16 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     # A timeout is a result, never retried.
     return timed_out or (result["return_code"] == 0 and check.tool_completed(_tool(job), text))
 
+  def died(text: str) -> str | None:
+    # Vivado: synth_design of this attempt started and never returned.
+    if _tool(job) not in ("vivado", "xilinx"):
+      return None
+    return check.synth_died(reports / check.STATUS_FILE, result["run_id"], text)
+
   # Shared retry policy (tools/eda_retry.py): every retried attempt is recorded
   # and its log kept as run.attempt<n>.log.
   text, result["retries"], persisted = run_with_retries(run_once, completed=completed, roots=_tool_roots(job),
-                                                        log_path=log_file)
+                                                        log_path=log_file, died=died)
 
   result["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
   record = {key: result[key] for key in ("provenance", "run_id", "started_at", "completed_at", "return_code",

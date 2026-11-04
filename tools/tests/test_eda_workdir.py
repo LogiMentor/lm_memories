@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tools.eda_workdir import WORKDIR_ENV, prune, work_root
+from tools.eda_workdir import WORKDIR_ENV, default_base, prune, work_root
 
 
 class EdaWorkdirTest(unittest.TestCase):
@@ -19,7 +19,13 @@ class EdaWorkdirTest(unittest.TestCase):
       self.assertEqual(work_root("vs"), Path("C:/eda") / "vs")
     env = {k: v for k, v in os.environ.items() if k != WORKDIR_ENV}
     with mock.patch.dict(os.environ, env, clear=True):
-      self.assertEqual(work_root("ps"), Path(tempfile.gettempdir()) / "lmeda" / "ps")
+      expected = Path("C:/lmeda") if os.name == "nt" else Path(tempfile.gettempdir()) / "lmeda"
+      self.assertEqual(work_root("ps"), expected / "ps")
+
+  def test_default_root_is_outside_temp_on_windows(self) -> None:
+    # Campaign of 2026-11-04: "couldn't read file" on new files under .Xil in %TEMP%.
+    self.assertEqual(default_base("nt"), Path("C:/lmeda"))
+    self.assertEqual(default_base("posix"), Path(tempfile.gettempdir()) / "lmeda")
 
   def test_prune_keeps_only_matching_entries(self) -> None:
     with tempfile.TemporaryDirectory() as tmp:

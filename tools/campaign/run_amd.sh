@@ -11,7 +11,8 @@
 #
 # Environment (defaults in brackets):
 #   LM_CAMPAIGN_ROOT     campaign directory, must be new or empty
-#                        [$LM_EDA_WORKDIR/c, or lmeda/c in the system temp]
+#                        [$LM_EDA_WORKDIR/c; default C:/lmeda/c on Windows,
+#                        lmeda/c in the system temp elsewhere]
 #   LM_EDA_ARCHIVE_DIR   archives [~/lm_eda_archive]
 #   LM_VIVADO_DIR        [C:/Xilinx/Vivado/2023.1]
 #   LM_QUARTUS_DIR       [C:/intelFPGA_lite/23.1std/quartus] (checked only)

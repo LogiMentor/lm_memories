@@ -255,9 +255,10 @@ python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --eva
   failed` without an error message. Every failed attempt is recorded; a
   failure that persists is a `tool-error`.
 - Runs are sequential and hold the machine-wide lock described above.
-- Results go to `$LM_EDA_WORKDIR/vs` (default: `lmeda/vs` in the system
-  temporary directory; keep the path short, Vivado fails beyond 260
-  characters on Windows), or to `--work-root`. Each run writes `summary.md`,
+- Results go to `$LM_EDA_WORKDIR/vs` (default: `C:/lmeda/vs` on Windows,
+  outside `%TEMP%`; `lmeda/vs` in the system temporary directory elsewhere;
+  keep the path short, Vivado fails beyond 260 characters on Windows), or to
+  `--work-root`. Each run writes `summary.md`,
   `summary.csv`, `summary.json`, and `summary_public.json` (no local paths).
   A passing case keeps only its log, reports and script; a failing one keeps
   everything (`--keep-work` keeps everything always). The checked results

@@ -2,7 +2,11 @@
 # Copyright 2026 LogiMentor Srl
 """Work directories of heavy EDA runs (synthesis, post-synthesis simulation).
 
-- Root: $LM_EDA_WORKDIR, or "lmeda" in the system temporary directory. Keep it
+- Root: $LM_EDA_WORKDIR; by default C:/lmeda on Windows and "lmeda" in the
+  system temporary directory elsewhere. Not %TEMP% on Windows: the AMD
+  campaign of 2026-11-04 failed three attempts of one case with "couldn't
+  read file" on a file Vivado had just written under .Xil in %TEMP%, a
+  pattern of a file scanner on new files there (PLAN 3.15). Keep the root
   short: Vivado builds paths under .Xil from the work directory and fails
   beyond 260 characters on Windows ([Common 17-680]).
 - Each script has its own subdirectory: work_root("vs") for vendor_synth,
@@ -24,11 +28,16 @@ from collections.abc import Iterable
 from pathlib import Path
 
 WORKDIR_ENV = "LM_EDA_WORKDIR"
+WINDOWS_DEFAULT = Path("C:/lmeda")
+
+
+def default_base(os_name: str = os.name) -> Path:
+  return WINDOWS_DEFAULT if os_name == "nt" else Path(tempfile.gettempdir()) / "lmeda"
 
 
 def workdir_base() -> Path:
   value = os.environ.get(WORKDIR_ENV)
-  return Path(value) if value else Path(tempfile.gettempdir()) / "lmeda"
+  return Path(value) if value else default_base()
 
 
 def work_root(name: str) -> Path:

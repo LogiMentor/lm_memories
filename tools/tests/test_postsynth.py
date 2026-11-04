@@ -55,21 +55,48 @@ class ParseResultTest(unittest.TestCase):
 
 UNISIM_PATH = (r"::tb_lm_mem_ram_plain:inst_harness:inst_dut:gen_crw_crw_16x64_16_l11:inst_dut:"
                r"\inst/gen_crw_crw.inst_dut/sv_mem_reg\:tdp:ramb18e1_tdp_inst:")
-RAMB = {r"\inst/gen_crw_crw.inst_dut/sv_mem_reg" + "\\": {"primitive": "RAMB18E1", "READ_WIDTH_A": 18,
-                                                         "READ_WIDTH_B": 18, "WRITE_WIDTH_A": 18,
-                                                         "WRITE_WIDTH_B": 18}}
-COLL = {"instances": RAMB, "a_w": 16, "b_w": 16}
 
 
-def model_ww(t_ns: int, addr: str, sim: str = "ghdl") -> str:
+def ramb(label: str, primitive: str, addr_a: list[str], addr_b: list[str], en_a: str = "enb_i",
+         en_b: str = "ena_i", width: int = 18) -> str:
+  """A block RAM instance as write_vhdl -mode funcsim writes it."""
+  ports = ([f"      ADDRARDADDR{a}" for a in addr_a] + [f"      ADDRBWRADDR{b}" for b in addr_b]
+           + [f"      ENARDEN => {en_a}", f"      ENBWREN => {en_b}", "      WEA(0) => wen_b_i",
+              "      WEBWE(0) => wen_a_i"])
+  return (f"{label}: unisim.vcomponents.{primitive}\n    generic map(\n      READ_WIDTH_A => {width},\n"
+          f"      READ_WIDTH_B => {width},\n      SIM_COLLISION_CHECK => \"ALL\",\n      WRITE_WIDTH_A => {width},\n"
+          f"      WRITE_WIDTH_B => {width}\n    )\n        port map (\n" + ",\n".join(ports) + "\n    );\n")
+
+
+def lut2(label: str, init: str, i0: str, i1: str, out: str) -> str:
+  return (f"{label}: unisim.vcomponents.LUT2\n    generic map(\n      INIT => X\"{init}\"\n    )\n"
+          f"        port map (\n      I0 => {i0},\n      I1 => {i1},\n      O => {out}\n    );\n")
+
+
+LABEL = r"\inst/gen_crw_crw.inst_dut/sv_mem_reg" + "\\"
+# crw_crw.1clk.16x64 on xc7a35tfgg484-2 (2026-11-04): port A of the primitive
+# is port B of the DUT and the other way round; the low bits and the unused
+# high bits are constants.
+NETLIST_16X64 = ramb(LABEL, "RAMB18E1",
+                     ['(13 downto 10) => B"0000"', "(9 downto 4) => addr_b_i(5 downto 0)", '(3 downto 0) => B"0000"'],
+                     ['(13 downto 10) => B"0000"', "(9 downto 4) => addr_a_i(5 downto 0)", '(3 downto 0) => B"0000"'])
+
+
+def context(netlist: str = NETLIST_16X64, depth: int = 64, same_clock: bool = True, a_per: int = 10000,
+            b_per: int = 10000) -> dict:
+  return {"netlist": ps.parse_netlist(netlist), "a_w": 16, "b_w": 16, "a_depth": depth, "same_clock": same_clock,
+          "a_period_ps": a_per, "b_period_ps": b_per}
+
+
+def model_ww(t_ns: int, addr: str, sim: str = "ghdl", primitive: str = "RAMB18E1", path: str = UNISIM_PATH) -> str:
   # The shape of the real logs of crw_crw.1clk.16x64 on xc7a35tfgg484-2 (2026-11-04).
-  head = (f"Memory Collision Error on RAMB18E1 {UNISIM_PATH} at simulation time {t_ns} ns.\n"
+  head = (f"Memory Collision Error on {primitive} {path} at simulation time {t_ns} ns.\n"
           f" A write was requested to the same address simultaneously at both port A and port B of the RAM. "
           f"The contents written to the RAM at address location {addr} (hex) of port A and address location "
           f"{addr} (hex) of port B are unknown. \n")
   if sim == "ghdl":
-    return f"RAMB18E1.vhd:1424:11:@{t_ns}ns:(assertion error):  " + head
-  return "Error:  " + head + f"Time: {t_ns} ns  Iteration: 3  Process: /x/prcs_clk  File: RAMB18E1.vhd\n"
+    return f"{primitive}.vhd:1424:11:@{t_ns}ns:(assertion error):  " + head
+  return "Error:  " + head + f"Time: {t_ns} ns  Iteration: 3  Process: /x/prcs_clk  File: {primitive}.vhd\n"
 
 
 def model_rw(t_ns: int, addr: str, read_port: str = "B") -> str:
@@ -97,46 +124,111 @@ def harness_line(ww: int, rw: int) -> str:
 
 
 class CollisionPairingTest(unittest.TestCase):
-  # Netlist simulations: a collision error of a UNISIM block RAM model is
-  # accepted only when paired with a collision of the harness (2026-11-04:
-  # 13 "Memory Collision Error on RAMB18E1" = collisions_ww=13 failed the run).
-  def _run(self, model: str, harness: str, ww: int, rw: int = 0) -> dict:
-    return ps.parse_result(harness + model + harness_line(ww, rw) + PASS, 0, COLL)
+  # Netlist simulations: every collision error of a UNISIM block RAM model
+  # must pair with a collision of the harness that excluded the read or made
+  # the cells undefined; a harness collision without a model message is
+  # allowed (2026-11-04: 13 "Memory Collision Error on RAMB18E1" for
+  # collisions_ww=13 failed the run).
+  def _run(self, model: str, harness: str, ww: int, rw: int = 0, ctx: dict | None = None) -> dict:
+    return ps.parse_result(harness + model + harness_line(ww, rw) + PASS, 0, ctx or context())
 
   def test_each_model_collision_paired_passes(self) -> None:
     for sim in ("ghdl", "xsim"):
       model = model_ww(1460, "0050", sim) + model_ww(2750, "00d0", sim)
       result = self._run(model, harness_ww(5, 1460) + harness_ww(13, 2750), ww=2)
       self.assertEqual(result["verdict"], "PASS", (sim, result["problems"]))
-      self.assertEqual(result["collisions"]["accepted"], 2)
+      self.assertEqual((result["collisions"]["accepted"], result["collisions"]["paired_ww"]), (2, 2))
 
   def test_one_more_in_the_model_fails(self) -> None:
-    model = model_ww(1460, "0050") + model_ww(2750, "00d0") + model_ww(3840, "0030")
-    result = self._run(model, harness_ww(5, 1460) + harness_ww(13, 2750), ww=2)
-    self.assertEqual(result["verdict"], "FAIL")
-    self.assertTrue(any("no matching collision in the harness" in p for p in result["problems"]), result)
-    self.assertTrue(any("1 fatal diagnostics" in p for p in result["problems"]), result)
+    for extra in (model_ww(3840, "0030"), model_ww(1460, "0050")):  # no collision; the same one twice
+      model = model_ww(1460, "0050") + model_ww(2750, "00d0") + extra
+      result = self._run(model, harness_ww(5, 1460) + harness_ww(13, 2750), ww=2)
+      self.assertEqual(result["verdict"], "FAIL", extra)
+      self.assertTrue(any("no matching collision in the harness" in p for p in result["problems"]), result)
+      self.assertTrue(any("1 fatal diagnostics" in p for p in result["problems"]), result)
 
-  def test_one_less_in_the_model_fails(self) -> None:
+  def test_harness_collision_without_model_message_passes(self) -> None:
+    # Coverage lost, not an error: the model is silent (UltraScale+ with two
+    # clocks, same data written, READ_FIRST with one clock).
     result = self._run(model_ww(1460, "0050"), harness_ww(5, 1460) + harness_ww(13, 2750), ww=2)
-    self.assertEqual(result["verdict"], "FAIL")
-    self.assertTrue(any("1 write/write collisions of the model paired, 2 in the harness" in p
-                        for p in result["problems"]), result["problems"])
+    self.assertEqual(result["verdict"], "PASS", result["problems"])
+    self.assertEqual(self._run("", harness_ww(5, 1460), ww=1)["verdict"], "PASS")
 
   def test_other_instant_or_address_does_not_pair(self) -> None:
     for model in (model_ww(1470, "0050"), model_ww(1460, "0060")):
       result = self._run(model, harness_ww(5, 1460), ww=1)
       self.assertEqual(result["verdict"], "FAIL", model)
 
-  def test_read_write_pairs_with_the_read_or_the_write_instant(self) -> None:
-    # Harness read/write collisions without a model message are allowed
-    # (one clock, READ_FIRST: old data, no message from the model).
-    harness = harness_rw("B", 5, 1460, 1460) + harness_rw("A", 8, 585, 585)
-    result = self._run(model_rw(1460, "0050"), harness, ww=0, rw=2)
+  def test_read_write_pairs_on_the_dut_port_of_the_read(self) -> None:
+    # Port B of the primitive is port A of the DUT (netlist).
+    harness = harness_rw("A", 5, 1460, 1460) + harness_rw("B", 8, 585, 585)
+    result = self._run(model_rw(1460, "0050", read_port="B"), harness, ww=0, rw=2)
     self.assertEqual(result["verdict"], "PASS", result["problems"])
+    self.assertEqual(result["collisions"]["paired_rw"], 1)
     # Another cell, another port or another instant: not paired.
     for model in (model_rw(1460, "0060"), model_rw(1460, "0050", read_port="A"), model_rw(1500, "0050")):
       self.assertEqual(self._run(model, harness, ww=0, rw=2)["verdict"], "FAIL", model)
+
+  def test_two_clocks_message_at_the_edge_of_the_writing_port(self) -> None:
+    # crw_cw.2clk.32x1024.lat1 (2026-11-04): read of DUT port A at 11570 ns
+    # (clock A 10 ns), model message at 11571 ns, the write edge of port B
+    # (clock B 7 ns); the harness names another write of its window.
+    ctx = context(same_clock=False, a_per=10000, b_per=7000)
+    harness = harness_rw("A", 8, 11570, 11578)
+    self.assertEqual(self._run(model_rw(11571, "0080"), harness, ww=0, rw=1, ctx=ctx)["verdict"], "PASS")
+    # Not at an edge of the writing port, at an edge of the reading port, or
+    # a read outside the window of the harness: not paired.
+    for t_ns, h in ((11572, harness), (11580, harness), (11571, harness_rw("A", 8, 11560, 11578))):
+      result = self._run(model_rw(t_ns, "0080"), h, ww=0, rw=1, ctx=ctx)
+      self.assertEqual(result["verdict"], "FAIL", (t_ns, h))
+    fail = self._run(model_rw(11571, "0080"), harness_rw("A", 8, 11560, 11578), ww=0, rw=1, ctx=ctx)
+    self.assertTrue(any("edges around it: A 11570000/11580000 ps, B 11571000 ps; harness window 10000 ps" in p
+                        for p in fail["problems"]), fail["problems"])
+    # One clock: only the instant of the read or of the write.
+    self.assertEqual(self._run(model_rw(11571, "0080"), harness, ww=0, rw=1)["verdict"], "FAIL")
+
+  def test_constant_address_bits_are_dropped(self) -> None:
+    # RAMB36E1 on xc7a35tfgg484-2: bit 15 tied to '1' (32896 = 0x8080, word 4).
+    netlist = ramb(LABEL, "RAMB36E1",
+                   ["(15) => '1'", "(14 downto 5) => addr_b_i(9 downto 0)", '(4 downto 0) => B"00000"'],
+                   ["(15) => '1'", "(14 downto 5) => addr_a_i(9 downto 0)", '(4 downto 0) => B"00000"'], width=36)
+    ctx = {**context(netlist, depth=1024), "a_w": 32, "b_w": 32}
+    model = model_ww(3460, "8080", primitive="RAMB36E1")
+    self.assertEqual(self._run(model, harness_ww(4, 3460), ww=1, ctx=ctx)["verdict"], "PASS")
+    self.assertEqual(self._run(model, harness_ww(260, 3460), ww=1, ctx=ctx)["verdict"], "FAIL")
+
+  def test_ram_split_in_depth_pairs_with_the_block_of_the_address(self) -> None:
+    # 128 words on two blocks of 64: bit 6 of the DUT address selects the
+    # block through the enables (LUTs), as in rw_rw.36x4096 on xcku3p.
+    blocks = ""
+    for k, init in ((0, "2"), (1, "8")):  # I0 and not I1; I0 and I1
+      label = rf"\inst/gen_crw_crw.inst_dut/sv_mem_reg_bram_{k}" + "\\"
+      blocks += ramb(label, "RAMB18E1",
+                     ['(13 downto 10) => B"0000"', "(9 downto 4) => addr_b_i(5 downto 0)", '(3 downto 0) => B"0000"'],
+                     ['(13 downto 10) => B"0000"', "(9 downto 4) => addr_a_i(5 downto 0)", '(3 downto 0) => B"0000"'],
+                     en_a=f"en_a_{k}", en_b=f"en_b_{k}")
+      blocks += lut2(f"en_a_lut_{k}", init, "enb_i", "addr_b_i(6)", f"en_a_{k}")
+      blocks += lut2(f"en_b_lut_{k}", init, "ena_i", "addr_a_i(6)", f"en_b_{k}")
+    ctx = context(blocks, depth=128)
+    path = UNISIM_PATH.replace("sv_mem_reg\\:", "sv_mem_reg_bram_1\\:")
+    model = model_ww(1460, "0050", path=path)
+    self.assertEqual(self._run(model, harness_ww(69, 1460), ww=1, ctx=ctx)["verdict"], "PASS")
+    result = self._run(model, harness_ww(5, 1460), ww=1, ctx=ctx)
+    self.assertEqual(result["verdict"], "FAIL")
+    self.assertTrue(any("words [69]" in p for p in result["problems"]), result["problems"])
+
+  def test_unconvertible_messages_are_not_paired(self) -> None:
+    harness = harness_ww(5, 1460)
+    # 'X' in the address; an instance that is not in the netlist; an address
+    # driven by a net that is not a DUT address input.
+    inner = ramb(LABEL, "RAMB18E1", ["(9 downto 4) => addr_reg(5 downto 0)"], ["(9 downto 4) => addr_a_i(5 downto 0)"])
+    for model, ctx, why in ((model_ww(1460, "00X0"), None, "address of port A not readable"),
+                            (model_ww(1460, "0050", path=UNISIM_PATH.replace("sv_mem_reg", "other")), None,
+                             "instance not found in the netlist"),
+                            (model_ww(1460, "0050"), context(inner), "driven by addr_reg")):
+      result = self._run(model, harness, ww=1, ctx=ctx)
+      self.assertEqual(result["verdict"], "FAIL", why)
+      self.assertTrue(any(why in p for p in result["problems"]), (why, result["problems"]))
 
   def test_other_unisim_diagnostics_stay_fatal(self) -> None:
     overlap = ("RAMB18E1.vhd:1385:11:@1460ns:(assertion error):  Address Overlap Error on RAMB18E1 "
@@ -144,15 +236,6 @@ class CollisionPairingTest(unittest.TestCase):
     result = self._run(model_ww(1460, "0050") + overlap, harness_ww(5, 1460), ww=1)
     self.assertEqual(result["verdict"], "FAIL")
     self.assertTrue(any("Address Overlap Error" in p for p in result["problems"]), result["problems"])
-
-  def test_messages_without_address_need_the_exact_count(self) -> None:
-    # 'X' in the address: no pairing by address, so the count per kind and
-    # instance must equal the harness count, neither more nor less.
-    harness = harness_ww(5, 1460) + harness_ww(13, 2750)
-    exact = self._run(model_ww(1460, "00X0") + model_ww(2750, "00X0"), harness, ww=2)
-    self.assertEqual(exact["verdict"], "PASS", exact["problems"])
-    for model in (model_ww(1460, "00X0"), model_ww(1460, "00X0") * 2 + model_ww(2750, "00X0")):
-      self.assertEqual(self._run(model, harness, ww=2)["verdict"], "FAIL", model)
 
   def test_harness_messages_must_cover_its_counters(self) -> None:
     # A harness collision without its message (no instant) cannot be paired.
@@ -167,10 +250,14 @@ class CollisionPairingTest(unittest.TestCase):
   def test_netlist_instances_and_ultrascale_messages(self) -> None:
     netlist = ("\\inst/x/sv_mem_reg\\: unisim.vcomponents.RAMB36E2\n    generic map(\n      READ_WIDTH_A => 36,\n"
                "      WRITE_WIDTH_A => 36,\n      READ_WIDTH_B => 9,\n      WRITE_WIDTH_B => 9\n    )\n"
-               "        port map (\n")
+               "        port map (\n      ADDRARDADDR(14 downto 5) => addr_b_i(9 downto 0),\n"
+               "      ENARDEN => enb_i\n    );\n")
     self.assertEqual(ps.ramb_instances(netlist)["\\inst/x/sv_mem_reg\\"],
                      {"primitive": "RAMB36E2", "READ_WIDTH_A": 36, "READ_WIDTH_B": 9, "WRITE_WIDTH_A": 36,
                       "WRITE_WIDTH_B": 9})
+    ports = ps.parse_netlist(netlist)["rams"]["\\inst/x/sv_mem_reg\\"]["ports"]["A"]
+    self.assertEqual((ports["addr"][14], ports["addr"][5], ports["en"]),
+                     (("s", "addr_b_i", 9), ("s", "addr_b_i", 0), ("s", "enb_i", None)))
     log = ("Error : [Unisim RAMB36E2-1]  : instance :tb:\\inst/x/sv_mem_reg\\:ramb : Memory Collision at time "
            "1460 ns.\nA simultaneous WRITE occured on port A (addr:0140 data:00000000) and port B (addr:0140 "
            "data:00).\nMemory contents at those locations have been corrupted\n")

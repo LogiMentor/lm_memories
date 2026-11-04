@@ -478,7 +478,14 @@ Confirmed defaults:
   complete log, and `tool-error` if the failure persists. Before each rerun
   the policy waits, outside the EDA lock: 30 s before the first, 60 s
   before the second (`LM_EDA_RETRY_DELAYS`, seconds separated by commas,
-  `0` for none; the last value also serves later reruns). The record of a
+  `0` for none; the last value also serves later reruns). A run whose
+  status file of `synth_design` stays at "started" (the tool died before
+  `synth_design` returned) is retried whatever its log says, also with an
+  error of the project in it (signature `tool-died`): on 2026-11-04 Vivado
+  printed the expected stop of `bad_fifo_almost_full_0` with `-assert`,
+  then "called Tcl_Close on channel with refCount > 0", and exited with 3;
+  that run was reported as fail. Of the 99 Vivado runs of that campaign
+  with a status file, only this one ends at "started". The record of a
   retried attempt ends with the wait that followed it (`; waited 30 s
   before attempt 2`). The failures of 2026-11-04 came in bursts: the three
   runs of one case, within 30 seconds, all failed. A timeout stops
@@ -874,31 +881,53 @@ the summary in `<campaign root>/summary.md`.
   `logs/steps.txt` at the start and shown in the summary, with the waits
   before a rerun (`LM_EDA_RETRY_DELAYS`).
 - **Collisions in the netlist simulations:** the harness provokes
-  collisions on purpose; the UNISIM block RAM models report each one as an
-  assertion error ("Memory Collision Error on RAMB18E1", "[Unisim
+  collisions on purpose; the UNISIM block RAM models report many of them as
+  assertion errors ("Memory Collision Error on RAMB18E1", "[Unisim
   RAMB18E2-1] ... Memory Collision"), which made every netlist simulation
   of a two-writer RAM fail (2026-11-04: 13 errors for `collisions_ww=13`).
-  The harness now writes the instant of each collision (write/write: the
-  write; read/write: the read and the colliding write).
-  `check_collisions` in `run_postsynth.py` accepts a model message only
-  when it pairs with a harness collision of the same kind at the same
-  instant whose cells overlap the word of the message (model address
-  without the low bits of the port width, read from the netlist). For
-  write/write, every block RAM must pair every harness collision exactly
-  once: one more or one less fails. For read/write, every model message
-  must pair, but a harness collision without a message is allowed: with one
-  clock and READ_FIRST the models report nothing (`crw_crw.1clk.16x64`: 53
-  in the harness, none in the models). A message that cannot be paired by
-  instant and address (unknown instance or width, 'X' in the address)
-  passes only when, for its instance and kind, the number of messages
-  equals the harness count. Every other UNISIM diagnostic (also "Address
-  Overlap Error") stays fatal. Measured on 2026-11-04 with
-  `crw_crw.1clk.16x64` on `xc7a35tfgg484-2` (RAMB18E1) and
-  `xcku3p-ffva676-2-e` (RAMB18E2), GHDL and xsim: 13 messages, 13 paired,
-  PASS; the same logs with one harness collision less, one model message
-  more or one less: FAIL. The other configurations (two clocks, mixed
-  widths, 36 x 4096 with several block RAMs) are first checked by the
-  campaign.
+  The harness writes the instant of each collision (write/write: the
+  write; read/write: the read and one colliding write).
+  `check_collisions` in `run_postsynth.py` follows one rule: every
+  collision message of a model (read/write or write/write) must pair with
+  a harness collision that excluded that read or made those cells
+  undefined; a harness collision without a model message is allowed (lost
+  coverage, already bounded by `g_min_checked`); every other UNISIM
+  diagnostic (also "Address Overlap Error") stays fatal, and so does a
+  message that cannot be read or converted.
+  - Address conversion from the netlist (`parse_netlist`, `dut_words`):
+    the bits of the primitive address wired to `addr_a_i` or `addr_b_i`
+    give the DUT port and those bits of the word; constant bits are
+    dropped (the low bits under the port width, and bit 15 of a RAMB36E1,
+    tied to '1': the model printed 32896 = 0x8080 for word 4). Vivado
+    crosses the ports: port A of the primitive is port B of the DUT in
+    every netlist of 2026-11-04. DUT address bits not wired to the
+    primitive (a RAM split in depth, `rw_rw.36x4096` on `xcku3p` over four
+    RAMB36E2) are decoded by evaluating the LUTs that drive the enables and
+    write enables of that primitive: a message of block k pairs only with
+    words of block k.
+  - Instants: write/write at the instant of the harness collision;
+    read/write at the read or write instant of the harness collision, or,
+    with two clocks, at an edge of the writing port only, less than the
+    harness window from the read. The harness excludes a read for every
+    write of the other port in its window but names only the last one it
+    finds (`crw_cw.2clk.32x1024.lat1` on RAMB36E1: read at 11570 ns, model
+    message at the write of 11571 ns, harness "write at 11578000 ps"; the
+    read was excluded, no data was compared).
+  - Windows: RAMB18E1/RAMB36E1 take the shorter clock period, at most
+    3 ns; RAMB18E2/RAMB36E2 50 to 401 ps, and report nothing when both
+    ports write the same data. The harness window is the longer period
+    (10 ns with clocks of 10 and 7 ns), wider than both: with two clocks
+    the harness counts many more collisions than the models report (on
+    `xcku3p`, 0 or 1 message against 18 to 33), which the rule allows.
+  - Measured on the logs of the campaign of 2026-11-04 (`4d1380c`),
+    evaluated again without simulating: all 50 netlist runs pass (both
+    parts, GHDL and xsim, including the rerun of `rw_rw.32x1024.lat2`);
+    the functional comparison of each run was already `RESULT PASS`,
+    `errors=0`. On six of those logs (RAMB18E1, RAMB36E1, RAMB18E2,
+    RAMB36E2; one and two clocks; mixed widths; the RAM split in depth),
+    removing each harness collision in turn fails exactly the paired ones,
+    and one model message more, the address of another word or the message
+    on another block of the split RAM fail.
 
 ### 3.15 Cross-cutting work (other LogiMentor repositories)
 

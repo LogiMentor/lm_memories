@@ -302,7 +302,11 @@ def synthesize(vivado_dir: Path, part: str, key: str, g: dict, work: Path, commo
 
   # Shared retry policy (tools/eda_retry.py): every retried attempt is
   # recorded and its log kept as vivado.attempt<n>.log.
-  text, retries, persisted = run_with_retries(run_once, completed=completed, roots=[vivado_dir], log_path=log)
+  def died(text: str) -> str | None:
+    return check.synth_died(status_file, run_id, text)
+
+  text, retries, persisted = run_with_retries(run_once, completed=completed, roots=[vivado_dir], log_path=log,
+                                              died=died)
   parsed = check.parse_vivado_log(text, f"lm_ps_{key}")
   metrics = check.parse_vivado_utilization(util.read_text(encoding="utf-8", errors="ignore")) if util.is_file() else {}
   problems = []
@@ -401,23 +405,174 @@ _E2_ACCESS_RE = re.compile(r"(?:\b(WRITE|READ)(?: occured)?(?: window)? on|\band
 _HARNESS_WW_RE = re.compile(r"lm_mem_tb_pkg: write/write collision on cells (\d+) to (\d+) at (\d+) ps")
 _HARNESS_RW_RE = re.compile(r"lm_mem_tb_pkg: read/write collision on port ([AB])\s+cell (\d+) "
                             r"\(read at (\d+) ps, write at (\d+) ps\)")
-_RAMB_INSTANCE_RE = re.compile(r"^\s*(\\[^\\\n]+\\|\w+)\s*:\s*unisim\.vcomponents\.(RAMB(?:18|36)E[12])\s*$"
-                               r"(.*?)^\s*port map", re.MULTILINE | re.DOTALL | re.IGNORECASE)
-_GENERIC_RE = re.compile(r"(\w+)\s*=>\s*(\d+)\b")
-# Port width generic of a block RAM -> low address bits that do not select a word.
-_WIDTH_SHIFT = {1: 0, 2: 1, 4: 2, 9: 3, 18: 4, 36: 5, 72: 6}
 _TIME_PS = {"fs": 0.001, "ps": 1, "ns": 1000, "us": 1000000, "ms": 1000000000}
+
+# Funcsim netlists (write_vhdl -mode funcsim): instances of UNISIM cells with
+# their generics and port maps.
+_INSTANCE_RE = re.compile(r"^\s*(\\[^\\\n]+\\|\w+)\s*:\s*unisim\.vcomponents\.(\w+)\s*$", re.MULTILINE | re.IGNORECASE)
+_GENERIC_RE = re.compile(r"(\w+)\s*=>\s*(\d+)\b")
+_INIT_RE = re.compile(r"\bINIT\s*=>\s*X\"([0-9A-Fa-f_]+)\"", re.IGNORECASE)
+_PORT_MAP_RE = re.compile(r"port map\s*\((.*?)\n\s*\);", re.DOTALL | re.IGNORECASE)
+_ASSOC_RE = re.compile(r"^\s*(\w+)(?:\((\d+)(?:\s+downto\s+(\d+))?\))?\s*=>\s*(.+?),?\s*$")
+_ACTUAL_RE = re.compile(r"(\\[^\\]+\\|\w+)(?:\((\d+)(?:\s+downto\s+(\d+))?\))?")
+_WIDTHS = ("READ_WIDTH_A", "READ_WIDTH_B", "WRITE_WIDTH_A", "WRITE_WIDTH_B")
+# Address, enable and write enable of each port of a block RAM primitive
+# (RAMB18E1, RAMB36E1, RAMB18E2, RAMB36E2), and the DUT inputs of each DUT port.
+_RAMB_PORTS = {"A": ("ADDRARDADDR", "ENARDEN", "WEA"), "B": ("ADDRBWRADDR", "ENBWREN", "WEBWE")}
+_DUT_INPUTS = {"A": ("addr_a_i", "ena_i", "wen_a_i"), "B": ("addr_b_i", "enb_i", "wen_b_i")}
+# DUT address bits not wired to the block RAM (they select one block of a RAM
+# split in depth) are decoded through the LUTs, up to this many bits.
+_MAX_DECODED_BITS = 8
+
+# A bit of a port map: ("c", 0 or 1) for a constant, ("s", name, index or
+# None) for a signal; None when the text is not understood.
+Bit = tuple
+
+
+def _actual_bits(actual: str, width: int) -> list[Bit] | None:
+  """The bits of the actual of an association, most significant first."""
+  actual = actual.strip()
+  if actual in ("'0'", "'1'"):
+    return [("c", int(actual[1]))] * width
+  literal = re.fullmatch(r'([BX])"([0-9A-Fa-f_]+)"', actual)
+  if literal:
+    digits = literal[2].replace("_", "")
+    bits = "".join(f"{int(d, 16):04b}" for d in digits) if literal[1] == "X" else digits
+    return [("c", int(b)) for b in bits[-width:]] if len(bits) >= width else None
+  signal = _ACTUAL_RE.fullmatch(actual)
+  if not signal:
+    return None
+  name, hi, lo = signal[1], signal[2], signal[3]
+  if hi is None:
+    return [("s", name, None)] if width == 1 else None
+  hi_i, lo_i = int(hi), int(lo) if lo is not None else int(hi)
+  bits = [("s", name, i) for i in range(hi_i, lo_i - 1, -1)]
+  return bits if len(bits) == width else None
+
+
+def _port_map(body: str) -> dict[str, dict[int | None, Bit | None]]:
+  """Formal port -> {bit index (None for a scalar): bit of the actual}."""
+  out: dict[str, dict[int | None, Bit | None]] = {}
+  for line in body.splitlines():
+    assoc = _ASSOC_RE.match(line)
+    if not assoc:
+      continue
+    formal, hi, lo, actual = assoc[1].upper(), assoc[2], assoc[3], assoc[4]
+    if hi is None:
+      bits = _actual_bits(actual, 1)
+      out.setdefault(formal, {})[None] = bits[0] if bits else None
+      continue
+    hi_i, lo_i = int(hi), int(lo) if lo is not None else int(hi)
+    bits = _actual_bits(actual, hi_i - lo_i + 1)
+    for k, index in enumerate(range(hi_i, lo_i - 1, -1)):
+      out.setdefault(formal, {})[index] = bits[k] if bits else None
+  return out
+
+
+def parse_netlist(text: str) -> dict:
+  """Block RAMs and LUTs of a funcsim netlist.
+
+  rams: label -> primitive, port widths, and per primitive port its address
+  bits, enable and write enables as bits of the port map. luts: output net
+  -> (INIT, input bits).
+  """
+  rams, luts = {}, {}
+  matches = list(_INSTANCE_RE.finditer(text))
+  for i, match in enumerate(matches):
+    chunk = text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)]
+    cell = match[2].upper()
+    port_map = _PORT_MAP_RE.search(chunk)
+    ports = _port_map(port_map[1]) if port_map else {}
+    generic_text = chunk[:port_map.start()] if port_map else chunk
+    if re.fullmatch(r"RAMB(?:18|36)E[12]", cell):
+      generics = {k.upper(): int(v) for k, v in _GENERIC_RE.findall(generic_text)}
+      rams[match[1]] = {"primitive": cell, **{k: generics.get(k) for k in _WIDTHS},
+                        "ports": {p: {"addr": ports.get(addr, {}), "en": ports.get(en, {}).get(None),
+                                      "we": ports.get(we, {})} for p, (addr, en, we) in _RAMB_PORTS.items()}}
+    elif re.fullmatch(r"LUT[1-6]", cell):
+      init = _INIT_RE.search(generic_text)
+      out = ports.get("O", {}).get(None)
+      if init and out and out[0] == "s":
+        luts[(out[1], out[2])] = (int(init[1].replace("_", ""), 16),
+                                  [ports.get(f"I{k}", {}).get(None) for k in range(int(cell[3]))])
+  return {"rams": rams, "luts": luts}
 
 
 def ramb_instances(netlist_text: str) -> dict[str, dict]:
   """Block RAM instances of a funcsim netlist: label -> primitive and port widths."""
-  out = {}
-  for match in _RAMB_INSTANCE_RE.finditer(netlist_text):
-    generics = {k.upper(): int(v) for k, v in _GENERIC_RE.findall(match.group(3))}
-    out[match.group(1)] = {"primitive": match.group(2).upper(),
-                           **{k: generics.get(k) for k in ("READ_WIDTH_A", "READ_WIDTH_B",
-                                                            "WRITE_WIDTH_A", "WRITE_WIDTH_B")}}
-  return out
+  return {label: {k: v for k, v in ram.items() if k != "ports"}
+          for label, ram in parse_netlist(netlist_text)["rams"].items()}
+
+
+def _eval_bit(bit: Bit | None, env: dict, luts: dict, depth: int = 0) -> int | None:
+  """Value of a bit of the netlist from the DUT inputs in env, through LUTs; None if unknown."""
+  if bit is None:
+    return None
+  if bit[0] == "c":
+    return bit[1]
+  key = (bit[1], bit[2])
+  if key in env:
+    return env[key]
+  lut = luts.get(key)
+  if lut is None or depth > 6:
+    return None
+  init, inputs = lut
+  values = [_eval_bit(b, env, luts, depth + 1) for b in inputs]
+  unknown = [k for k, v in enumerate(values) if v is None]
+  outs = set()
+  for combo in range(2 ** len(unknown)):
+    index = 0
+    for k, value in enumerate(values):
+      index |= (value if value is not None else (combo >> unknown.index(k)) & 1) << k
+    outs.add((init >> index) & 1)
+  return outs.pop() if len(outs) == 1 else None
+
+
+def dut_words(ram: dict, port: str, op: str, addr: int, luts: dict,
+              addr_w: dict[str, int]) -> tuple[str, list[int]] | str:
+  """The DUT port and the DUT words of an access reported by a block RAM model.
+
+  The address of the model is the address bus of the primitive port: its
+  bits wired to a DUT address input give that DUT port and those bits of the
+  word; constant bits (the low bits below the port width, bit 15 of a
+  RAMB36E1 tied to '1') are dropped. DUT address bits not wired to the
+  primitive select a block of a RAM split in depth: each of their values is
+  kept only if the enable (and, for a write, the write enable) of this port
+  of this primitive can be '1' for it, through the LUTs of the netlist.
+  Returns (DUT port, words), or why the access cannot be converted.
+  """
+  wiring = ram["ports"][port]
+  sources = {}
+  for prim_bit, bit in wiring["addr"].items():
+    if bit is None:
+      return f"address bit {prim_bit} of port {port}: connection not understood"
+    if bit[0] == "c":
+      continue
+    if bit[1] not in ("addr_a_i", "addr_b_i") or bit[2] is None:
+      return f"address bit {prim_bit} of port {port} is driven by {bit[1]}, not by a DUT address input"
+    sources[prim_bit] = bit
+  names = {bit[1] for bit in sources.values()}
+  if len(names) != 1:
+    return f"address of port {port} from {sorted(names) or 'no DUT address input'}"
+  dut = "A" if names == {"addr_a_i"} else "B"
+  fixed = {bit[2]: (addr >> prim_bit) & 1 for prim_bit, bit in sources.items()}
+  free = [b for b in range(addr_w[dut]) if b not in fixed]
+  if len(free) > _MAX_DECODED_BITS:
+    return f"{len(free)} DUT address bits of port {port} not wired to the block RAM"
+  addr_name, en_name, wen_name = _DUT_INPUTS[dut]
+  words = []
+  for combo in range(2 ** len(free)):
+    bits = {**fixed, **{b: (combo >> k) & 1 for k, b in enumerate(free)}}
+    if free:
+      env = {(addr_name, b): v for b, v in bits.items()}
+      env[(en_name, None)] = 1
+      env[(wen_name, None)] = 1 if op == "WRITE" else 0
+      if _eval_bit(wiring["en"], env, luts) == 0:
+        continue
+      if op == "WRITE" and wiring["we"] and all(_eval_bit(b, env, luts) == 0 for b in wiring["we"].values()):
+        continue
+    words.append(sum(v << b for b, v in bits.items()))
+  return dut, words
 
 
 def unisim_collisions(log_text: str) -> list[dict]:
@@ -425,7 +580,7 @@ def unisim_collisions(log_text: str) -> list[dict]:
 
   Each: position of the header, primitive, instance path, instant (ps), kind
   ("ww", "rw" or None when the text is not understood) and the accesses
-  (operation, port, address or None).
+  (operation, primitive port, address or None).
   """
   events = []
   for match in _UNISIM_COLL_RE.finditer(log_text):
@@ -458,31 +613,45 @@ def _hex(text: str) -> int | None:
     return None  # 'X' or 'U' in the address
 
 
-def check_collisions(log_text: str, instances: dict[str, dict], a_w: int, b_w: int,
-                     counts: dict) -> tuple[set[int], list[str], dict]:
+def _edges(t: int, period: int) -> str:
+  before = (t // period) * period
+  return f"{before}" if before == t else f"{before}/{before + period}"
+
+
+def check_collisions(log_text: str, context: dict, counts: dict) -> tuple[set[int], list[str], dict]:
   """Pairs the collision errors of the UNISIM models with the harness.
 
+  context: collision_context (netlist, DUT widths and depth, clocks).
   Returns (positions of the accepted messages, problems, facts).
-  - Write/write: a message pairs with a harness collision at the same
-    instant whose cells overlap the word of each port in the message (the
-    model's address, without the low bits of its port width, is the word of
-    the DUT port; harness cells are words of the narrower port). In every
-    block RAM instance of the netlist, each harness collision pairs with
-    exactly one message and each message with one collision: one more or one
-    less is a problem.
-  - Read/write: a message pairs with a harness read/write collision on the
-    same read port, whose read or write instant is the message's instant,
-    and whose read cells overlap the read word. A harness read/write
-    collision without a message is not a problem: with one clock and
-    READ_FIRST the read returns the old data and the models report nothing
-    (crw_crw.1clk.16x64: 53 in the harness, none in the model).
-  - A message whose instance, port widths or addresses are not known cannot
-    be paired: for its instance and kind, the number of messages must equal
-    the harness count exactly.
-  Messages that are not paired are not accepted and stay fatal.
+
+  Every collision message of a model must pair with a collision of the
+  harness that excluded the read or made the cells undefined; a harness
+  collision without a message is allowed (coverage lost, measured by
+  g_min_checked). The address of each access is converted to DUT words
+  through the netlist (dut_words).
+  - Write/write: a harness write/write collision at the instant of the
+    message whose cells overlap a word of each access. Each harness
+    collision pairs at most once per block RAM.
+  - Read/write: a harness read/write collision on the DUT port of the read
+    whose read cells overlap a word of the read access, at the instant of
+    the message: its read or its write instant, or, with two clocks, a read
+    less than the harness window from the message when the message is at an
+    edge of the writing port only. The harness excludes a read for every
+    write of the other port in its window but names only one of them
+    (2026-11-04, crw_cw.2clk.32x1024.lat1 on RAMB36E1: read at 11570 ns,
+    model message at the write of 11571 ns, harness message "write at
+    11578000 ps"). At most once per block RAM.
+  A message that cannot be read, or whose instance or address cannot be
+  converted, is not paired. Messages that are not paired are not accepted
+  and stay fatal; each is reported with the clock edges around it and the
+  collision window of the harness.
   """
+  netlist = context["netlist"]
+  rams, luts = netlist["rams"], netlist["luts"]
+  a_w, b_w, a_depth = context["a_w"], context["b_w"], context["a_depth"]
   cell_w = min(a_w, b_w)
   ratio = {"A": a_w // cell_w, "B": b_w // cell_w}
+  addr_w = {"A": max(1, math.ceil(math.log2(a_depth))), "B": max(1, math.ceil(math.log2(a_depth * a_w // b_w)))}
   harness_ww = [(int(lo), int(hi), int(t)) for lo, hi, t in _HARNESS_WW_RE.findall(log_text)]
   harness_rw = [(port, int(cell), int(t_rd), int(t_wr)) for port, cell, t_rd, t_wr in _HARNESS_RW_RE.findall(log_text)]
   problems = []
@@ -492,67 +661,74 @@ def check_collisions(log_text: str, instances: dict[str, dict], a_w: int, b_w: i
       problems.append(f"harness: {counts[counter]} {kind} collisions counted, {len(events)} reported with "
                       "their instant (the pairing needs every one)")
 
-  def cells(port: str, op: str, addr: int | None, widths: dict) -> range | None:
-    shift = _WIDTH_SHIFT.get(widths.get(f"{op}_WIDTH_{port}") or 0)
-    if addr is None or shift is None:
-      return None
-    word = addr >> shift
-    return range(word * ratio[port], (word + 1) * ratio[port])
+  def cells(dut: str, words: list[int]) -> list[range]:
+    return [range(w * ratio[dut], (w + 1) * ratio[dut]) for w in words]
 
-  def overlap(r: range, lo: int, hi: int) -> bool:
-    return r.start <= hi and lo < r.stop
+  def overlap(ranges: list[range], lo: int, hi: int) -> bool:
+    return any(r.start <= hi and lo < r.stop for r in ranges)
 
+  same_clock = context.get("same_clock", False)
+  t_a, t_b = context.get("a_period_ps"), context.get("b_period_ps")
+  window = "same instant (common clock)" if same_clock else f"{max(t_a or 0, t_b or 0)} ps"
+
+  def rw_instant(t: int, read_dut: str, t_rd: int, t_wr: int) -> bool:
+    if t in (t_rd, t_wr):
+      return True
+    if same_clock or not (t_a and t_b):
+      return False
+    read_period, write_period = (t_a, t_b) if read_dut == "A" else (t_b, t_a)
+    return t % read_period != 0 and t % write_period == 0 and abs(t - t_rd) < max(t_a, t_b)
   accepted: set[int] = set()
-  unpaired = []
-  fallback: dict[tuple[str, str], list[dict]] = {}
-  paired_ww = {label: 0 for label in instances}
-  used_ww: dict[str, set[int]] = {label: set() for label in instances}
-  used_rw: dict[str, set[int]] = {label: set() for label in instances}
+  unpaired: list[str] = []
+  used = {"ww": set(), "rw": set()}
+  paired = {"ww": 0, "rw": 0}
   messages = unisim_collisions(log_text)
   for event in messages:
-    label = next((l for l in instances if l.lower() in event["path"].lower()), None)
-    widths = instances.get(label, {})
-    ranges = [cells(port, op, addr, widths) for op, port, addr in event["accesses"]
-              if not (event["kind"] == "rw" and op == "WRITE")]
-    if label is None or event["kind"] is None or not ranges or None in ranges:
-      fallback.setdefault((label or event["path"], event["kind"] or "unknown"), []).append(event)
-      continue
-    if event["kind"] == "ww":
-      match = next((i for i, (lo, hi, t) in enumerate(harness_ww) if i not in used_ww[label]
-                    and t == event["t_ps"] and all(overlap(r, lo, hi) for r in ranges)), None)
-      if match is not None:
-        used_ww[label].add(match)
-        paired_ww[label] += 1
+    label = next((l for l in rams if l.lower() in event["path"].lower()), None)
+    converted, why = [], None
+    if label is None:
+      why = "instance not found in the netlist"
+    elif event["kind"] is None:
+      why = "message not understood"
     else:
-      read_port = next(port for op, port, _ in event["accesses"] if op == "READ")
-      match = next((i for i, (port, cell, t_rd, t_wr) in enumerate(harness_rw) if i not in used_rw[label]
-                    and port == read_port and event["t_ps"] in (t_rd, t_wr)
-                    and overlap(ranges[0], cell, cell + ratio[port] - 1)), None)
-      if match is not None:
-        used_rw[label].add(match)
-    if match is None:
-      unpaired.append(event)
-    else:
+      for op, port, addr in event["accesses"]:
+        if event["kind"] == "rw" and op == "WRITE":
+          continue  # 7-series read/write: the write is on the read address
+        if addr is None:
+          why = f"address of port {port} not readable"
+          break
+        result = dut_words(rams[label], port, op, addr, luts, addr_w)
+        if isinstance(result, str):
+          why = result
+          break
+        converted.append((op, *result))
+    match = None
+    if why is None and event["kind"] == "ww":
+      match = next((i for i, (lo, hi, t) in enumerate(harness_ww) if (label, i) not in used["ww"]
+                    and t == event["t_ps"] and all(overlap(cells(d, w), lo, hi) for _, d, w in converted)), None)
+    elif why is None:
+      _, read_dut, read_words = converted[0]
+      match = next((i for i, (port, cell, t_rd, t_wr) in enumerate(harness_rw) if (label, i) not in used["rw"]
+                    and port == read_dut and rw_instant(event["t_ps"], read_dut, t_rd, t_wr)
+                    and overlap(cells(read_dut, read_words), cell, cell + ratio[port] - 1)), None)
+    if match is not None:
+      used[event["kind"]].add((label, match))
+      paired[event["kind"]] += 1
       accepted.add(event["pos"])
-  for event in unpaired[:3]:
-    problems.append(f"{event['primitive']} {event['kind']} collision at {event['t_ps']} ps "
-                    f"({event['accesses']}) has no matching collision in the harness")
-  if len(unpaired) > 3:
-    problems.append(f"{len(unpaired) - 3} more collisions of the model without a match in the harness")
-  # One less: every write/write collision of the harness in every block RAM.
-  for label, n in paired_ww.items():
-    if n != len(harness_ww) and not any(key[0] == label and key[1] == "ww" for key in fallback):
-      problems.append(f"block RAM {label}: {n} write/write collisions of the model paired, "
-                      f"{len(harness_ww)} in the harness")
-  for (label, kind), events in fallback.items():
-    expected = {"ww": len(harness_ww), "rw": len(harness_rw)}.get(kind)
-    if expected is not None and len(events) == expected and label in instances:
-      accepted.update(e["pos"] for e in events)
-    else:
-      problems.append(f"{len(events)} {kind} collision messages of {label} cannot be paired by instant and "
-                      f"address, and their number is not the harness count ({expected})")
-  facts = {"model_collisions": len(messages), "accepted": len(accepted), "harness_ww": len(harness_ww),
-           "harness_rw": len(harness_rw), "block_rams": sorted(instances)}
+      continue
+    t = event["t_ps"]
+    edges = (f"clock edge {t} ps (common clock)" if same_clock or not (t_a and t_b) else
+             f"edges around it: A {_edges(t, t_a)} ps, B {_edges(t, t_b)} ps")
+    duts = "; ".join(f"{op} DUT port {d} words {w[:4]}" for op, d, w in converted)
+    unpaired.append(f"{event['primitive']} {event['kind'] or '?'} collision at {t} ps "
+                    f"({event['accesses']}{'; ' + duts if duts else ''}) has no matching collision in the harness"
+                    f"{': ' + why if why else ''}; {edges}; harness window {window}")
+  problems += unpaired[:5]
+  if len(unpaired) > 5:
+    problems.append(f"{len(unpaired) - 5} more collisions of the model without a match in the harness")
+  facts = {"model_collisions": len(messages), "accepted": len(accepted), "paired_ww": paired["ww"],
+           "paired_rw": paired["rw"], "unpaired": len(unpaired), "harness_ww": len(harness_ww),
+           "harness_rw": len(harness_rw), "block_rams": sorted(rams)}
   return accepted, problems, facts
 
 
@@ -561,9 +737,9 @@ def parse_result(log_text: str, return_code: int | None, collisions: dict | None
   one RESULT line and it is PASS, exactly one harness line with every counter,
   0 errors in it, and no fatal diagnostic anywhere in the log.
 
-  collisions (netlist simulations): {"instances": ramb_instances(netlist),
-  "a_w": .., "b_w": ..}. A collision error of a UNISIM block RAM model is then
-  not fatal when check_collisions pairs it with the harness."""
+  collisions (netlist simulations): collision_context of the configuration.
+  A collision error of a UNISIM block RAM model is then not fatal when
+  check_collisions pairs it with the harness."""
   verdicts = VERDICT_RE.findall(log_text)
   harness = RESULT_RE.findall(log_text)
   counts = {k: int(v) for k, v in re.findall(r"(\w+)=(\d+)", harness[0])} if len(harness) == 1 else {}
@@ -584,8 +760,7 @@ def parse_result(log_text: str, return_code: int | None, collisions: dict | None
   fatal_matches = list(FATAL_RE.finditer(log_text))
   result_facts = {}
   if collisions is not None:
-    accepted, coll_problems, result_facts = check_collisions(log_text, collisions["instances"], collisions["a_w"],
-                                                             collisions["b_w"], counts)
+    accepted, coll_problems, result_facts = check_collisions(log_text, collisions, counts)
     problems += coll_problems
     # A fatal line is accepted only if the paired collision message starts in it.
     fatal_matches = [m for m in fatal_matches if not any(m.start() <= pos < m.end() for pos in accepted)]
@@ -601,8 +776,10 @@ def parse_result(log_text: str, return_code: int | None, collisions: dict | None
 
 def collision_context(netlist: Path, g: dict) -> dict:
   """Argument collisions of parse_result for one configuration."""
-  return {"instances": ramb_instances(netlist.read_text(encoding="utf-8", errors="ignore")),
-          "a_w": g["g_a_data_w"], "b_w": g["g_b_data_w"]}
+  return {"netlist": parse_netlist(netlist.read_text(encoding="utf-8", errors="ignore")),
+          "a_w": g["g_a_data_w"], "b_w": g["g_b_data_w"], "a_depth": g["g_a_depth"],
+          "same_clock": g.get("g_same_clock", False), "a_period_ps": g.get("g_a_period_ps"),
+          "b_period_ps": g.get("g_b_period_ps")}
 
 
 def ghdl_version() -> str:

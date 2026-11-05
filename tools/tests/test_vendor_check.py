@@ -173,6 +173,21 @@ class CheckParsingTest(unittest.TestCase):
     self.assertEqual(len(problems), 6, problems)
 
 
+class QuartusVersionTest(unittest.TestCase):
+  def test_quartus_version_is_recorded(self) -> None:
+    # Second review of PR #4: tool_version stayed empty for Quartus.
+    from tools.vendor_synth import cli
+    log = "\n".join(["Info: Running Quartus Prime Shell",
+                     "    Info: Version 23.1std.0 Build 991 11/28/2023 SC Lite Edition",
+                     "Info: Running Quartus Prime Analysis & Synthesis",
+                     "    Info: Version 23.1std.0 Build 991 11/28/2023 SC Lite Edition", ""])
+    job = {"name": "q", "tool": "quartus", "vendor": "intel", "family": "Cyclone V", "device": "5CEBA4F23C7"}
+    case = {"name": "bad_r_w_latency3", "kind": "entity", "generics": {}}
+    with tempfile.TemporaryDirectory() as tmp:
+      result = cli._evaluate(job, case, "lm_mem_ram_r_w", log, Path(tmp), [], {"return_code": 1})
+    self.assertEqual(result["log"].get("version"), "23.1std.0 Build 991")
+
+
 class VendorRunTest(unittest.TestCase):
   def setUp(self) -> None:
     self.tmp = tempfile.TemporaryDirectory()

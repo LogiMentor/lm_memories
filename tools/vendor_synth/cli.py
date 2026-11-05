@@ -1115,15 +1115,17 @@ def _evaluate(
     problems, facts = check.check_expected_failure(
       tool, log_text, expectation, sources, assert_mode=bool(job.get("assert")), return_code=return_code,
       status=status, exit_code_required=check.vivado_exit_code_reliable() if vivado else True)
-    log = check.parse_vivado_log(log_text, top) if tool in ("vivado", "xilinx") else {}
+    log = check.parse_vivado_log(log_text, top) if vivado else {"version": check.quartus_version(log_text)}
     # The stop must be for the requested generics (Vivado prints them before the error).
     module = _generics_module(case, top)
-    if log and module is not None:
+    if vivado and module is not None:
       problems += check.check_generics(case.get("generics", {}), log["module_generics"].get(module.lower(), {}))
     return {"status": _classify(problems, log_text, status, vivado, facts["elaborated"]), "problems": problems,
             "metrics": facts, "log": log}
   if tool not in ("vivado", "xilinx"):
-    return {"status": "unchecked", "problems": [f"no result extraction for tool {tool} yet"], "metrics": {}, "log": {}}
+    version = {"version": check.quartus_version(log_text)} if tool in ("quartus", "intel", "altera") else {}
+    return {"status": "unchecked", "problems": [f"no result extraction for tool {tool} yet"], "metrics": {},
+            "log": version}
   log = check.parse_vivado_log(log_text, top)
   util_file = reports / "utilization.rpt"
   metrics = check.parse_vivado_utilization(util_file.read_text(encoding="utf-8", errors="ignore")) if util_file.is_file() else {}

@@ -138,6 +138,16 @@ _PARAM_RE = re.compile(r"^\s*Parameter\s+(\S+)\s+bound to:\s*(.*?)\s+-\s+type:\s
 _MODULE_RE = re.compile(r"synthesizing module '([^']+)'")
 _LIMIT_RE = re.compile(r"\[Common 17-14\] Message '([^']+)' appears 100 times")
 _VERSION_RE = re.compile(r"\bVivado v(\d{4}\.\d+(?:\.\d+)?)")
+# Quartus: "Info: Version 23.1std.0 Build 991 11/28/2023 SC Lite Edition" (each module prints it).
+_QUARTUS_VERSION_RE = re.compile(r"\bInfo: Version (\S+ Build \d+)\b")
+
+
+def quartus_version(text: str) -> str:
+  """Version of Quartus in its log ("23.1std.0 Build 991"); "unknown" if absent, "mixed: ..." if two differ."""
+  versions = sorted(set(_QUARTUS_VERSION_RE.findall(text)))
+  if not versions:
+    return "unknown"
+  return versions[0] if len(versions) == 1 else "mixed: " + ", ".join(versions)
 
 
 def load_cases(path: Path = CASES_FILE) -> list[dict[str, Any]]:

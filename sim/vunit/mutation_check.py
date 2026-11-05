@@ -192,19 +192,21 @@ def main(argv: list[str] | None = None) -> int:
                            "(tools/eda_archive.py) and write results.json under $LM_EDA_WORKDIR/mut/NAME")
   args = parser.parse_args(argv)
   version = None
+  inherited = None
   if args.campaign:
-    # A campaign names its simulator: it must be requested explicitly and
+    # A campaign names its simulator, whatever the environment holds, and it
     # must be the one the harness reports.
     expected, version = campaign_simulator(args.campaign)
-    if os.environ.get("VUNIT_SIMULATOR") != expected:
-      print(f"--campaign {args.campaign}: set VUNIT_SIMULATOR={expected} explicitly", file=sys.stderr)
-      return 2
+    inherited = os.environ.get("VUNIT_SIMULATOR")
+    os.environ["VUNIT_SIMULATOR"] = expected
   before = _src_digest()
   with tempfile.TemporaryDirectory(prefix="lm_mutation_") as tmp:
     copy = Path(tmp)
     for folder in COPIED:
       shutil.copytree(ROOT_DIR / folder, copy / folder, ignore=IGNORED)
     report = run_mutations(copy, version=version)
+    if inherited and inherited != os.environ["VUNIT_SIMULATOR"]:
+      report["simulator_environment_ignored"] = inherited
     if args.campaign:
       target = work_root("mut") / args.campaign
       if target.exists() and any(target.iterdir()):

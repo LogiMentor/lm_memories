@@ -89,11 +89,33 @@ class VunitCampaignTest(unittest.TestCase):
   # The simulator: requested explicitly, and the one the harness reports
   # (second review of PR #4).
 
-  def test_simulator_must_be_requested_explicitly(self) -> None:
-    with mock.patch.dict(os.environ):
-      del os.environ["VUNIT_SIMULATOR"]
-      with self.assertRaises(SystemExit):
-        self._campaign({"r_w.32x1024.lat1.random": harness(GOOD)})
+  def test_campaign_name_sets_the_simulator_whatever_the_environment(self) -> None:
+    # Codex, second review of PR #4: with VUNIT_SIMULATOR=modelsim inherited,
+    # ghdl_6.0.0 ran on Questa. The campaign name decides: run.py gets
+    # VUNIT_SIMULATOR=ghdl, the inherited value is recorded as ignored.
+    seen = []
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kwargs):
+      if "--xunit-xml" not in cmd:
+        return real_run(cmd, **kwargs)
+      seen.append(kwargs["env"].get("VUNIT_SIMULATOR"))
+      Path(cmd[cmd.index("--xunit-xml") + 1]).write_text(xunit({"r_w.random": harness(GOOD)}), encoding="utf-8")
+      return subprocess.CompletedProcess(cmd, 0)
+
+    for inherited in ("modelsim", None):
+      with mock.patch.dict(os.environ):
+        os.environ.pop("VUNIT_SIMULATOR")
+        if inherited:
+          os.environ["VUNIT_SIMULATOR"] = inherited
+        root = Path(os.environ["LM_EDA_WORKDIR"]) / "vu" / "ghdl_6.0.0"
+        import shutil
+        shutil.rmtree(root, ignore_errors=True)
+        with mock.patch.object(vc.subprocess, "run", fake_run):
+          code = vc.main(["ghdl_6.0.0"])
+        result = json.loads((root / "results.json").read_text(encoding="utf-8"))
+      self.assertEqual((code, seen[-1], result["simulator"]), (0, "ghdl", SIM), inherited)
+      self.assertEqual(result.get("simulator_environment_ignored"), inherited)
 
   def test_effective_simulator_must_be_the_published_one(self) -> None:
     for label, sims in (("other simulator", ["modelsim_Questa_Sim-64_vsim_2021.1"]),

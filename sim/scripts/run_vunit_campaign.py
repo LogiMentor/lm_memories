@@ -3,9 +3,11 @@
 # Copyright 2026 LogiMentor Srl
 """VUnit campaign for docs/results: the whole suite, with its logs archived.
 
-Runs sim/vunit/run.py with the simulator of VUNIT_SIMULATOR, which must be
-set explicitly and match the campaign name (<tool>_<version>: ghdl_6.0.0 ->
-ghdl, questa_2021.1 -> modelsim), into a new work directory ($LM_EDA_WORKDIR/vu/<name>), reads the
+Runs sim/vunit/run.py on the simulator of the campaign name (<tool>_<version>:
+ghdl_6.0.0 -> VUNIT_SIMULATOR=ghdl, questa_2021.1 -> modelsim), whatever
+VUNIT_SIMULATOR the environment holds (an inherited other value is recorded
+as simulator_environment_ignored), into a new work directory
+($LM_EDA_WORKDIR/vu/<name>), reads the
 structured results (VUnit xunit file) and the final harness line of each
 RAM test (counters), writes results.json there, and archives the whole
 directory (tools/eda_archive.py). The campaign passes only if every test
@@ -14,8 +16,8 @@ counter and errors=0 written explicitly (tools/harness_counts.py), and
 every harness line names the requested simulator of that version: the
 published simulator is the one that ran.
 
-  VUNIT_SIMULATOR=ghdl python sim/scripts/run_vunit_campaign.py ghdl_6.0.0
-  VUNIT_SIMULATOR=modelsim VUNIT_MODELSIM_PATH=C:/questasim64_2021.1/win64 \\
+  python sim/scripts/run_vunit_campaign.py ghdl_6.0.0
+  VUNIT_MODELSIM_PATH=C:/questasim64_2021.1/win64 \\
     python sim/scripts/run_vunit_campaign.py questa_2021.1 -p 1
 """
 
@@ -47,10 +49,8 @@ def main(argv: list[str] | None = None) -> int:
   parser.add_argument("-p", "--parallel", type=int, default=2, help="VUnit parallel jobs (Questa 2021.1: 1)")
   args = parser.parse_args(argv)
   expected, version = campaign_simulator(args.name)
-  requested = os.environ.get("VUNIT_SIMULATOR")
-  if requested != expected:
-    raise SystemExit(f"VUNIT_SIMULATOR={requested or '(not set)'}: campaign {args.name} needs VUNIT_SIMULATOR={expected} "
-                     "set explicitly")
+  inherited = os.environ.get("VUNIT_SIMULATOR")
+  requested = expected
   root = work_root("vu") / args.name
   if root.exists() and any(root.iterdir()):
     print(f"{root} must be new or empty", file=sys.stderr)
@@ -58,12 +58,16 @@ def main(argv: list[str] | None = None) -> int:
   root.mkdir(parents=True, exist_ok=True)
   xunit = root / "vunit_results.xml"
   env = {k: v for k, v in os.environ.items() if k != "LM_MEM_BUILD_DIR"}
+  # The campaign name decides the simulator, never the environment.
+  env["VUNIT_SIMULATOR"] = requested
   cmd = [sys.executable, str(ROOT_DIR / "sim" / "vunit" / "run.py"), "-p", str(args.parallel), "--no-color",
          "--output-path", str(root / "vunit_out"), "--xunit-xml", str(xunit)]
   with (root / "console.log").open("w", encoding="utf-8") as handle:
     code = subprocess.run(cmd, cwd=ROOT_DIR, env=env, stdout=handle, stderr=subprocess.STDOUT).returncode
   result = {"campaign": args.name, **evaluate(xunit, code, requested, version), "commit": commit(),
             "manifest_hash": manifest_hash()}
+  if inherited and inherited != requested:
+    result["simulator_environment_ignored"] = inherited
   (root / "results.json").write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
   result["archive"] = archive_campaign(f"vunit_{args.name}", root)
   (root / "results.json").write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")

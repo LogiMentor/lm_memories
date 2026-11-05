@@ -887,6 +887,16 @@ the summary in `<campaign root>/summary.md`.
   2023-05-07). Synthesis stopped before elaboration (no generic bound, no
   error of the design), and the same case completed in the launch before.
   The pilot reported only "did not complete synthesis".
+- **Publishing:** `python -m tools.campaign.publish <campaign root>`
+  writes `docs/results/` from a campaign whose summary passed: one JSON
+  file per step plus `amd_campaign.json`, and the table of
+  `docs/results/README.md` between its markers. Every result carries its
+  commit (and `evaluated_on` for a step evaluated again), tool, version,
+  device and archive; a tool-error that passed when run again is published
+  with the rerun and keeps its first run under `first_run`. Every archive
+  is checked against its SHA-256 first, and the local paths are removed (a
+  path left stops the script). vendor_synth does not record the Quartus
+  version: it is read from the run logs.
 - **Memory thresholds:** the thresholds of the EDA lock in effect
   (`LM_EDA_MIN_FREE_MB_SYNTH`, `LM_EDA_MIN_FREE_MB_SIM`) are written to
   `logs/steps.txt` at the start and shown in the summary, with the waits

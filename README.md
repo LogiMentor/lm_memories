@@ -67,7 +67,10 @@ Support and validation status is tracked in
   nothing is pruned, the logs of every attempt are archived, compressed,
   outside the repository (`LM_EDA_ARCHIVE_DIR`, default `lm_eda_archive` in
   the home directory), and the result JSON records the archive name and
-  SHA-256 ([`docs/results/README.md`](docs/results/README.md)).
+  SHA-256. `python -m tools.campaign.publish <campaign root>` writes
+  `docs/results/` from a campaign that passed, with the commit, tool,
+  version, device and archive of every result
+  ([`docs/results/README.md`](docs/results/README.md)).
 
 ## Simulation Quick Start
 

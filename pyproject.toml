@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lm-memories"
-version = "0.1.0"
+version = "1.0.0"
 description = "Open-source VHDL memory and FIFO library by LogiMentor"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -7,6 +7,74 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-05
+
+First numbered release (issue #3, PR #4). It has breaking changes, so the
+major number changes; read **Migration for vendored copies** first.
+
+### Migration for vendored copies
+
+For a copy of `src/` inside another repository. Each item says what to check
+in the design that uses the library.
+
+1. **File list.** Take it again from `manifests/lm_memories.toml`
+   (`python -m tools.manifest list --flow synth-amd --format tcl`, `--flow
+   sim`, ...). `src/generic/lm_mem_ram_crw_crw.vhd` is gone: copy
+   `src/core/` and the architecture of your flow (`src/sim/`,
+   `src/vendor/amd/` or `src/vendor/unsupported/`). An old list fails at
+   analysis or elaboration ("no architecture"), not silently.
+2. **Read outputs are undefined before the first read.** No read output
+   register has an initial value: the data output is undefined until the
+   first enabled read reaches it (with latency 2, until the second). The
+   simulation model of the two-writer RAMs drives 'X' in that phase. Check
+   that nothing samples the read data, or a value derived from it (a
+   comparison, a checksum, a testbench check right after reset), before a
+   read was enabled; qualify it with your own valid flag.
+3. **Collisions are undefined.** On the two-writer RAMs, two writes to the
+   same address from both ports, in the same cycle or less than one period
+   of the slower clock apart, leave the word undefined until the next write
+   to it (with mixed widths, also the untouched parts of the wide word). On
+   any true dual-port RAM, a read on one port during a write of the other
+   port to the same address returns undefined data, also with a single
+   clock (`lm_mem_ram_rw_rw`). The simulation model of the two-writer RAMs
+   warns and returns 'X' for both (before: a deterministic value). Arbitrate
+   the two ports in the design; a testbench that expected the old value
+   must avoid the collision or accept 'X'. Read during write on the same
+   port still returns the old data; on a common-clock simple dual-port RAM
+   the old data is guaranteed only for AMD Vivado so far.
+4. **Addresses at or beyond the depth are undefined** (only possible with a
+   depth that is not a power of two): a read returns undefined data (before:
+   zeros); a write never changes a word within the depth (before: ignored).
+   Check that nothing relies on reading zeros there. The storage now takes
+   the next power of two words, which may cost more block RAM (32 x 1536
+   `lm_mem_ram_r_w`: two RAMB36 on 7-series).
+5. **`g_simulation` is deprecated.** It has no effect and still exists in
+   every entity, so instantiations that set it keep compiling; each RAM core
+   prints the note `g_simulation is deprecated and ignored` at the start of
+   simulation. Remove it from your instantiations before the next major
+   release, which removes it.
+6. **`LM_MEM_BUILD_DIR` is replaced by `LM_EDA_WORKDIR`** for the heavy runs:
+   `tools/vendor_synth` and `sim/scripts/run_postsynth.py` work under
+   `$LM_EDA_WORKDIR` (default `C:/lmeda` on Windows, `lmeda` in the system
+   temporary directory elsewhere) and ignore `LM_MEM_BUILD_DIR`. The VUnit
+   and mutation campaigns remove it from the environment of their runs.
+   `LM_MEM_BUILD_DIR` still sets the output of the developer runners
+   `sim/vunit/run.py` and `sim/scripts/run_ghdl.py`. Scripts that looked for
+   synthesis results under `$LM_MEM_BUILD_DIR` must look under
+   `$LM_EDA_WORKDIR`.
+7. **AMD Vivado: add `-assert` to `synth_design`.** Without it Vivado ignores
+   VHDL assertions; wrong generics still stop synthesis, but with
+   `[Synth 8-11323] assigned value '1' out of range` at the line of a
+   `C_ERROR_<CHECK>` constant instead of the message. With `-assert` the
+   message is printed (`[Synth 8-63] RTL assertion: "..."`). In project mode
+   the option goes in the More Options of the synthesis run
+   (`STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS`).
+8. **Generics that used to pass may now stop synthesis or elaboration** (see
+   Breaking changes): width ratios that are not a power of two, FIFO
+   almost-flag limits out of range (the default limits need a read depth of
+   at least 3), `g_meta_levels` below 2, and the two-writer RAMs with any
+   tool other than AMD Vivado.
+
 ### Fixed
 
 - Generic RAMs were not inferred as block or distributed RAM by vendor tools

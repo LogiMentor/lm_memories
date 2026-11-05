@@ -57,8 +57,8 @@ Support and validation status is tracked in
 - A synthesis or simulation result counts only with positive evidence of a
   complete run: the tool's completion message, exit code 0, complete
   reports or counters of this run, and the same inputs (hash of the
-  sources and the manifest) when a result is evaluated again or a netlist
-  reused. Vivado scripts also write a status file (`synth_status.jsonl`:
+  sources and the manifest, of the generated top and of the tool script
+  with its options) when a result is evaluated again or a netlist reused. Vivado scripts also write a status file (`synth_status.jsonl`:
   outcome of each `synth_design`, error message, time, run id of the
   attempt); a pass needs "ok" there, an expected stop needs "failed", the
   error of the check in the log, and a non-zero exit code where the exit

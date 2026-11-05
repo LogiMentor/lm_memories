@@ -456,6 +456,48 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(result["status"], "not-run")
     self.assertIn("other inputs", result["problems"][0])
 
+  # The fingerprint of a run: generated top and tool script (second review of PR #4).
+
+  def _evaluate_again(self) -> dict:
+    main(["--config", str(self.root / "config.json"), "--evaluate-only"])
+    return json.loads((self.root / "work" / "summary.json").read_text(encoding="utf-8"))["results"][0]
+
+  def test_evaluate_only_regenerates_the_top_and_refuses_another(self) -> None:
+    from tools.vendor_synth import cli
+    self._run(self._good_spec(), case="crw_cr_36x4096_cc", part="xcku3p-ffva676-2-e")
+    self.assertNotEqual(self._evaluate_again()["status"], "not-run")
+    with mock.patch.object(cli, "_render_top", lambda job, case, entity: "-- another generated top\n"):
+      result = self._evaluate_again()
+    self.assertEqual(result["status"], "not-run", result["problems"])
+    self.assertIn("generated top", result["problems"][0])
+
+  def test_evaluate_only_refuses_other_tool_options(self) -> None:
+    from tools.vendor_synth import cli
+    self.assertEqual(self._run(self._good_spec())["status"], "pass")
+    command = cli.check.vivado_synth_command
+    # An option of synth_design that changes the result, in the regenerated script.
+    with mock.patch.object(cli.check, "vivado_synth_command",
+                           lambda synth, status: command(synth + " -flatten_hierarchy none", status)):
+      result = self._evaluate_again()
+    self.assertEqual(result["status"], "not-run", result["problems"])
+    self.assertIn("tool script", result["problems"][0])
+
+  def test_evaluate_only_on_a_record_without_fingerprint_checks_the_files_of_the_run(self) -> None:
+    # Records written before the fingerprint (the campaign of 4d1380c): the
+    # regenerated script and top are compared with the files the run used.
+    self.assertEqual(self._run(self._good_spec())["status"], "pass")
+    case_dir = self.root / "work" / "fake" / "r_w_16x64"
+    record = json.loads((case_dir / "run.json").read_text(encoding="utf-8"))
+    for key in ("top_hash", "script_hash"):
+      record["provenance"].pop(key, None)
+    (case_dir / "run.json").write_text(json.dumps(record), encoding="utf-8")
+    self.assertEqual(self._evaluate_again()["status"], "pass")
+    script = case_dir / "run_vivado.tcl"
+    script.write_text(script.read_text().replace("-mode out_of_context", "-mode out_of_context -flatten_hierarchy none"))
+    result = self._evaluate_again()
+    self.assertEqual(result["status"], "not-run", result["problems"])
+    self.assertIn("tool script", result["problems"][0])
+
   def test_missing_uram_row_on_ultrascale_plus_fails(self) -> None:
     util = UTIL_TEMPLATE.format(luts=1, lutram=20, regs=16, bram=0)
     result = self._run(self._good_spec(util=util), part="xcku3p-ffva676-2-e")

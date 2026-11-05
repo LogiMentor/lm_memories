@@ -13,12 +13,14 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import hashlib
 import json
 import os
 import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 import textwrap
 import uuid
 from dataclasses import dataclass
@@ -1167,6 +1169,63 @@ def _inputs(job: dict[str, Any], case: dict[str, Any], sources: list[Path]) -> d
   return provenance(sources, extra=[selection])
 
 
+def _normalized_script(text: str, job: dict[str, Any], case: dict[str, Any]) -> str:
+  """The tool script without the places of this run: the case directory
+  (any path that ends in <job>/<case>) becomes <work>, the repository <repo>."""
+  case_dir = re.escape(_sanitize(_job_name(job))) + r"[\/]+" + re.escape(_sanitize(case["name"]))
+  text = re.sub(r"[^\s{}\"']*?[\/]" + case_dir + r"(?=[\/}\s\"']|$)", "<work>", text.replace("\r\n", "\n"))
+  return re.sub(re.escape(ROOT_DIR.resolve().as_posix()), "<repo>", text, flags=re.IGNORECASE)
+
+
+def _fingerprint(job: dict[str, Any], case: dict[str, Any], script_text: str, top_text: str | None) -> dict[str, str]:
+  """Hashes of what the tool was given besides the library sources: the
+  generated top ("" for an entity case) and the tool script with every
+  option (part, generics, -assert, message limits, device, flow), plus the
+  environment of the job."""
+  def sha(text: str) -> str:
+    return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+  options = _normalized_script(script_text, job, case) + "\nenv=" + json.dumps(job.get("env", {}), sort_keys=True)
+  return {"top_hash": sha(top_text or ""), "script_hash": sha(options)}
+
+
+def _regenerated_fingerprint(job: dict[str, Any], case: dict[str, Any], top: str, sources: list[Path],
+                             generics: dict[str, Any], top_text: str | None) -> dict[str, str]:
+  """The fingerprint the case would have now: top and script generated in a
+  scratch directory (--evaluate-only keeps the files of the run)."""
+  with tempfile.TemporaryDirectory(prefix="lm_vs_fp_") as tmp:
+    case_dir = Path(tmp) / _sanitize(_job_name(job)) / _sanitize(case["name"])
+    (case_dir / "reports").mkdir(parents=True)
+    if top_text is not None:
+      top_file = case_dir / f"{top}.vhd"
+      top_file.write_text(top_text, encoding="utf-8")
+      sources = sources + [top_file]
+    script = case_dir / f"run_{_tool(job)}.tcl"
+    _tool_script(job, top, sources, script, case_dir / "reports", generics)
+    return _fingerprint(job, case, script.read_text(encoding="utf-8"), top_text)
+
+
+def _fingerprint_problem(record: dict[str, Any], current: dict[str, str], job: dict[str, Any],
+                         case: dict[str, Any], case_dir: Path, top: str, top_text: str | None) -> str | None:
+  """Why the run of the record had another generated top or other tool options, or None.
+
+  A record written before the fingerprint has no hashes: then the files the
+  run used (its tool script and generated top in the case directory) are
+  compared instead."""
+  recorded = {k: record.get("provenance", {}).get(k) for k in current}
+  if None in recorded.values():
+    script = case_dir / f"run_{_tool(job)}.tcl"
+    top_file = case_dir / f"{top}.vhd"
+    if not script.is_file() or (top_text is not None and not top_file.is_file()):
+      return "the previous run has no fingerprint and its tool script or generated top is missing; run the case again"
+    recorded = _fingerprint(job, case, script.read_text(encoding="utf-8"),
+                            top_file.read_text(encoding="utf-8") if top_text is not None else None)
+  if recorded["top_hash"] != current["top_hash"]:
+    return "the previous run used another generated top; run the case again"
+  if recorded["script_hash"] != current["script_hash"]:
+    return "the previous run used another tool script (options, part, generics or environment); run the case again"
+  return None
+
+
 def _read_run_record(path: Path) -> dict[str, Any] | None:
   try:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -1188,16 +1247,23 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
 
   script_file = case_dir / f"run_{_tool(job)}.tcl"
   sources = _source_files_for(job, case)
+  library = list(sources)
   inputs = _inputs(job, case, sources)
   generics: dict[str, Any] = {}
+  top_text = None
   if case.get("kind") == "entity":
     generics = dict(case.get("generics", {}))
-  elif not evaluate_only:
-    top_file = case_dir / f"{top}.vhd"
-    top_file.write_text(_render_top(job, case, top), encoding="utf-8")
-    sources = sources + [top_file]
+  else:
+    # Generated top: rendered again also for --evaluate-only, to check it.
+    top_text = _render_top(job, case, top)
+    if not evaluate_only:
+      top_file = case_dir / f"{top}.vhd"
+      top_file.write_text(top_text, encoding="utf-8")
+      sources = sources + [top_file]
   # Evaluation only: keep the script that actually ran.
   command = [] if evaluate_only else _tool_script(job, top, sources, script_file, reports, generics)
+  if not evaluate_only:
+    inputs.update(_fingerprint(job, case, script_file.read_text(encoding="utf-8"), top_text))
   log_file = case_dir / "run.log"
 
   result: dict[str, Any] = {
@@ -1238,6 +1304,10 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     elif not same_inputs(record.get("provenance"), inputs):
       problem = (f"the previous run used other inputs (commit {record.get('provenance', {}).get('commit', '?')}); "
                  "run the case again")
+    else:
+      current = _regenerated_fingerprint(job, case, top, library, generics, top_text)
+      problem = _fingerprint_problem(record, current, job, case, case_dir, top, top_text)
+      inputs.update(current)
     if problem:
       result.update(status="not-run", completed_at=result["started_at"], message=problem, problems=[problem])
       return result

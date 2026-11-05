@@ -465,7 +465,13 @@ Confirmed defaults:
   project, reports written by this run with every row, the generics read
   back (also of the inner entity of a generated top), and a run record
   (`run.json`: sources and manifest hash, commit, times, exit code) that
-  `--evaluate-only` requires to match the current inputs. An expected stop
+  `--evaluate-only` requires to match the current inputs. The record also
+  holds the hash of the generated top and of the tool script without its
+  paths (every option the tool gets: part, generics, `-assert`, message
+  limits, device, flow) plus the environment of the job; `--evaluate-only`
+  generates the top and the script again and compares them. A record
+  written before these hashes (the campaign of `4d1380c`) is compared with
+  the script and top files of the run in its case directory. An expected stop
   needs an error of the tool that names the check, the stop message, a
   non-zero exit code and the elaborated module of the check; each Vivado
   mode accepts only its own message (section 3.14).

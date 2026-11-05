@@ -10,7 +10,9 @@ files. Runs outside a campaign are pruned as before (tools/eda_workdir.py).
 
 - Directory: $LM_EDA_ARCHIVE_DIR, or lm_eda_archive in the home directory.
   It must not be inside the repository.
-- Name: <campaign>_<UTC time>.tar.xz.
+- Name: <campaign>_<UTC time>.tar.xz, or <campaign>_<UTC time>_<n>.tar.xz
+  when that name exists (two archives in one second). The file is created
+  exclusively: an existing archive is never overwritten.
 - Contents: every file of the work directory except compiled simulation
   libraries and tool caches (ARCHIVE_SKIP): logs of every attempt, reports,
   scripts, generated tops and adapters, netlists, result files.
@@ -67,11 +69,22 @@ def archive_campaign(campaign: str, *roots: Path) -> dict[str, object]:
   target_dir = archive_dir()
   target_dir.mkdir(parents=True, exist_ok=True)
   stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-  target = target_dir / f"{campaign}_{stamp}.tar.xz"
+  target, handle = _create_exclusive(target_dir, f"{campaign}_{stamp}")
   count = 0
-  with tarfile.open(target, "w:xz") as tar:
+  with handle, tarfile.open(fileobj=handle, mode="w:xz") as tar:
     for root in roots:
       for path in _members(root):
         tar.add(path, arcname=(Path(root.name) / path.relative_to(root)).as_posix(), recursive=False)
         count += 1
   return {"archive": target.name, "sha256": sha256_file(target), "files": count}
+
+
+def _create_exclusive(directory: Path, stem: str):
+  """A new archive file, opened for writing; never one that exists."""
+  for n in range(1, 10000):
+    target = directory / (f"{stem}.tar.xz" if n == 1 else f"{stem}_{n}.tar.xz")
+    try:
+      return target, target.open("xb")
+    except FileExistsError:
+      continue
+  raise SystemExit(f"cannot create a new archive {stem}*.tar.xz in {directory}")

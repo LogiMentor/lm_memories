@@ -32,6 +32,28 @@ class ArchiveTest(unittest.TestCase):
       with tarfile.open(target) as tar:
         self.assertEqual(sorted(tar.getnames()), ["work/case/run.attempt1.log", "work/case/run.log"])
 
+  def test_archives_of_the_same_second_get_their_own_names_and_never_overwrite(self) -> None:
+    # Second review of PR #4: <campaign>_<UTC second>.tar.xz was opened with
+    # "w": two archives in one second, or an existing file, were overwritten.
+    from tools import eda_archive
+    fixed = mock.Mock()
+    fixed.datetime.now.return_value.strftime.return_value = "20261105T000000Z"
+    with tempfile.TemporaryDirectory() as tmp:
+      work = Path(tmp) / "work"
+      work.mkdir()
+      (work / "run.log").write_text("log")
+      archive = Path(tmp) / "archive"
+      archive.mkdir()
+      (archive / "test_20261105T000000Z.tar.xz").write_bytes(b"an earlier archive")
+      with mock.patch.dict(os.environ, {ARCHIVE_ENV: str(archive)}), mock.patch.object(eda_archive, "dt", fixed):
+        first = archive_campaign("test", work)
+        second = archive_campaign("test", work)
+      self.assertEqual((archive / "test_20261105T000000Z.tar.xz").read_bytes(), b"an earlier archive")
+      names = {first["archive"], second["archive"], "test_20261105T000000Z.tar.xz"}
+      self.assertEqual(len(names), 3)
+      for record in (first, second):
+        self.assertEqual(record["sha256"], sha256_file(archive / record["archive"]))
+
   def test_archive_outside_the_repository_only(self) -> None:
     with mock.patch.dict(os.environ, {ARCHIVE_ENV: str(ROOT_DIR / "archive")}):
       with self.assertRaises(SystemExit):

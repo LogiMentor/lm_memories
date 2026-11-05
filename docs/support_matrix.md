@@ -3,56 +3,59 @@
 
 # Support Matrix
 
+What is verified, per entity and per tool. The numbers behind each entry are
+in [`docs/results/`](results/README.md); the plan and the open items are in
+[`docs/PLAN.md`](PLAN.md).
+
 Status values:
 
-- `planned`: public target is identified but not implemented yet.
-- `simulated`: covered by portable simulation models and self-checking tests.
-- `synthesis-smoke-tested`: checked with a local vendor synthesis campaign.
-- `production-tested`: validated in a reviewed production integration.
+- **simulated**: the VUnit harness (scoreboard, frozen reference model,
+  coverage thresholds) passes on GHDL and Questa; the legacy GHDL tests pass.
+- **synthesis checked**: `tools/vendor_synth` passes with the expected
+  results of `tools/vendor_synth/expected/<vendor>.toml` (memory primitives,
+  register and LUT ceilings, 0 CRITICAL WARNINGs, generics read back).
+- **netlist checked**: the same harness passes on the synthesized netlist
+  (`sim/scripts/run_postsynth.py`, GHDL with UNISIM and xsim).
+- **stops**: synthesis stops at the fallback check
+  (`no validated two-writer RAM architecture for this tool`), as expected.
+- **not checked**: no campaign with this tool yet.
+- **not run**: the tool is not available (Lattice Diamond: license expired;
+  Microchip Libero: not installed).
 
-## RTL Status
+## RTL
 
-| Area | Entity | Status | Test Coverage |
-| --- | --- | --- | --- |
-| Generic RAM | `lm_mem_ram_crw_crw` | simulated | GHDL CI |
-| Generic RAM | `lm_mem_ram_rw_rw` | simulated | GHDL CI |
-| Generic RAM | `lm_mem_ram_cr_cw` | simulated | source-order coverage |
-| Generic RAM | `lm_mem_ram_cr_cw_ratio` | simulated | source-order coverage |
-| Generic RAM | `lm_mem_ram_crw_cr` | simulated | source-order coverage |
-| Generic RAM | `lm_mem_ram_crw_cw` | simulated | source-order coverage |
-| Generic RAM | `lm_mem_ram_r_w` | simulated | GHDL CI |
-| Generic RAM | `lm_mem_ram_r_w_ratio` | simulated | source-order coverage |
-| FIFO | `lm_mem_fifo` | simulated | GHDL CI through wrappers |
-| FIFO | `lm_mem_fifo_sync` | simulated | GHDL CI |
-| FIFO | `lm_mem_fifo_async` | simulated | GHDL CI |
-| Inference RAM | `lm_mem_ram_r_w_infer` | simulated | GHDL CI |
-| Xilinx primitive wrapper | `lm_mem_xilinx_ram_r_w_prim` | simulated | GHDL CI |
-| Intel primitive wrapper | `lm_mem_intel_ram_r_w_prim` | simulated | GHDL CI |
-| Lattice primitive wrapper | `lm_mem_lattice_ram_r_w_prim` | simulated | GHDL CI |
-| Microchip primitive wrapper | `lm_mem_microchip_ram_r_w_prim` | simulated | GHDL CI |
-| ROM | Generic ROM modules | planned | not started |
-
-## Vendor Status
-
-| Vendor | Tools | Families | Generic | Inference | Primitives |
+| Entity | Simulation | AMD Vivado 2023.1 (`xc7a35tfgg484-2`, `xcku3p-ffva676-2-e`) | Intel Quartus 23.1 (Cyclone V) | Lattice | Microchip |
 | --- | --- | --- | --- | --- | --- |
-| AMD/Xilinx | ISE, Vivado | Spartan-6, 7-Series, UltraScale, UltraScale+ | simulated | simulated | simulated |
-| Intel/Altera | Quartus | Cyclone, Arria, Stratix | simulated | simulated | simulated |
-| Lattice | Diamond, Radiant, Yosys/nextpnr | iCE40, ECP5, Nexus | simulated | simulated | simulated |
-| Microchip/Microsemi | Libero | IGLOO, SmartFusion, RTG4, PolarFire | simulated | simulated | simulated |
-| Generic | GHDL, Yosys where applicable | Portable behavioural targets | simulated | simulated | simulated |
+| `lm_mem_ram_r_w` | simulated | synthesis checked; 36 x 4096 on UltraScale+ (URAM) netlist checked | not checked (phase 4) | not run | not run |
+| `lm_mem_ram_cr_cw` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
+| `lm_mem_ram_r_w_ratio` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
+| `lm_mem_ram_cr_cw_ratio` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
+| `lm_mem_ram_crw_cr` | simulated | synthesis checked; 36 x 4096 on one clock netlist checked | not checked (phase 4) | not run | not run |
+| `lm_mem_ram_crw_crw` | simulated | synthesis checked, netlist checked | stops | not run (stops by design) | not run (stops by design) |
+| `lm_mem_ram_rw_rw` | simulated | synthesis checked, netlist checked | stops | not run (stops by design) | not run (stops by design) |
+| `lm_mem_ram_crw_cw` | simulated | synthesis checked, netlist checked | stops | not run (stops by design) | not run (stops by design) |
+| `lm_mem_fifo_sync`, `lm_mem_fifo_async` (`lm_mem_fifo`) | simulated | synthesis checked | not checked (phase 4) | not run | not run |
+| `lm_mem_ram_r_w_infer` | simulated (legacy test) | wrong generics stop synthesis; no expected results | wrong generics stop | not run | not run |
+| `lm_mem_*_ram_r_w_prim` (deprecated: no vendor primitive inside) | simulated (legacy test) | wrong generics stop synthesis; no expected results | wrong generics stop | not run | not run |
+| ROM | planned | - | - | - | - |
 
-## Local Synthesis Cases
+Wrong generics stop synthesis for every entity (static checks,
+`f_static_check`): checked with Vivado with and without `synth_design
+-assert`, with Quartus, and with GHDL (`tools/tests/test_static_checks.py`).
 
-| Case | Coverage Intent |
-| --- | --- |
-| `generic_r_w_32x1024` | common-clock one-write one-read RAM |
-| `generic_rw_rw_32x1024` | common-clock true dual-port RAM |
-| `generic_crw_crw_32x1024` | dual-clock true dual-port RAM |
-| `infer_r_w_bram_32x1024` | vendor-aware inferred block RAM candidate |
-| `infer_r_w_distributed_16x64` | vendor-aware inferred distributed RAM candidate |
-| `primitive_r_w_block_32x1024` | vendor primitive-ready one-write one-read wrapper |
+## Behaviour that depends on the vendor
 
-Local vendor synthesis results become meaningful only after reviewing the
-generated reports and confirming that the expected memory resources were
-inferred or instantiated for the selected family.
+- Read of the address written in the same cycle on a common-clock simple
+  dual-port RAM (`lm_mem_ram_r_w`, `lm_mem_ram_r_w_ratio`): old data,
+  **verified on AMD only** (RTL and netlist, block RAM and URAM). Quartus
+  23.1 reports `Warning (276027): Inferred dual-clock RAM node ... The
+  read-during-write behavior of a dual-clock RAM is undefined` for
+  `lm_mem_ram_r_w` 32 x 1024 on Cyclone V; whether old data holds on Intel is
+  checked in phase 4.
+- Collisions between the ports of a true dual-port RAM, and accesses beyond
+  a depth that is not a power of two, are undefined on every vendor.
+- URAM: Vivado chooses it by itself for `lm_mem_ram_r_w` 36 x 4096 on
+  UltraScale+. Its behaviour (old data, latency 1, zero initial content) is
+  checked on the UNISIM simulation model of `URAM288`, not on hardware.
+
+No entity is checked on hardware.

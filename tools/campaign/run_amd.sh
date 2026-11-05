@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+#
+# AMD campaign for docs/results (issue #3): pilot, then every campaign in
+# sequence. Every tool run holds the machine-wide EDA lock and waits there
+# for free memory (tools/eda_lock.py); the logs of every step are archived
+# with their SHA-256 (tools/eda_archive.py).
+#
+#   bash tools/campaign/run_amd.sh
+#
+# Environment (defaults in brackets):
+#   LM_CAMPAIGN_ROOT     campaign directory, must be new or empty
+#                        [$LM_EDA_WORKDIR/c; default C:/lmeda/c on Windows,
+#                        lmeda/c in the system temp elsewhere]
+#   LM_EDA_ARCHIVE_DIR   archives [~/lm_eda_archive]
+#   LM_VIVADO_DIR        [C:/Xilinx/Vivado/2023.1]
+#   LM_QUARTUS_DIR       [C:/intelFPGA_lite/23.1std/quartus] (checked only)
+#   VUNIT_MODELSIM_PATH  Questa [C:/questasim64_2021.1/win64]
+#   GHDL                 GHDL executable [ghdl on PATH, else C:/msys64/ucrt64/bin/ghdl]
+#   LM_EDA_RETRY_DELAYS  seconds to wait before the first, second rerun of a
+#                        transient tool failure [30,60] (tools/eda_retry.py)
+#   LM_CAMPAIGN_RESUME   resume an existing campaign root (its pilot passed)
+#                        with only these steps, separated by spaces [unset]:
+#                        vivado, checks_vivado, checks_quartus: the results
+#                        evaluated again with the current checks, no tool
+#                        run (tools/campaign/resume.py); postsynth: run again
+#                        from scratch (the old ps kept as ps.before_<time>).
+#                        Refused if a kept step's sources, manifest, harness
+#                        or configuration changed since it ran
+#                        (tools/campaign/deps.py, logs/deps.json).
+#                        Then the tool-errors of these steps run again, and
+#                        the summary is written again. The results of the
+#                        other steps stay as they are; logs/steps.txt records
+#                        the commit of the resume.
+#
+# Steps:
+#   pilot           python -m tools.campaign.pilot (launcher exit codes,
+#                   string generics, 1000 for 1024, old code); a case that
+#                   ends as tool-error runs again, at most twice; if a case
+#                   fails or stays a tool-error, the script stops with exit
+#                   code 1
+#   vivado          vendor_synth, vivado_check.toml (55 cases)
+#   checks_vivado   vendor_synth, fallback_check.toml (with and without -assert)
+#   checks_quartus  vendor_synth, quartus_check.toml
+#   postsynth       run_postsynth.py, both parts, URAM configurations included
+#   vunit_ghdl      run_vunit_campaign.py on GHDL
+#   vunit_questa    run_vunit_campaign.py on Questa (-p 1)
+#   mutation        mutation_check.py --campaign, with baseline
+#   rerun_tool_errors  python -m tools.campaign.rerun: every case that ended
+#                   as tool-error runs once more (never a fail); the summary
+#                   lists each one with its first and second result
+#
+# The memory thresholds of the EDA lock (LM_EDA_MIN_FREE_MB_SYNTH, default
+# 4096 MB, and LM_EDA_MIN_FREE_MB_SIM, default 2048 MB) are recorded in
+# logs/steps.txt and in the summary.
+#
+# Result: <campaign root>/summary.md and summary.json (tools/campaign/summarize.py).
+# Exit code: 0 only if the pilot and every step passed.
+
+set -u
+REPO=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$REPO" || exit 2
+
+fail() { echo "run_amd.sh: $*" >&2; exit 2; }
+
+# Prerequisites, before anything runs.
+PY=${PYTHON:-python}
+"$PY" -c 'import sys; assert sys.version_info >= (3, 11), sys.version' 2>/dev/null \
+  || fail "Python 3.11 or newer is needed as '$PY' (set PYTHON)"
+"$PY" -c 'import vunit' 2>/dev/null || fail "VUnit is not installed for $PY (pip install vunit_hdl)"
+if [ -z "${GHDL:-}" ]; then
+  if command -v ghdl >/dev/null 2>&1; then GHDL=$(command -v ghdl)
+  elif [ -x /c/msys64/ucrt64/bin/ghdl.exe ] || [ -x /c/msys64/ucrt64/bin/ghdl ]; then GHDL=/c/msys64/ucrt64/bin/ghdl
+  else fail "GHDL not found: put it on PATH or set GHDL"; fi
+fi
+export GHDL
+export PATH="$(dirname "$GHDL"):$PATH"
+export LM_VIVADO_DIR=${LM_VIVADO_DIR:-C:/Xilinx/Vivado/2023.1}
+LM_QUARTUS_DIR=${LM_QUARTUS_DIR:-C:/intelFPGA_lite/23.1std/quartus}
+export VUNIT_MODELSIM_PATH=${VUNIT_MODELSIM_PATH:-C:/questasim64_2021.1/win64}
+[ -d "$LM_VIVADO_DIR/bin" ] || fail "Vivado not found in $LM_VIVADO_DIR"
+[ -d "$LM_QUARTUS_DIR" ] || fail "Quartus not found in $LM_QUARTUS_DIR"
+[ -d "$VUNIT_MODELSIM_PATH" ] || fail "Questa not found in $VUNIT_MODELSIM_PATH"
+# The tool configurations name these directories; a different installation needs them changed too.
+grep -q "install_dir = \"$LM_VIVADO_DIR\"" tools/vendor_synth/vivado_check.toml \
+  || fail "tools/vendor_synth/*.toml name another Vivado directory than $LM_VIVADO_DIR"
+[ -z "$(git status --porcelain --untracked-files=no)" ] \
+  || fail "tracked files differ from HEAD: commit first, the results record the commit"
+
+ROOT=${LM_CAMPAIGN_ROOT:-$("$PY" -c 'from tools.eda_workdir import work_root; print(work_root("c").as_posix())')}
+RESUME=${LM_CAMPAIGN_RESUME:-}
+TAG=$(date -u +%Y%m%dT%H%M%SZ)
+if [ -n "$RESUME" ]; then
+  for s in $RESUME; do
+    case $s in vivado|checks_vivado|checks_quartus|postsynth) ;;
+      *) fail "LM_CAMPAIGN_RESUME: $s cannot be resumed (vivado, checks_vivado, checks_quartus, postsynth)";;
+    esac
+  done
+  [ -f "$ROOT/logs/steps.txt" ] || fail "LM_CAMPAIGN_RESUME: $ROOT is not a campaign root (no logs/steps.txt)"
+  "$PY" -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1])).get("ok") else 1)' "$ROOT/pilot/pilot.json" \
+    2>/dev/null || fail "LM_CAMPAIGN_RESUME: the pilot of $ROOT did not pass"
+  # The kept steps must have the dependencies they ran with (tools/campaign/deps.py).
+  "$PY" -m tools.campaign.deps check "$ROOT" $RESUME     || fail "LM_CAMPAIGN_RESUME: refused, the dependencies of a kept step changed (above)"
+elif [ -d "$ROOT" ] && [ -n "$(ls -A "$ROOT")" ]; then
+  fail "campaign root $ROOT is not empty (move or delete it; set LM_CAMPAIGN_ROOT for another one)"
+fi
+mkdir -p "$ROOT/logs" || fail "cannot create $ROOT"
+STEPS="$ROOT/logs/steps.txt"
+stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+# Memory thresholds of the EDA lock in effect for every run of the campaign
+# (tools/eda_lock.py), recorded in the step log and in the summary.
+MEMORY=$("$PY" -c 'from tools.eda_lock import min_free_mb
+print("; ".join("%s %d MB (%s)" % ((k,) + (int(min_free_mb(k)[0]), min_free_mb(k)[1])) for k in ("synthesis", "simulation")))') \
+  || fail "cannot read the memory thresholds of tools/eda_lock.py"
+# Waits before a rerun (tools/eda_retry.py); a wrong value stops here.
+RETRY_WAITS=$("$PY" -c 'from tools.eda_retry import retry_delays, RETRY_DELAYS_ENV
+print("%s s (%s)" % (", ".join("%g" % d for d in retry_delays()), RETRY_DELAYS_ENV))') \
+  || fail "wrong LM_EDA_RETRY_DELAYS (seconds separated by commas, for example 30,60)"
+if [ -n "$RESUME" ]; then
+  {
+    echo "$(stamp) resume commit $(git rev-parse HEAD) steps: $RESUME"
+    echo "memory thresholds: $MEMORY"
+    echo "retry waits: $RETRY_WAITS"
+  } >> "$STEPS"
+else
+  {
+    echo "$(stamp) start commit $(git rev-parse HEAD)"
+    echo "python: $("$PY" --version 2>&1); ghdl: $("$GHDL" --version | head -1); vivado: $LM_VIVADO_DIR"
+    echo "memory thresholds: $MEMORY"
+    echo "retry waits: $RETRY_WAITS"
+  } > "$STEPS"
+  "$PY" -m tools.campaign.deps record "$ROOT" > /dev/null || fail "cannot record the dependencies of the steps"
+fi
+echo "Campaign root: $ROOT"
+echo "Memory thresholds: $MEMORY"
+echo "Retry waits: $RETRY_WAITS"
+echo "Progress: $STEPS"
+
+step() {
+  local name=$1; shift
+  # A resumed step keeps the driver log of its earlier run.
+  [ -f "$ROOT/logs/$name.txt" ] && mv "$ROOT/logs/$name.txt" "$ROOT/logs/$name.before_$TAG.txt"
+  echo "$(stamp) begin $name" | tee -a "$STEPS"
+  "$@" > "$ROOT/logs/$name.txt" 2>&1
+  local rc=$?
+  echo "$(stamp) end $name rc=$rc" | tee -a "$STEPS"
+  return $rc
+}
+
+summarize() {
+  "$PY" -m tools.campaign.summarize "$ROOT" > "$ROOT/logs/summarize.txt" 2>&1
+  local rc=$?
+  echo
+  echo "Summary: $ROOT/summary.md"
+  return $rc
+}
+
+if [ -n "$RESUME" ]; then
+  FRESH=""
+  for s in $RESUME; do
+    if [ "$s" = postsynth ]; then
+      [ -d "$ROOT/ps" ] && mv "$ROOT/ps" "$ROOT/ps.before_$TAG"
+      step postsynth "$PY" sim/scripts/run_postsynth.py --campaign postsynth_vivado_2023.1_amd --work-root "$ROOT/ps"
+      FRESH="postsynth"
+    else
+      step "reevaluate_$s" "$PY" -m tools.campaign.resume "$ROOT" "$s"
+    fi
+  done
+  step rerun_tool_errors "$PY" -m tools.campaign.rerun "$ROOT" --steps $RESUME ${FRESH:+--fresh $FRESH}
+  "$PY" -m tools.campaign.deps record "$ROOT" $RESUME > /dev/null || fail "cannot record the dependencies of the steps"
+  echo "$(stamp) done (resume)" >> "$STEPS"
+  summarize
+  exit $?
+fi
+
+if ! step pilot "$PY" -m tools.campaign.pilot "$ROOT/pilot"; then
+  echo "$(stamp) pilot failed: campaigns not started" | tee -a "$STEPS"
+  summarize
+  exit 1
+fi
+
+step vivado "$PY" -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going \
+  --campaign vivado_2023.1_amd --work-root "$ROOT/vs"
+step checks_vivado "$PY" -m tools.vendor_synth --config tools/vendor_synth/fallback_check.toml --keep-going \
+  --campaign static_checks_vivado_2023.1 --work-root "$ROOT/fc"
+step checks_quartus "$PY" -m tools.vendor_synth --config tools/vendor_synth/quartus_check.toml --keep-going \
+  --campaign static_checks_quartus_23.1 --work-root "$ROOT/qc"
+step postsynth "$PY" sim/scripts/run_postsynth.py --campaign postsynth_vivado_2023.1_amd --work-root "$ROOT/ps"
+step vunit_ghdl env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/scripts/run_vunit_campaign.py ghdl_6.0.0 -p 2
+step vunit_questa env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=modelsim \
+  "$PY" sim/scripts/run_vunit_campaign.py questa_2021.1 -p 1
+step mutation env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/vunit/mutation_check.py --campaign ghdl_6.0.0
+# Once more, only the cases that ended as tool-error (never a fail).
+step rerun_tool_errors "$PY" -m tools.campaign.rerun "$ROOT"
+echo "$(stamp) done" >> "$STEPS"
+
+summarize
+exit $?

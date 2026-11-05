@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 LogiMentor Srl
+#
+# Expected Quartus results for the cases in ../cases.toml.
+#
+# There is no validated Intel two-writer architecture yet, so the synth-intel
+# flow compiles the fallback (src/vendor/unsupported). Expected result for the
+# two-writer RAMs: Analysis & Synthesis stops at the static check of the
+# fallback. For the bad_* cases it stops at the check of the wrong generic.
+# Quartus prints the assertion message (Error 10652) and an error at the line
+# of the constant expect_failure_constant (Error 10657, failed call of
+# f_static_check); either error is accepted, a line that is not an error is
+# not. "Analysis & Synthesis was unsuccessful" and a non-zero exit code are
+# required as well.
+#
+# Device: 5CEBA4F23C7 (Cyclone V E).
+
+[[expect]]
+case = "crw_crw_32x1024"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_NO_VALIDATED_TWO_WRITER_RAM_FOR_THIS_TOOL"
+expect_failure = ["no validated two-writer RAM architecture for this tool"]
+
+[[expect]]
+case = "rw_rw_32x1024"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_NO_VALIDATED_TWO_WRITER_RAM_FOR_THIS_TOOL"
+expect_failure = ["no validated two-writer RAM architecture for this tool"]
+
+[[expect]]
+case = "crw_cw_32x1024"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_NO_VALIDATED_TWO_WRITER_RAM_FOR_THIS_TOOL"
+expect_failure = ["no validated two-writer RAM architecture for this tool"]
+
+[[expect]]
+case = "bad_r_w_latency3"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_RD_LATENCY_NOT_1_OR_2"
+expect_failure = ["lm_mem_ram_sdp: read latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_r_w_ratio_24to8"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_WIDTH_RATIO_NOT_POW2"
+expect_failure = ["lm_mem_ram_sdp: port widths must have a power-of-two ratio"]
+
+[[expect]]
+case = "bad_crw_cr_latency3"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_A_LATENCY_NOT_1_OR_2"
+expect_failure = ["lm_mem_ram_tdp1w: port A latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_fifo_sync_depth24"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_WR_DEPTH_NOT_POW2"
+expect_failure = ["lm_mem_fifo: g_wr_depth must be a power of two"]
+
+[[expect]]
+case = "bad_ccd_resync_levels1"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_META_LEVELS_BELOW_2"
+expect_failure = ["lm_mem_ccd_resync: g_meta_levels must be at least 2"]
+
+[[expect]]
+case = "bad_fifo_almost_full_0"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_ALMOST_FULL_OUT_OF_RANGE"
+expect_failure = ["lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth"]
+
+[[expect]]
+case = "bad_fifo_almost_empty_15"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_ALMOST_EMPTY_OUT_OF_RANGE"
+expect_failure = ["lm_mem_fifo: g_almost_empty_limit must be in 0 to read depth - 2"]
+
+[[expect]]
+case = "bad_r_w_infer_latency3"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_LATENCY_NOT_1_OR_2"
+expect_failure = ["lm_mem_ram_r_w_infer: latency must be 1 or 2"]

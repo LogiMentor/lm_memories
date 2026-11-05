@@ -1,5 +1,4 @@
 {
-  "work_root": "build/vendor_synth",
   "jobs": [
     {
       "name": "vivado_artix7",

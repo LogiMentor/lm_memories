@@ -1,12 +1,18 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- Copyright 2026 LogiMentor Srl
 --=============================================================================
--- Module Name : lm_mem_ram_crw_crw
+-- Module Name : lm_mem_ref_ram_crw_crw
 -- Library     : -
 -- Project     : lm_memories
 -- Company     : LogiMentor Srl
 -------------------------------------------------------------------------------
 -- Description:
+--  FROZEN REFERENCE MODEL. Do not modify.
+--  Verbatim copy of lm_mem_ram_crw_crw at commit 8b60c86, with the entity
+--  renamed so it can be compiled next to the library. Testbenches compare the
+--  library cores with it cycle by cycle. It is not synthesizable as a RAM
+--  (see docs/PLAN.md, issue #3).
+--
 --  Generic true dual-port RAM.
 --  Both ports have independent clocks, enables, write enables, address buses,
 --  and read data outputs. Port widths may differ by an integer power-of-two
@@ -19,7 +25,7 @@ use ieee.numeric_std.all;
 
 use work.lm_mem_pkg.all;
 
-entity lm_mem_ram_crw_crw is
+entity lm_mem_ref_ram_crw_crw is
   generic(
     g_ram_a_latency : positive := 1;
     g_ram_a_data_w  : positive := 32;
@@ -43,9 +49,9 @@ entity lm_mem_ram_crw_crw is
     data_rd_a_o : out std_logic_vector(g_ram_a_data_w - 1 downto 0);
     data_rd_b_o : out std_logic_vector(g_ram_b_data_w - 1 downto 0)
   );
-end entity lm_mem_ram_crw_crw;
+end entity lm_mem_ref_ram_crw_crw;
 
-architecture a_rtl of lm_mem_ram_crw_crw is
+architecture a_rtl of lm_mem_ref_ram_crw_crw is
   constant C_MIN_WIDTH       : positive := f_min(g_ram_a_data_w, g_ram_b_data_w);
   constant C_MAX_WIDTH       : positive := f_max(g_ram_a_data_w, g_ram_b_data_w);
   constant C_RATIO           : positive := C_MAX_WIDTH / C_MIN_WIDTH;
@@ -119,23 +125,23 @@ architecture a_rtl of lm_mem_ram_crw_crw is
   end procedure p_write_word;
 begin
   assert (g_ram_a_latency = 1) or (g_ram_a_latency = 2)
-    report "lm_mem_ram_crw_crw: port A latency must be 1 or 2"
+    report "lm_mem_ref_ram_crw_crw: port A latency must be 1 or 2"
     severity failure;
 
   assert (g_ram_b_latency = 1) or (g_ram_b_latency = 2)
-    report "lm_mem_ram_crw_crw: port B latency must be 1 or 2"
+    report "lm_mem_ref_ram_crw_crw: port B latency must be 1 or 2"
     severity failure;
 
   assert (C_MAX_WIDTH mod C_MIN_WIDTH) = 0
-    report "lm_mem_ram_crw_crw: port widths must have an integer ratio"
+    report "lm_mem_ref_ram_crw_crw: port widths must have an integer ratio"
     severity failure;
 
   assert ((g_ram_a_depth * g_ram_a_data_w) mod g_ram_b_data_w) = 0
-    report "lm_mem_ram_crw_crw: port B depth must resolve to an integer"
+    report "lm_mem_ref_ram_crw_crw: port B depth must resolve to an integer"
     severity failure;
 
   assert g_init_file = ""
-    report "lm_mem_ram_crw_crw: initialization files are reserved for a future import step"
+    report "lm_mem_ref_ram_crw_crw: initialization files are reserved for a future import step"
     severity failure;
 
   proc_mem : process(clk_a_i, clk_b_i)

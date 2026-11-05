@@ -885,9 +885,11 @@ the summary in `<campaign root>/summary.md`.
   `sim/ref`) and configuration (vendor_synth configuration, cases and
   expected results; `run_postsynth.py` and `configs.py`; the VUnit runner;
   the mutations; the pilot configuration). A resume first compares them
-  for every kept step with the commit of the resume and is refused on a
-  difference, naming the steps to run again; a root without the record is
-  derived from git at the commits of `logs/steps.txt`.
+  for every kept step with the commit of the resume, and the
+  `manifest_hash` recorded in the result files of each kept step with the
+  current manifest; it is refused on a difference, naming the steps to run
+  again. A root without the record is derived from git at the commits of
+  `logs/steps.txt`.
 - **Retries in the pilot:** the pilot follows the same policy, case by
   case (each launcher case, the 1000-for-1024 run, each old-code case): a
   case that ends as `tool-error` (a transient signature of

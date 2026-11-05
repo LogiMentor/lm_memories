@@ -97,6 +97,20 @@ class DepsTest(unittest.TestCase):
     self.assertLess(script.index("tools.campaign.rerun \"$ROOT\" --steps"),
                     script.index('tools.campaign.deps record "$ROOT" $RESUME'))
 
+  def test_kept_results_of_another_manifest_refuse_the_resume(self) -> None:
+    # Codex, second review of PR #4: on a copy of the metadata, a kept VUnit
+    # step whose results record another manifest_hash was accepted.
+    deps.record(self.root, read=reader(TREE), commit="c1")
+    current = deps.manifest_hash_of(TREE["manifests/lm_memories.toml"])
+    for rel, data in (("vu/ghdl_6.0.0/results.json", {"manifest_hash": "0" * 64}),
+                      ("ps/results.json", {"manifest_hash": current}),
+                      ("vs/summary.json", {"results": [{"provenance": {"manifest_hash": current}}]})):
+      (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+      (self.root / rel).write_text(json.dumps(data), encoding="utf-8")
+    problems = deps.check(self.root, ["checks_vivado"], read=reader(TREE))
+    self.assertEqual(len(problems), 1, problems)
+    self.assertTrue(problems[0].startswith("vunit_ghdl: its results record manifest_hash 0000000"), problems)
+
   def test_real_history_of_the_campaign_of_4d1380c(self) -> None:
     # From 4d1380c to f971122 only checks, tools and run_postsynth.py changed:
     # a resume of checks_vivado and postsynth keeps every other step.

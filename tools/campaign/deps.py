@@ -24,7 +24,9 @@ the commit and its four hashes, from the working tree (run_amd.sh requires
 a clean tree, so it is the commit). check compares, for every step that is
 NOT resumed, the recorded hashes with the current ones; on a difference it
 prints the steps to run again and which dependency changed, and exits
-with 1. A root without deps.json (campaigns before this check) gets its
+with 1. The result files of every kept step must also record the manifest
+of the resume (manifest_hash in vs/fc/qc summary.json, ps/results.json,
+vu/*/results.json): their own evidence of what they ran on. A root without deps.json (campaigns before this check) gets its
 record derived from git: each step at the commit of logs/steps.txt that last
 ran it (the start, or a resume that named it).
 """
@@ -174,6 +176,45 @@ def record(root: Path, steps: list[str] | None = None, read: Reader | None = Non
   return data
 
 
+def manifest_hash_of(text: bytes) -> str:
+  """manifest_hash as the runs record it (tools/eda_provenance.py)."""
+  return hashlib.sha256(text.replace(b"\r\n", b"\n")).hexdigest()
+
+
+# The result files of each step, which record the manifest_hash of their runs.
+RESULT_FILES = {
+  "vivado": ["vs/summary.json"], "checks_vivado": ["fc/summary.json"], "checks_quartus": ["qc/summary.json"],
+  "postsynth": ["ps/results.json"], "vunit_ghdl": ["vu/ghdl_*/results.json"],
+  "vunit_questa": ["vu/questa_*/results.json"], "mutation": ["mut/*/results.json"],
+}
+
+
+def _recorded_manifests(value) -> set[str]:
+  if isinstance(value, dict):
+    found = {value["manifest_hash"]} if isinstance(value.get("manifest_hash"), str) else set()
+    return found.union(*(_recorded_manifests(v) for k, v in value.items() if k != "manifest_hash"))
+  if isinstance(value, list):
+    return set().union(*(_recorded_manifests(v) for v in value))
+  return set()
+
+
+def result_problems(root: Path, step: str, manifest: str) -> list[str]:
+  """The results of a kept step must record the manifest of the resume (their own evidence)."""
+  problems = []
+  for pattern in RESULT_FILES.get(step, []):
+    for path in sorted(root.glob(pattern)):
+      try:
+        recorded = _recorded_manifests(json.loads(path.read_text(encoding="utf-8")))
+      except (OSError, json.JSONDecodeError):
+        problems.append(f"{step}: {path.relative_to(root).as_posix()} cannot be read")
+        continue
+      other = sorted(recorded - {manifest})
+      if other:
+        problems.append(f"{step}: its results record manifest_hash {', '.join(h[:7] for h in other)} "
+                        f"({path.relative_to(root).as_posix()}), the manifest now is {manifest[:7]}")
+  return problems
+
+
 def check(root: Path, resumed: list[str], read: Reader | None = None,
           reader_at: Callable[[str], Reader] = commit_reader) -> list[str]:
   """Problems of a resume of these steps: kept steps whose dependencies changed."""
@@ -182,6 +223,7 @@ def check(root: Path, resumed: list[str], read: Reader | None = None,
   if not data.get("steps"):
     return [f"no record of the dependencies of the steps of {root} (logs/{DEPS_FILE} or logs/steps.txt)"]
   problems = []
+  manifest = manifest_hash_of(read(_COMMON["manifest"]).get("manifests/lm_memories.toml", b""))
   for step in STEPS:
     if step in resumed:
       continue
@@ -193,6 +235,7 @@ def check(root: Path, resumed: list[str], read: Reader | None = None,
     changed = [group for group in now if entry["deps"].get(group) != now[group]]
     if changed:
       problems.append(f"{step}: {', '.join(changed)} changed since commit {entry['commit'][:7]}")
+    problems += result_problems(root, step, manifest)
   return problems
 
 

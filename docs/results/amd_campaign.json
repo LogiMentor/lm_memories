@@ -153,8 +153,11 @@
   },
   "postsynth": {
    "ok": true,
-   "runs": 74,
-   "reruns": 2
+   "main_step_runs": 74,
+   "reruns": 2,
+   "rerun_netlist_runs": 4,
+   "consolidated_results": 78,
+   "meaning": "main_step_runs: simulation runs of the post-synthesis step itself, RTL and netlist, on both simulators (a synthesis that ended as tool-error has no netlist run there); reruns: syntheses that ended as tool-error and ran again (tools/campaign/rerun.py); rerun_netlist_runs: the netlist runs of those reruns; consolidated_results: the results published in postsynth_vivado_2023.1_amd.json = main_step_runs + rerun_netlist_runs"
   },
   "vunit_ghdl": {
    "ok": true,

@@ -917,8 +917,9 @@ the summary in `<campaign root>/summary.md`.
   device and archive; a tool-error that passed when run again is published
   with the rerun and keeps its first run under `first_run`. Every archive
   is checked against its SHA-256 first, and the local paths are removed (a
-  path left stops the script). vendor_synth does not record the Quartus
-  version: it is read from the run logs.
+  path left stops the script). vendor_synth records the Quartus version
+  since the second review of PR #4; for older results it is read from the
+  run logs.
 - **Memory thresholds:** the thresholds of the EDA lock in effect
   (`LM_EDA_MIN_FREE_MB_SYNTH`, `LM_EDA_MIN_FREE_MB_SIM`) are written to
   `logs/steps.txt` at the start and shown in the summary, with the waits

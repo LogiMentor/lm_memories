@@ -43,7 +43,14 @@ paths:
   - the pilot cases;
   - the exit code of every step;
   - every archive;
-  - the archives replaced by the resume (`superseded_archives`: the post-synthesis run on `4d1380c` and its rerun).
+  - the archives replaced by the resume (`superseded_archives`: the post-synthesis run on `4d1380c` and its rerun);
+  - for the post-synthesis step, what each count means: 74 runs of the step, 2 syntheses run again with 4 netlist runs, 78 consolidated results.
+- **Evaluated again after the second review of PR #4.** Every archived log behind these files was evaluated again with the checks of that round, without running a tool:
+  - the synthesis and static checks with `--evaluate-only` on the extracted archives, reruns included;
+  - the 78 post-synthesis results, their syntheses and collision messages;
+  - the VUnit results, including the simulator of every harness line;
+  - the mutation runs.
+  No result changed. The GHDL steps ran on GHDL 6.0.0: `Simulator: ghdl_GHDL_6.0.0_(tarball)_Dunoon_edition_` is in the console of the VUnit run and of the 15 mutation runs, and the same simulator is on every harness line.
 
 <!-- publish:begin -->
 | File | Result | Commit | Tool and version | Device | Archives (SHA-256) |
@@ -110,7 +117,7 @@ Synthesis on `5CEBA4F23C7` (`tools/vendor_synth/quartus_check.toml`).
 - **Result: 11 of 11 pass.**
   - The three two-writer RAMs stop at the fallback check.
   - The wrong generics stop with `Error (10652): VHDL Assertion Statement ... assertion is false - report "<message>"`.
-- **Tool version.** vendor_synth does not record the Quartus version. `publish.py` reads it from the run logs of the step (`Info: Version ...`), and all of them carry the same version.
+- **Tool version.** The vendor_synth of this campaign (`4d1380c`) did not record the Quartus version; it does since the second review of PR #4. For these results, `publish.py` reads it from the run logs of the step (`Info: Version ...`). All of them carry the same version, and an evaluation of the archived logs with the current vendor_synth gives the same.
 
 ## `postsynth_vivado_2023.1_amd.json`
 

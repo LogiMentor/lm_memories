@@ -64,6 +64,7 @@ from tools.eda_proc import run_tool  # noqa: E402
 from tools.eda_provenance import commit, manifest_hash, provenance, same_inputs  # noqa: E402
 from tools.eda_retry import run_with_retries  # noqa: E402
 from tools.eda_workdir import prune, work_root  # noqa: E402
+from tools.harness_counts import REQUIRED_COUNTS, parse_counts  # noqa: E402,F401
 from tools.manifest import load  # noqa: E402
 from tools.vendor_synth import check  # noqa: E402
 
@@ -77,10 +78,6 @@ ADAPTER_RTL = ROOT_DIR / "sim" / "vunit" / "lm_mem_tb_dut.vhd"
 HARNESS_FILESET = "tb_harness"
 RESULT_RE = re.compile(r"lm_mem_tb_harness \S+ \[[^\]]*\]: (.*)")
 VERDICT_RE = re.compile(r"tb_lm_mem_ram_plain: RESULT (PASS|FAIL)[^\n]*")
-# Every counter of the harness line (f_tb_counts_image in lm_mem_tb_pkg).
-REQUIRED_COUNTS = ("writes", "writes_masked", "writes_beyond_depth", "reads", "checked", "excluded_rw",
-                   "excluded_undefined", "excluded_beyond_depth", "collisions_rw", "collisions_ww", "init_reads",
-                   "old_data_reads", "hold_checks", "undefined_output_checks", "errors")
 # Diagnostics that end or invalidate a run: failures and errors of the
 # simulators (GHDL, xsim) and of the testbench.
 FATAL_RE = re.compile(r"^.*(?:\((?:assertion|report) (?:failure|error)\)|bound check failure|FATAL_ERROR|"
@@ -742,7 +739,7 @@ def parse_result(log_text: str, return_code: int | None, collisions: dict | None
   check_collisions pairs it with the harness."""
   verdicts = VERDICT_RE.findall(log_text)
   harness = RESULT_RE.findall(log_text)
-  counts = {k: int(v) for k, v in re.findall(r"(\w+)=(\d+)", harness[0])} if len(harness) == 1 else {}
+  counts, count_problems = parse_counts(harness[0]) if len(harness) == 1 else ({}, [])
   problems = []
   if return_code == TIMEOUT_RC:
     problems.append("timeout")
@@ -752,11 +749,8 @@ def parse_result(log_text: str, return_code: int | None, collisions: dict | None
     problems.append(f"RESULT lines: {verdicts or 'none'} (expected exactly one PASS)")
   if len(harness) != 1:
     problems.append(f"{len(harness)} harness result lines (expected 1)")
-  missing = [k for k in REQUIRED_COUNTS if k not in counts]
-  if counts and missing:
-    problems.append("harness counters missing: " + ", ".join(missing))
-  if counts.get("errors", 0) != 0:
-    problems.append(f"errors={counts['errors']}")
+  # Every counter, errors=0 written explicitly (tools/harness_counts.py).
+  problems += count_problems
   fatal_matches = list(FATAL_RE.finditer(log_text))
   result_facts = {}
   if collisions is not None:

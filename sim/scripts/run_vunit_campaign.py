@@ -8,7 +8,8 @@ set) into a new work directory ($LM_EDA_WORKDIR/vu/<name>), reads the
 structured results (VUnit xunit file) and the final harness line of each
 RAM test (counters), writes results.json there, and archives the whole
 directory (tools/eda_archive.py). The campaign passes only if every test
-passed and every RAM test printed exactly one harness line with errors=0.
+passed and every RAM test printed exactly one harness line with every
+counter and errors=0 written explicitly (tools/harness_counts.py).
 
   python sim/scripts/run_vunit_campaign.py ghdl_6.0.0
   VUNIT_SIMULATOR=modelsim VUNIT_MODELSIM_PATH=C:/questasim64_2021.1/win64 \\
@@ -32,6 +33,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from tools.eda_archive import archive_campaign  # noqa: E402
 from tools.eda_provenance import commit, manifest_hash  # noqa: E402
 from tools.eda_workdir import work_root  # noqa: E402
+from tools.harness_counts import parse_counts  # noqa: E402
 
 HARNESS_RE = re.compile(r"lm_mem_tb_harness (\S+) \[([^\]]*)\]: (.*)")
 
@@ -52,7 +54,26 @@ def main(argv: list[str] | None = None) -> int:
          "--output-path", str(root / "vunit_out"), "--xunit-xml", str(xunit)]
   with (root / "console.log").open("w", encoding="utf-8") as handle:
     code = subprocess.run(cmd, cwd=ROOT_DIR, env=env, stdout=handle, stderr=subprocess.STDOUT).returncode
+  result = {"campaign": args.name, **evaluate(xunit, code), "commit": commit(), "manifest_hash": manifest_hash()}
+  if not result["simulator"]:
+    result["simulator"] = env.get("VUNIT_SIMULATOR", "ghdl")
+  (root / "results.json").write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
+  result["archive"] = archive_campaign(f"vunit_{args.name}", root)
+  (root / "results.json").write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
+  print(f"{result['passed']} of {result['total']} pass; {len(result['problems'])} problems; "
+        f"results {root / 'results.json'}; archive {result['archive']['archive']}")
+  for problem in result["problems"][:20]:
+    print("  " + problem)
+  return 0 if not result["problems"] else 1
 
+
+def evaluate(xunit: Path, code: int | None) -> dict:
+  """Verdict of a VUnit run from its xunit file and the exit code of run.py.
+
+  Every test must pass; every RAM test must print exactly one harness line
+  with every counter and errors=0 written explicitly. Returns simulator (as
+  the harness printed it), exit_code, passed, total, problems and tests.
+  """
   tests = []
   simulator = ""
   if xunit.is_file():
@@ -62,12 +83,14 @@ def main(argv: list[str] | None = None) -> int:
                 else "skipped" if case.find("skipped") is not None else "pass")
       out = case.find("system-out")
       lines = HARNESS_RE.findall((out.text or "") if out is not None else "")
-      entry = {"test": name, "status": status}
+      entry: dict = {"test": name, "status": status}
       if ".tb_lm_mem_ram." in name:
         entry["harness_lines"] = len(lines)
         if len(lines) == 1:
           simulator = lines[0][1]
-          entry["counts"] = {k: int(v) for k, v in re.findall(r"(\w+)=(\d+)", lines[0][2])}
+          entry["counts"], count_problems = parse_counts(lines[0][2])
+          if count_problems:
+            entry["count_problems"] = count_problems
       tests.append(entry)
   problems = []
   if code != 0:
@@ -77,18 +100,9 @@ def main(argv: list[str] | None = None) -> int:
   problems += [f"{t['test']}: {t['status']}" for t in tests if t["status"] != "pass"]
   problems += [f"{t['test']}: {t['harness_lines']} harness lines" for t in tests
                if "harness_lines" in t and t["harness_lines"] != 1]
-  problems += [f"{t['test']}: errors={t['counts']['errors']}" for t in tests if t.get("counts", {}).get("errors")]
-  result = {"campaign": args.name, "simulator": simulator or env.get("VUNIT_SIMULATOR", "ghdl"), "commit": commit(),
-            "manifest_hash": manifest_hash(), "passed": sum(t["status"] == "pass" for t in tests),
-            "total": len(tests), "problems": problems, "tests": tests}
-  (root / "results.json").write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
-  result["archive"] = archive_campaign(f"vunit_{args.name}", root)
-  (root / "results.json").write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
-  print(f"{result['passed']} of {result['total']} pass; {len(problems)} problems; results {root / 'results.json'}; "
-        f"archive {result['archive']['archive']}")
-  for problem in problems[:20]:
-    print("  " + problem)
-  return 0 if not problems else 1
+  problems += [f"{t['test']}: {p}" for t in tests for p in t.get("count_problems", [])]
+  return {"simulator": simulator, "exit_code": code, "passed": sum(t["status"] == "pass" for t in tests),
+          "total": len(tests), "problems": problems, "tests": tests}
 
 
 if __name__ == "__main__":

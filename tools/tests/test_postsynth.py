@@ -47,6 +47,24 @@ class ParseResultTest(unittest.TestCase):
     self.assertIn("hold_checks", result["problems"][0])
     self.assertEqual(ps.parse_result(HARNESS + HARNESS + PASS, 0)["verdict"], "FAIL")
 
+  def test_every_counter_is_always_required_and_errors_explicit(self) -> None:
+    # Second review of PR #4: an empty harness line, a missing or malformed
+    # errors counter, or a repeated counter passed.
+    head = "lm_mem_tb_harness lm_mem_ram_crw_crw [GHDL_6.0.0]: "
+    cases = {
+      "empty": head + "\n",
+      "no errors": HARNESS.replace(" errors=0", ""),
+      "errors malformed": HARNESS.replace("errors=0", "errors=x"),
+      "errors negative": HARNESS.replace("errors=0", "errors=-1"),
+      "counter malformed": HARNESS.replace("checked=5", "checked=5a"),
+      "repeated": HARNESS.replace("\n", " errors=0\n"),
+      "errors not zero": HARNESS.replace("errors=0", "errors=2"),
+    }
+    for name, line in cases.items():
+      result = ps.parse_result(line + PASS, 0)
+      self.assertEqual(result["verdict"], "FAIL", name)
+      self.assertTrue(result["problems"], name)
+
   def test_fatal_diagnostic_after_the_result_fails(self) -> None:
     for fatal in ("x.vhd:10:5:@1us:(report failure): late\n", "ERROR: [XSIM 43-3316] Signal SIGSEGV received.\n",
                   "x.vhd:1:1:@0ms:(assertion failure): bound check failure\n"):

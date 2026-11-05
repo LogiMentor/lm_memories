@@ -708,6 +708,13 @@ Each phase ends with a report and waits for confirmation.
   exceeds 260-Byte` with deep work directories (Vivado doubles the path in
   `.Xil`). They are tool errors, never results: a run that did not reach
   elaboration is reported as `tool-error` by the expected-failure check.
+  Since the second review of PR #4 the rule is the same for every case: an
+  explicit error of the project in the log (any error other than the
+  generic "command failed") makes the run a `fail`, never a `tool-error`,
+  unless the tool is recognized as dead (Vivado: `synth_design` of the
+  attempt started and never returned, "tool-died"). Only a run with no
+  completion and no error of the project is a `tool-error`; so a `[Common
+  17-680]` path error stops as a `fail`, and a `fail` is never run again.
 
 ### 3.13 Decisions after phase 3
 

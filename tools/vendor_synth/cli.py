@@ -29,7 +29,7 @@ from tools.eda_archive import archive_campaign
 from tools.eda_lock import heavy_tool_lock
 from tools.eda_proc import run_tool
 from tools.eda_provenance import provenance, same_inputs
-from tools.eda_retry import retry_reason, run_with_retries
+from tools.eda_retry import project_error, retry_reason, run_with_retries
 from tools.eda_workdir import prune, work_root as work_root_for
 from tools.manifest import load as load_manifest
 
@@ -1062,6 +1062,28 @@ def _report_is_fresh(path: Path, started_at: str | None) -> bool:
   return path.stat().st_mtime >= started - 2.0
 
 
+def _classify(problems: list[str], log_text: str, status: tuple[dict[str, Any] | None, list[str]] | None,
+              vivado: bool, elaborated: bool = False) -> str:
+  """Status of a run with these problems (none: pass).
+
+  - The tool is recognized as dead (Vivado: synth_design of this attempt
+    started and never returned, check.synth_died): tool-error, whatever the
+    log says.
+  - The log has an explicit error of the project (eda_retry.project_error,
+    not the generic "command failed"), or the tool elaborated the file of the
+    check of an expected stop: fail, a result.
+  - Otherwise there is no evidence about the design (no completion and no
+    error): tool-error.
+  """
+  if not problems:
+    return "pass"
+  if vivado and status is not None and status[0] and status[0].get("outcome") == "started":
+    return "tool-error"
+  if elaborated or project_error(log_text):
+    return "fail"
+  return "tool-error"
+
+
 def _evaluate(
   job: dict[str, Any],
   case: dict[str, Any],
@@ -1096,12 +1118,8 @@ def _evaluate(
     module = _generics_module(case, top)
     if log and module is not None:
       problems += check.check_generics(case.get("generics", {}), log["module_generics"].get(module.lower(), {}))
-    # A tool that stopped before elaborating the design, or died before
-    # synth_design returned (status file still "started"), says nothing
-    # about the check.
-    died = bool(vivado and status[0] and status[0].get("outcome") == "started")
-    status = "pass" if not problems else ("fail" if facts["elaborated"] and not died else "tool-error")
-    return {"status": status, "problems": problems, "metrics": facts, "log": log}
+    return {"status": _classify(problems, log_text, status, vivado, facts["elaborated"]), "problems": problems,
+            "metrics": facts, "log": log}
   if tool not in ("vivado", "xilinx"):
     return {"status": "unchecked", "problems": [f"no result extraction for tool {tool} yet"], "metrics": {}, "log": {}}
   log = check.parse_vivado_log(log_text, top)
@@ -1127,7 +1145,8 @@ def _evaluate(
     incomplete.append("utilization report older than the run")
   if incomplete:
     problems = ["synthesis did not complete: " + "; ".join(incomplete)]
-    return {"status": "tool-error", "problems": problems, "metrics": metrics, "log": log}
+    return {"status": _classify(problems, log_text, status, vivado), "problems": problems, "metrics": metrics,
+            "log": log}
   problems: list[str] = []
   module = _generics_module(case, top)
   if module is None:

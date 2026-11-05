@@ -235,7 +235,9 @@ not appear (for example Vivado `Synth 8-6859` multi-driven nets). A case
 passes only when every field matches; the tool exit code alone never makes a
 pass. Other results:
 
-- `tool-error`: synthesis did not complete.
+- `tool-error`: synthesis did not complete and the log has no error of the
+  project, or the tool died inside `synth_design`. An explicit error of the
+  project is a `fail`.
 - `unchecked`: the case has no expected results.
 - `not-run`: the tool is not installed.
 

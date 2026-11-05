@@ -373,6 +373,49 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual(result["status"], "tool-error", result["problems"])
     self.assertIn("tool-died", result["problems"][0])
 
+  # An explicit error of the project is a fail, never a tool-error, unless the
+  # tool is recognized as dead (second review of PR #4).
+  PROJECT_ERROR_STOP = ["ERROR: [Synth 8-1031] lm_mem_missing is not declared [x.vhd:12]",
+                        "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w' [x.vhd:3]"]
+
+  def _campaign_step(self, sub: str = "vs") -> Path:
+    """The work root of the last run, moved to <campaign root>/<sub>."""
+    root = self.root / "campaign"
+    root.mkdir(exist_ok=True)
+    (self.root / "work").rename(root / sub)
+    return root
+
+  def test_project_error_is_a_fail_from_classification_to_summary(self) -> None:
+    from tools.campaign import rerun, summarize
+    result = self._run(self._good_spec(stop=self.PROJECT_ERROR_STOP))
+    self.assertEqual(result["status"], "fail", result["problems"])
+    self.assertEqual(result["retries"], [])
+    self.assertIn("Synth 8-1031", "; ".join(result["problems"]))
+    root = self._campaign_step()
+    self.assertEqual(rerun.tool_errors(root), [])  # a fail is never selected for a rerun
+    step = summarize._synthesis(root, "vs", [])
+    self.assertFalse(step["ok"])
+    self.assertEqual(step["counts"], {"fail": 1})
+    self.assertIn("r_w_16x64: fail", step["failures"][0])
+
+  def test_project_error_of_an_expected_stop_before_elaboration_is_a_fail(self) -> None:
+    # The file of the check was never elaborated, but the tool reported an
+    # error of the project: a result (fail), not a tool-error.
+    result = self._run(self._good_spec(stop=self.PROJECT_ERROR_STOP), case="bad_fifo_almost_full_0",
+                       job_extra={"assert": True})
+    self.assertEqual(result["status"], "fail", result["problems"])
+    self.assertIn("no evidence that the tool elaborated the file of the check", result["problems"])
+
+  def test_project_error_of_a_dead_tool_is_a_tool_error_selected_for_the_rerun(self) -> None:
+    from tools.campaign import rerun, summarize
+    result = self._run(self._good_spec(stop=self.PROJECT_ERROR_STOP, die_calls=9))
+    self.assertEqual(result["status"], "tool-error", result["problems"])
+    self.assertTrue(all("tool-died" in r for r in result["retries"]), result["retries"])
+    root = self._campaign_step()
+    self.assertEqual([(i["step"], i["case"]) for i in rerun.tool_errors(root)], [("vivado", "r_w_16x64")])
+    step = summarize._synthesis(root, "vs", [{"job": "fake", "case": "r_w_16x64", "rerun_status": "pass"}])
+    self.assertTrue(step["ok"], step)
+
   def test_a_stop_that_returned_is_not_run_again(self) -> None:
     spec = self._good_spec(stop=self.FIFO_STOP)
     result = self._run(spec, case="bad_fifo_almost_full_0", job_extra={"assert": True})

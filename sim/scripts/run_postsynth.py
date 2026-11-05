@@ -535,7 +535,9 @@ def dut_words(ram: dict, port: str, op: str, addr: int, luts: dict,
   RAMB36E1 tied to '1') are dropped. DUT address bits not wired to the
   primitive select a block of a RAM split in depth: each of their values is
   kept only if the enable (and, for a write, the write enable) of this port
-  of this primitive can be '1' for it, through the LUTs of the netlist.
+  of this primitive is '1' for it, through the LUTs of the netlist; if that
+  cannot be evaluated from the DUT inputs, the access is not converted (the
+  message stays unpaired, so fatal).
   Returns (DUT port, words), or why the access cannot be converted.
   """
   wiring = ram["ports"][port]
@@ -564,10 +566,21 @@ def dut_words(ram: dict, port: str, op: str, addr: int, luts: dict,
       env = {(addr_name, b): v for b, v in bits.items()}
       env[(en_name, None)] = 1
       env[(wen_name, None)] = 1 if op == "WRITE" else 0
-      if _eval_bit(wiring["en"], env, luts) == 0:
+      # The block of the address must be decided: an enable or write enable
+      # that cannot be evaluated from the DUT inputs makes the access unconvertible.
+      enable = _eval_bit(wiring["en"], env, luts)
+      if enable is None:
+        return (f"block of DUT address bits {free} not decided: the enable of port {port} cannot be evaluated "
+                "from the DUT inputs")
+      if enable == 0:
         continue
-      if op == "WRITE" and wiring["we"] and all(_eval_bit(b, env, luts) == 0 for b in wiring["we"].values()):
-        continue
+      if op == "WRITE" and wiring["we"]:
+        wes = [_eval_bit(b, env, luts) for b in wiring["we"].values()]
+        if 1 not in wes and None in wes:
+          return (f"block of DUT address bits {free} not decided: the write enable of port {port} cannot be "
+                  "evaluated from the DUT inputs")
+        if 1 not in wes:
+          continue
     words.append(sum(v << b for b, v in bits.items()))
   return dut, words
 

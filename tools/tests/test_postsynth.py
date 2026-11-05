@@ -260,6 +260,24 @@ class CollisionPairingTest(unittest.TestCase):
     self.assertEqual(result["verdict"], "FAIL")
     self.assertTrue(any("words [69]" in p for p in result["problems"]), result["problems"])
 
+  def test_unknown_bank_decode_is_not_paired(self) -> None:
+    # Second review of PR #4: when the enable of a block could not be
+    # evaluated from the DUT address (a LUT input that is not a DUT input),
+    # every word was kept, and the message paired with any block.
+    blocks = ""
+    for k, init in ((0, "2"), (1, "8")):
+      label = rf"\inst/gen_crw_crw.inst_dut/sv_mem_reg_bram_{k}" + "\\"
+      blocks += ramb(label, "RAMB18E1",
+                     ['(13 downto 10) => B"0000"', "(9 downto 4) => addr_b_i(5 downto 0)", '(3 downto 0) => B"0000"'],
+                     ['(13 downto 10) => B"0000"', "(9 downto 4) => addr_a_i(5 downto 0)", '(3 downto 0) => B"0000"'],
+                     en_a=f"en_a_{k}", en_b=f"en_b_{k}")
+      blocks += lut2(f"en_a_lut_{k}", init, "enb_i", "bank_reg", f"en_a_{k}")
+      blocks += lut2(f"en_b_lut_{k}", init, "ena_i", "bank_reg", f"en_b_{k}")
+    path = UNISIM_PATH.replace("sv_mem_reg\\:", "sv_mem_reg_bram_1\\:")
+    result = self._run(model_ww(1460, "0050", path=path), harness_ww(69, 1460), ww=1, ctx=context(blocks, depth=128))
+    self.assertEqual(result["verdict"], "FAIL")
+    self.assertTrue(any("block of DUT address bits" in p for p in result["problems"]), result["problems"])
+
   def test_unconvertible_messages_are_not_paired(self) -> None:
     harness = harness_ww(5, 1460)
     # 'X' in the address; an instance that is not in the netlist; an address

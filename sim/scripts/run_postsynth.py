@@ -630,7 +630,9 @@ def check_collisions(log_text: str, context: dict, counts: dict) -> tuple[set[in
     message whose cells overlap a word of each access. Each harness
     collision pairs at most once per block RAM.
   - Read/write: a harness read/write collision on the DUT port of the read
-    whose read cells overlap a word of the read access, at the instant of
+    whose read cells overlap a word of the read access and, on UltraScale+
+    (the message names the write address too), a word of the write access
+    of the other DUT port, at the instant of
     the message: its read or its write instant, or, with two clocks, a read
     less than the harness window from the message when the message is at an
     edge of the writing port only. The harness excludes a read for every
@@ -689,8 +691,8 @@ def check_collisions(log_text: str, context: dict, counts: dict) -> tuple[set[in
       why = "message not understood"
     else:
       for op, port, addr in event["accesses"]:
-        if event["kind"] == "rw" and op == "WRITE":
-          continue  # 7-series read/write: the write is on the read address
+        if event["kind"] == "rw" and op == "WRITE" and event["primitive"].endswith("E1"):
+          continue  # 7-series read/write: the write is on the read address, not in the message
         if addr is None:
           why = f"address of port {port} not readable"
           break
@@ -704,10 +706,20 @@ def check_collisions(log_text: str, context: dict, counts: dict) -> tuple[set[in
       match = next((i for i, (lo, hi, t) in enumerate(harness_ww) if (label, i) not in used["ww"]
                     and t == event["t_ps"] and all(overlap(cells(d, w), lo, hi) for _, d, w in converted)), None)
     elif why is None:
-      _, read_dut, read_words = converted[0]
-      match = next((i for i, (port, cell, t_rd, t_wr) in enumerate(harness_rw) if (label, i) not in used["rw"]
-                    and port == read_dut and rw_instant(event["t_ps"], read_dut, t_rd, t_wr)
-                    and overlap(cells(read_dut, read_words), cell, cell + ratio[port] - 1)), None)
+      _, read_dut, read_words = next(c for c in converted if c[0] == "READ")
+      read_cells = cells(read_dut, read_words)
+      # UltraScale+: the write of the message has its port and address too.
+      write = next((c for c in converted if c[0] == "WRITE"), None)
+      write_cells = cells(write[1], write[2]) if write else None
+      if write and write[1] == read_dut:
+        why = f"read and write on the same DUT port {read_dut}"
+      elif write and not any(overlap(write_cells, r.start, r.stop - 1) for r in read_cells):
+        why = f"the cells of the write (DUT port {write[1]} words {write[2][:4]}) are not those of the read"
+      else:
+        match = next((i for i, (port, cell, t_rd, t_wr) in enumerate(harness_rw) if (label, i) not in used["rw"]
+                      and port == read_dut and rw_instant(event["t_ps"], read_dut, t_rd, t_wr)
+                      and overlap(read_cells, cell, cell + ratio[port] - 1)
+                      and (write_cells is None or overlap(write_cells, cell, cell + ratio[port] - 1))), None)
     if match is not None:
       used[event["kind"]].add((label, match))
       paired[event["kind"]] += 1

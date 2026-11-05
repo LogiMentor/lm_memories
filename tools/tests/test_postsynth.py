@@ -205,6 +205,31 @@ class CollisionPairingTest(unittest.TestCase):
     # One clock: only the instant of the read or of the write.
     self.assertEqual(self._run(model_rw(11571, "0080"), harness, ww=0, rw=1)["verdict"], "FAIL")
 
+  def test_ultrascale_read_write_checks_both_accesses(self) -> None:
+    # Second review of PR #4: the write of an UltraScale+ read/write message
+    # (crw_cw.1clk.32x1024.lat2 on xcku3p, 2026-11-05: "A simultaneous WRITE
+    # on port B (0080) occured during a READ on port A (0080).") was ignored.
+    netlist = NETLIST_16X64.replace("RAMB18E1", "RAMB18E2")
+    path = ":tb_lm_mem_ram_plain:inst_harness:inst_dut:" + LABEL + ":"
+
+    def e2_rw(write_port: str, write_addr: str, read_port: str, read_addr: str) -> str:
+      return (f"RAMB18E2.vhd:2170:9:@1460ns:(assertion error): Error : [Unisim RAMB18E2-11]  : instance {path} : "
+              f"Memory Collision at time 1460 ns.\nA simultaneous WRITE on port {write_port} ({write_addr}) occured "
+              f"during a READ on port {read_port} ({read_addr}).\nThe WRITE was successful but the READ may be "
+              "corrupted.\n")
+    # Primitive port A is DUT port B: the read of DUT port B on cell 5, written by DUT port A.
+    harness = harness_rw("B", 5, 1460, 1460)
+    ctx = context(netlist)
+    result = self._run(e2_rw("B", "0050", "A", "0050"), harness, ww=0, rw=1, ctx=ctx)
+    self.assertEqual(result["verdict"], "PASS", result["problems"])
+    self.assertEqual(result["collisions"]["paired_rw"], 1)
+    # The write on another word, or on the DUT port of the read: not paired.
+    for model, why in ((e2_rw("B", "0060", "A", "0050"), "cells of the write"),
+                       (e2_rw("A", "0050", "A", "0050"), "same DUT port")):
+      result = self._run(model, harness, ww=0, rw=1, ctx=ctx)
+      self.assertEqual(result["verdict"], "FAIL", why)
+      self.assertTrue(any(why in p for p in result["problems"]), (why, result["problems"]))
+
   def test_constant_address_bits_are_dropped(self) -> None:
     # RAMB36E1 on xc7a35tfgg484-2: bit 15 tied to '1' (32896 = 0x8080, word 4).
     netlist = ramb(LABEL, "RAMB36E1",

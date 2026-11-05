@@ -1,0 +1,187 @@
+{
+ "step": "mutation",
+ "tool": "ghdl",
+ "tool_version": "6.0.0",
+ "part": null,
+ "simulator": "ghdl",
+ "mutations": [
+  {
+   "name": "sdp: reversed sub-word order on read",
+   "file": "src/core/lm_mem_ram_sdp.vhd",
+   "patterns": [
+    "*sdp.2clk.8to32.lat2*",
+    "*r_w_ratio.8to32.lat2*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.r_w_ratio.8to32.lat2.random",
+    "lib.tb_lm_mem_ram.sdp.2clk.8to32.lat2.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "sdp: second output stage not gated by enb_i",
+   "file": "src/core/lm_mem_ram_sdp.vhd",
+   "patterns": [
+    "*sdp.1clk.32x1024.lat2*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.sdp.1clk.32x1024.lat2.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "sdp: write ignores ena_i",
+   "file": "src/core/lm_mem_ram_sdp.vhd",
+   "patterns": [
+    "*sdp.1clk.32x1024.lat1*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.sdp.1clk.32x1024.lat1.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "sdp: latency 2 output taken from stage 1",
+   "file": "src/core/lm_mem_ram_sdp.vhd",
+   "patterns": [
+    "*r_w.32x1024.lat2*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.r_w.32x1024.lat2.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "tdp1w: port A write-first instead of read-first",
+   "file": "src/core/lm_mem_ram_tdp1w.vhd",
+   "patterns": [
+    "*tdp1w.1clk.32x1024.lat11*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.tdp1w.1clk.32x1024.lat11.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "tdp1w: port B read ignores enb_i",
+   "file": "src/core/lm_mem_ram_tdp1w.vhd",
+   "patterns": [
+    "*crw_cr.1clk.32x1024.lat1*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.crw_cr.1clk.32x1024.lat1.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "crw_crw sim: port A write ignores ena_i",
+   "file": "src/sim/lm_mem_ram_crw_crw_rtl.vhd",
+   "patterns": [
+    "*crw_crw.2clk.32x1024.lat12*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.crw_crw.2clk.32x1024.lat12.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "crw_crw sim: port B write-first instead of read-first",
+   "file": "src/sim/lm_mem_ram_crw_crw_rtl.vhd",
+   "patterns": [
+    "*crw_crw.1clk.32x1024.lat11*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.crw_crw.1clk.32x1024.lat11.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "crw_crw sim: write/write collision leaves the cell defined",
+   "file": "src/sim/lm_mem_ram_crw_crw_rtl.vhd",
+   "patterns": [
+    "*crw_crw.1clk.32x1024.lat11*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.crw_crw.1clk.32x1024.lat11.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "crw_crw sim: port B latency 2 output taken from stage 1",
+   "file": "src/sim/lm_mem_ram_crw_crw_rtl.vhd",
+   "patterns": [
+    "*crw_crw.2clk.32x1024.lat12*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.crw_crw.2clk.32x1024.lat12.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "crw_crw sim: reversed sub-word order on the wide port B read",
+   "file": "src/sim/lm_mem_ram_crw_crw_rtl.vhd",
+   "patterns": [
+    "*crw_crw.1clk.8to32.lat22*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.crw_crw.1clk.8to32.lat22.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "crw_crw sim: port B write ignores wen_b_i",
+   "file": "src/sim/lm_mem_ram_crw_crw_rtl.vhd",
+   "patterns": [
+    "*rw_rw.32x1024.lat1*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.rw_rw.32x1024.lat1.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "crw_crw sim: port A output defined (zero) before the first read",
+   "file": "src/sim/lm_mem_ram_crw_crw_rtl.vhd",
+   "patterns": [
+    "*crw_crw.1clk.32x1024.lat11*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.crw_crw.1clk.32x1024.lat11.random"
+   ],
+   "verdict": "DETECTED"
+  },
+  {
+   "name": "sdp: output defined (zero) before the first read",
+   "file": "src/core/lm_mem_ram_sdp.vhd",
+   "patterns": [
+    "*sdp.1clk.32x1024.lat1*"
+   ],
+   "failed_tests": [
+    "lib.tb_lm_mem_ram.sdp.1clk.32x1024.lat1.random"
+   ],
+   "verdict": "DETECTED"
+  }
+ ],
+ "baseline": {
+  "verdict": "PASS",
+  "tests": [
+   "lib.tb_lm_mem_ram.crw_cr.1clk.32x1024.lat1.random",
+   "lib.tb_lm_mem_ram.crw_crw.1clk.32x1024.lat11.random",
+   "lib.tb_lm_mem_ram.crw_crw.1clk.8to32.lat22.random",
+   "lib.tb_lm_mem_ram.crw_crw.2clk.32x1024.lat12.random",
+   "lib.tb_lm_mem_ram.r_w.32x1024.lat2.random",
+   "lib.tb_lm_mem_ram.r_w_ratio.8to32.lat2.random",
+   "lib.tb_lm_mem_ram.rw_rw.32x1024.lat1.random",
+   "lib.tb_lm_mem_ram.sdp.1clk.32x1024.lat1.random",
+   "lib.tb_lm_mem_ram.sdp.1clk.32x1024.lat2.random",
+   "lib.tb_lm_mem_ram.sdp.2clk.8to32.lat2.random",
+   "lib.tb_lm_mem_ram.tdp1w.1clk.32x1024.lat11.random"
+  ]
+ },
+ "commit": "4d1380c42fbfaf5d08065d6a4d88927f20dfb063",
+ "archive": {
+  "archive": "mutation_ghdl_6.0.0_20261104T164222Z.tar.xz",
+  "sha256": "832ae667ac090c342e4289d86851c2527f0067e5c71a772bc3c5720be2cec037",
+  "files": 30
+ }
+}

@@ -52,7 +52,7 @@
 #                   lists each one with its first and second result
 #
 # The memory thresholds of the EDA lock (LM_EDA_MIN_FREE_MB_SYNTH, default
-# 8192 MB, and LM_EDA_MIN_FREE_MB_SIM, default 2048 MB) are recorded in
+# 4096 MB, and LM_EDA_MIN_FREE_MB_SIM, default 2048 MB) are recorded in
 # logs/steps.txt and in the summary.
 #
 # Result: <campaign root>/summary.md and summary.json (tools/campaign/summarize.py).

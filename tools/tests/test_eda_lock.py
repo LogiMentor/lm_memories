@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.eda_lock import TOKEN_ENV, LockTimeout, MemoryTimeout, free_physical_mb, heavy_tool_lock
+from tools.eda_lock import TOKEN_ENV, LockTimeout, MemoryTimeout, free_physical_mb, heavy_tool_lock, min_free_mb
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -197,6 +197,19 @@ class EdaLockTest(unittest.TestCase):
     with self.assertRaises(ValueError):
       with self._lock(kind="place and route"):
         pass
+
+  def test_default_thresholds_are_those_of_the_campaigns(self) -> None:
+    # The AMD campaign and every check since ran with 4096 MB for synthesis;
+    # the default of 8192 MB kept a synthesis waiting with 6.3 GB free.
+    from unittest import mock
+    with mock.patch.dict(os.environ):
+      for env in ("LM_EDA_MIN_FREE_MB_SYNTH", "LM_EDA_MIN_FREE_MB_SIM"):
+        os.environ.pop(env, None)
+      self.assertEqual(min_free_mb("synthesis"), (4096.0, "LM_EDA_MIN_FREE_MB_SYNTH"))
+      self.assertEqual(min_free_mb("simulation"), (2048.0, "LM_EDA_MIN_FREE_MB_SIM"))
+      with self._lock(timeout_s=1, poll_s=0.01, kind="synthesis", free_mb=lambda: 6300.0):
+        pass
+    self.assertFalse(any("waiting for memory" in m for m in self.messages), self.messages)
 
   def test_unreadable_memory_does_not_block(self) -> None:
     with self._lock(timeout_s=1, poll_s=0.01, free_mb=lambda: None):

@@ -26,7 +26,7 @@ to any repository, so other projects can use the same file to queue with us.
   reaches a threshold before it starts its tool, so that it does not start
   while other programs (for example tools of other projects, which do not
   use this lock) fill the memory. The threshold depends on the kind of run:
-  "synthesis" (Vivado, Quartus) LM_EDA_MIN_FREE_MB_SYNTH, default 8192 MB;
+  "synthesis" (Vivado, Quartus) LM_EDA_MIN_FREE_MB_SYNTH, default 4096 MB;
   "simulation" LM_EDA_MIN_FREE_MB_SIM, default 2048 MB. While it waits it
   keeps the lock, so the queue order is kept. Timeout: LM_EDA_MEMORY_TIMEOUT
   (seconds), default 4 hours. Where free memory cannot be read, it does not
@@ -70,7 +70,7 @@ TICKET_GRACE_S = 2.0
 MEMORY_TIMEOUT_ENV = "LM_EDA_MEMORY_TIMEOUT"
 # kind of run -> (environment variable, default threshold in MB)
 MIN_FREE_MB = {
-  "synthesis": ("LM_EDA_MIN_FREE_MB_SYNTH", 8192.0),
+  "synthesis": ("LM_EDA_MIN_FREE_MB_SYNTH", 4096.0),
   "simulation": ("LM_EDA_MIN_FREE_MB_SIM", 2048.0),
 }
 # While waiting for memory, repeat the status line this often.

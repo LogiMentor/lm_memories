@@ -112,6 +112,13 @@ All notable changes to this project are documented here.
   at the start of simulation. Vivado 2023.1 does not print that note during
   synthesis. It will be removed in a future major release.
 
+### Changed
+
+- `tools/eda_lock.py`: the default free-memory threshold before a synthesis
+  run (`LM_EDA_MIN_FREE_MB_SYNTH`) is 4096 MB (before: 8192 MB), the value
+  used by the whole AMD campaign. Simulation stays at 2048 MB
+  (`LM_EDA_MIN_FREE_MB_SIM`).
+
 ### Added
 
 - `manifests/lm_memories.toml` and `tools/manifest`: compile order per flow,

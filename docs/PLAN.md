@@ -925,7 +925,10 @@ the summary in `<campaign root>/summary.md`.
 - **Memory thresholds:** the thresholds of the EDA lock in effect
   (`LM_EDA_MIN_FREE_MB_SYNTH`, `LM_EDA_MIN_FREE_MB_SIM`) are written to
   `logs/steps.txt` at the start and shown in the summary, with the waits
-  before a rerun (`LM_EDA_RETRY_DELAYS`).
+  before a rerun (`LM_EDA_RETRY_DELAYS`). The defaults are 4096 MB for
+  synthesis and 2048 MB for simulation. The synthesis default was 8192 MB
+  until the end of PR #4; the AMD campaign and every check after it ran
+  with 4096 MB, which is now the default.
 - **Collisions in the netlist simulations:** the harness provokes
   collisions on purpose; the UNISIM block RAM models report many of them as
   assertion errors ("Memory Collision Error on RAMB18E1", "[Unisim

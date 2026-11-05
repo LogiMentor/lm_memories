@@ -202,6 +202,22 @@ an `if ... generate`, also with a concatenated message.
   `ERROR: [Synth 8-11323] assigned value '1' out of range [.../lm_mem_ram_sdp.vhd:<line>]`.
   The line holds `C_ERROR_<CHECK>`, and its comment says what is wrong.
 
+In project mode put it in the More Options of the synthesis run, with
+`-name` and `-value`:
+
+```tcl
+set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value {-assert} -objects [get_runs synth_1]
+```
+
+The short form `set_property STEPS.SYNTH_DESIGN.ARGS.MORE\ OPTIONS -assert
+[get_runs synth_1]` does not work: `set_property` reads `-assert` as one
+of its own options (`[Common 17-170] Unknown option '-assert'`), and the
+run is synthesized without it. Checked with Vivado 2023.1 on
+`xc7a35tfgg484-2` (`lm_mem_ram_r_w` with read latency 3): with the
+`-name`/`-value` form the run calls `synth_design ... -assert` and stops
+with `[Synth 8-63] RTL assertion: "lm_mem_ram_sdp: read latency must be 1
+or 2"`; without it, with `[Synth 8-11323]`.
+
 See [`CHANGELOG.md`](CHANGELOG.md) for breaking changes.
 
 ## Heavy tool runs

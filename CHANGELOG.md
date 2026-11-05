@@ -14,9 +14,10 @@ First numbered release (issue #3, PR #4). It has breaking changes; before
 first.
 
 **Validated vendors:** AMD Vivado 2023.1 on Artix-7 (`xc7a35tfgg484-2`) and
-Kintex UltraScale+ (`xcku3p-ffva676-2-e`); Intel Quartus 23.1
-(`5CEBA4F23C7`) only for the portable cores and the static checks; Lattice
-and Microchip not verified.
+Kintex UltraScale+ (`xcku3p-ffva676-2-e`). Intel Quartus 23.1
+(`5CEBA4F23C7`): static checks only (11/11); the synthesis of the portable
+cores with Quartus is not yet part of the verification matrix (phase 4).
+Lattice and Microchip not verified.
 
 ### Migration for vendored copies
 

@@ -98,7 +98,7 @@ class DepsTest(unittest.TestCase):
                     script.index('tools.campaign.deps record "$ROOT" $RESUME'))
 
   def test_kept_results_of_another_manifest_refuse_the_resume(self) -> None:
-    # Codex, second review of PR #4: on a copy of the metadata, a kept VUnit
+    # Second review of PR #4: on a copy of the metadata, a kept VUnit
     # step whose results record another manifest_hash was accepted.
     deps.record(self.root, read=reader(TREE), commit="c1")
     current = deps.manifest_hash_of(TREE["manifests/lm_memories.toml"])

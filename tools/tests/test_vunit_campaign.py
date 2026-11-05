@@ -90,7 +90,7 @@ class VunitCampaignTest(unittest.TestCase):
   # (second review of PR #4).
 
   def test_campaign_name_sets_the_simulator_whatever_the_environment(self) -> None:
-    # Codex, second review of PR #4: with VUNIT_SIMULATOR=modelsim inherited,
+    # Second review of PR #4: with VUNIT_SIMULATOR=modelsim inherited,
     # ghdl_6.0.0 ran on Questa. The campaign name decides: run.py gets
     # VUNIT_SIMULATOR=ghdl, the inherited value is recorded as ignored.
     seen = []

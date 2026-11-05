@@ -17,6 +17,15 @@ result records:
 - the device;
 - the archive of its complete logs, with the SHA-256.
 
+The commit hashes cited as provenance in this directory (in this file and
+in the JSON results) are commits of the history of PR #4, which was merged
+with a squash: they are not in the history of `main`. They stay readable in
+PR #4 on GitHub (`refs/pull/4/head`). Between those commits and the end
+of PR #4, the sources (`src/`), the manifest and the test harness did not
+change (`tools/campaign/deps.py`, which lists the files each step depends
+on). The scripts that run and judge the steps did change with the second
+review; the archived logs were evaluated again with them (below).
+
 The archives are kept outside the repository (`tools/eda_archive.py`). The
 script checks each archive file against its SHA-256 before it writes, and
 it stops if a file is missing or does not match. It also removes the local

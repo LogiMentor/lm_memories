@@ -52,6 +52,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from tools.eda_archive import archive_campaign  # noqa: E402
 from tools.eda_provenance import commit  # noqa: E402
 from tools.eda_workdir import work_root  # noqa: E402
+from tools.harness_counts import campaign_simulator, harness_simulators, simulator_problems  # noqa: E402
 
 # An error reported by the harness or the scoreboard (GHDL, Questa formats).
 FUNCTIONAL_RE = re.compile(r"(?:\(report error\)|\*\* Error): lm_mem_tb_pkg: ")
@@ -190,12 +191,20 @@ def main(argv: list[str] | None = None) -> int:
                       help="keep the VUnit results and logs of every run, archive them in $LM_EDA_ARCHIVE_DIR "
                            "(tools/eda_archive.py) and write results.json under $LM_EDA_WORKDIR/mut/NAME")
   args = parser.parse_args(argv)
+  version = None
+  if args.campaign:
+    # A campaign names its simulator: it must be requested explicitly and
+    # must be the one the harness reports.
+    expected, version = campaign_simulator(args.campaign)
+    if os.environ.get("VUNIT_SIMULATOR") != expected:
+      print(f"--campaign {args.campaign}: set VUNIT_SIMULATOR={expected} explicitly", file=sys.stderr)
+      return 2
   before = _src_digest()
   with tempfile.TemporaryDirectory(prefix="lm_mutation_") as tmp:
     copy = Path(tmp)
     for folder in COPIED:
       shutil.copytree(ROOT_DIR / folder, copy / folder, ignore=IGNORED)
-    report = run_mutations(copy)
+    report = run_mutations(copy, version=version)
     if args.campaign:
       target = work_root("mut") / args.campaign
       if target.exists() and any(target.iterdir()):
@@ -216,23 +225,36 @@ def main(argv: list[str] | None = None) -> int:
   return 0 if ok else 1
 
 
-def run_mutations(copy: Path) -> dict:
+def _simulators(results: dict) -> list[str]:
+  return [sim for r in results.values() for sim in harness_simulators(r["output"])]
+
+
+def run_mutations(copy: Path, version: str | None = None, only_baseline: bool = False) -> dict:
+  """Baseline, then each mutation. The harness lines of every run must name
+  the requested simulator (VUNIT_SIMULATOR, GHDL when unset, as run.py) and,
+  with version, that version."""
   # VUnit output stays inside the copy.
   env = {k: v for k, v in os.environ.items() if k != "LM_MEM_BUILD_DIR"}
+  requested = env.get("VUNIT_SIMULATOR", "ghdl")
   patterns = sorted({p for *_, tests in MUTATIONS for p in tests})
   # Baseline: the unmodified copy, same simulator and same tests. Every
   # pattern must select a test and every test must pass, otherwise a failure
   # of a mutant says nothing.
   results, out = _run_vunit(copy, patterns, "baseline", env)
-  report = {"simulator": env.get("VUNIT_SIMULATOR", "ghdl"), "mutations": []}
+  report = {"simulator": requested, "simulator_requested": requested, "mutations": []}
   if results is None:
     report["baseline"] = {"verdict": "ERROR (no results)", "tests": []}
     return report
   empty = [p for p in patterns if not _selected(results, [p])]
   failing = sorted(n for n, r in results.items() if r["status"] != "pass")
-  verdict = "PASS" if not empty and not failing else f"FAIL (no test for {empty}, failing {failing})"
+  simulators = _simulators(results)
+  wrong = simulator_problems(simulators, requested, version)
+  if not wrong:
+    report["simulator"] = simulators[0]
+  verdict = ("PASS" if not empty and not failing and not wrong else
+             f"FAIL ({'; '.join(wrong) + '; ' if wrong else ''}no test for {empty}, failing {failing})")
   report["baseline"] = {"verdict": verdict, "tests": sorted(results)}
-  if verdict != "PASS":
+  if verdict != "PASS" or only_baseline:
     return report
   for index, (name, rel, old, new, tests) in enumerate(MUTATIONS, start=1):
     original = (ROOT_DIR / rel).read_text(encoding="utf-8")
@@ -247,6 +269,10 @@ def run_mutations(copy: Path) -> dict:
       results, out = _run_vunit(copy, tests, f"mutation{index:02d}", env)
       expected = {n for n in report["baseline"]["tests"] if any(fnmatch.fnmatch(n, p) for p in tests)}
       entry["verdict"], entry["failed_tests"] = _classify(results, out, expected)
+      # A mutant run on another simulator says nothing about the suite.
+      other = sorted(set(_simulators(results or {})) - {report["simulator"]})
+      if other:
+        entry["verdict"] = f"ERROR (simulator {', '.join(other)})"
     finally:
       target.write_text(original, encoding="utf-8", newline="\n")
     report["mutations"].append(entry)

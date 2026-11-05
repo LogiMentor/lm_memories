@@ -48,7 +48,9 @@ def simulator_info() -> str:
   """Simulator name and version, made safe for a VHDL string generic."""
   name = os.environ["VUNIT_SIMULATOR"]
   if name == "ghdl":
-    cmd = [os.environ.get("GHDL", shutil.which("ghdl") or "ghdl"), "--version"]
+    # The GHDL that VUnit runs: $VUNIT_GHDL_PATH, else the first on PATH.
+    folder = os.environ.get("VUNIT_GHDL_PATH")
+    cmd = [str(Path(folder) / "ghdl") if folder else (shutil.which("ghdl") or "ghdl"), "--version"]
   elif name == "modelsim":
     folder = os.environ.get("VUNIT_MODELSIM_PATH")
     cmd = [str(Path(folder) / "vsim") if folder else (shutil.which("vsim") or "vsim"), "-version"]

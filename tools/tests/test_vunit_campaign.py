@@ -86,6 +86,32 @@ class VunitCampaignTest(unittest.TestCase):
       self.assertEqual(code, 1, label)
       self.assertTrue(any("r_w.32x1024.lat1.random" in p for p in result["problems"]), (label, result["problems"]))
 
+  # The simulator: requested explicitly, and the one the harness reports
+  # (second review of PR #4).
+
+  def test_simulator_must_be_requested_explicitly(self) -> None:
+    with mock.patch.dict(os.environ):
+      del os.environ["VUNIT_SIMULATOR"]
+      with self.assertRaises(SystemExit):
+        self._campaign({"r_w.32x1024.lat1.random": harness(GOOD)})
+
+  def test_effective_simulator_must_be_the_published_one(self) -> None:
+    for label, sims in (("other simulator", ["modelsim_Questa_Sim-64_vsim_2021.1"]),
+                        ("other version", ["ghdl_GHDL_5.0.1_(tarball)"]),
+                        ("two simulators", [SIM, "ghdl_GHDL_5.0.1_(tarball)"])):
+      tests = {f"t{k}.random": harness(GOOD, sim) for k, sim in enumerate(sims)}
+      code, result = self._campaign(tests)
+      self.assertEqual(code, 1, label)
+      self.assertTrue(any("simulator" in p for p in result["problems"]), (label, result["problems"]))
+    code, result = self._campaign({"r_w.random": harness(GOOD)})
+    self.assertEqual((code, result["simulator"]), (0, SIM))
+
+  def test_campaign_script_requests_ghdl_explicitly(self) -> None:
+    script = (ROOT_DIR / "tools" / "campaign" / "run_amd.sh").read_text(encoding="utf-8")
+    for step in ("vunit_ghdl", "mutation"):
+      line = next(l for l in script.splitlines() if l.startswith(f"step {step} "))
+      self.assertIn("VUNIT_SIMULATOR=ghdl ", line, step)
+
 
 if __name__ == "__main__":
   unittest.main()

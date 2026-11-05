@@ -187,10 +187,10 @@ step checks_vivado "$PY" -m tools.vendor_synth --config tools/vendor_synth/fallb
 step checks_quartus "$PY" -m tools.vendor_synth --config tools/vendor_synth/quartus_check.toml --keep-going \
   --campaign static_checks_quartus_23.1 --work-root "$ROOT/qc"
 step postsynth "$PY" sim/scripts/run_postsynth.py --campaign postsynth_vivado_2023.1_amd --work-root "$ROOT/ps"
-step vunit_ghdl env LM_EDA_WORKDIR="$ROOT" "$PY" sim/scripts/run_vunit_campaign.py ghdl_6.0.0 -p 2
+step vunit_ghdl env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/scripts/run_vunit_campaign.py ghdl_6.0.0 -p 2
 step vunit_questa env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=modelsim \
   "$PY" sim/scripts/run_vunit_campaign.py questa_2021.1 -p 1
-step mutation env LM_EDA_WORKDIR="$ROOT" "$PY" sim/vunit/mutation_check.py --campaign ghdl_6.0.0
+step mutation env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/vunit/mutation_check.py --campaign ghdl_6.0.0
 # Once more, only the cases that ended as tool-error (never a fail).
 step rerun_tool_errors "$PY" -m tools.campaign.rerun "$ROOT"
 echo "$(stamp) done" >> "$STEPS"

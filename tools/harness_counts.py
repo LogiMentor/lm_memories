@@ -48,3 +48,39 @@ def parse_counts(text: str) -> tuple[dict[str, int], list[str]]:
   if counts.get("errors", 0) != 0:
     problems.append(f"errors={counts['errors']}")
   return counts, problems
+
+
+# The simulator the harness ran on, as sim/vunit/run.py names it in its
+# generic ("ghdl_GHDL_6.0.0_(tarball)_Dunoon_edition_",
+# "modelsim_Questa_Sim-64_vsim_2021.1_..."): the VUnit simulator, then the
+# first line of its version output.
+_SIMULATOR_RE = re.compile(r"lm_mem_tb_harness \S+ \[([^\]]*)\]")
+# Campaign name "<tool>_<version>" -> VUNIT_SIMULATOR.
+CAMPAIGN_SIMULATORS = {"ghdl": "ghdl", "questa": "modelsim", "modelsim": "modelsim"}
+
+
+def harness_simulators(text: str) -> list[str]:
+  """Simulator of every harness line in a log."""
+  return _SIMULATOR_RE.findall(text)
+
+
+def campaign_simulator(name: str) -> tuple[str, str]:
+  """(VUNIT_SIMULATOR, version) of a campaign name such as ghdl_6.0.0 or questa_2021.1."""
+  tool, _, version = name.partition("_")
+  if tool not in CAMPAIGN_SIMULATORS or not version:
+    raise SystemExit(f"campaign name {name}: expected <tool>_<version> with tool in {', '.join(CAMPAIGN_SIMULATORS)}")
+  return CAMPAIGN_SIMULATORS[tool], version
+
+
+def simulator_problems(ids: list[str], requested: str, version: str | None = None) -> list[str]:
+  """Problems if the harness did not run on one simulator, the requested one, of this version."""
+  found = sorted(set(ids))
+  if not found:
+    return ["no harness line names the simulator"]
+  if len(found) > 1:
+    return [f"the harness ran on several simulators: {', '.join(found)}"]
+  if not found[0].lower().startswith(requested.lower() + "_"):
+    return [f"the harness ran on simulator {found[0]}, not on the requested {requested}"]
+  if version and not re.search(rf"(?<![0-9.]){re.escape(version)}(?![0-9])", found[0]):
+    return [f"the harness ran on simulator {found[0]}, not on version {version}"]
+  return []

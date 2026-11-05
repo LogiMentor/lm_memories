@@ -5,9 +5,11 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("mutation_check", ROOT_DIR / "sim" / "vunit" / "mutation_check.py")
@@ -52,6 +54,23 @@ class ClassifyTest(unittest.TestCase):
       results = mc._test_results(path)
     self.assertEqual(results[TEST]["status"], "fail")
     self.assertIn("lm_mem_tb_pkg", results[TEST]["output"])
+
+  def test_baseline_on_another_simulator_fails(self) -> None:
+    # Second review of PR #4: the simulator was taken from VUNIT_SIMULATOR
+    # (GHDL when unset) and never compared with the one that ran.
+    harness = "x.vhd:1:1:@1us:(report note): lm_mem_tb_harness lm_mem_ram_r_w [{}]: errors=0\n"
+    patterns = sorted({p for *_, tests in mc.MUTATIONS for p in tests})
+    names = [p.strip("*").replace("*", ".") for p in patterns]
+    for sim, version, ok in (("ghdl_GHDL_6.0.0_(tarball)", "6.0.0", True),
+                             ("modelsim_Questa_Sim-64_vsim_2021.1", "6.0.0", False),
+                             ("ghdl_GHDL_5.0.1_(tarball)", "6.0.0", False)):
+      results = {f"lib.tb_lm_mem_ram.{n}.random": {"status": "pass", "output": harness.format(sim)} for n in names}
+      run = mock.patch.object(mc, "_run_vunit", lambda copy, tests, tag, env: (results, ""))
+      with tempfile.TemporaryDirectory() as tmp, run, mock.patch.dict(os.environ, {"VUNIT_SIMULATOR": "ghdl"}):
+        report = mc.run_mutations(Path(tmp), version=version, only_baseline=True)
+      self.assertEqual(report["baseline"]["verdict"] == "PASS", ok, (sim, report["baseline"]))
+      if not ok:
+        self.assertIn("simulator", report["baseline"]["verdict"])
 
   def test_every_mutation_anchor_exists(self) -> None:
     for name, rel, old, _new, _tests in mc.MUTATIONS:

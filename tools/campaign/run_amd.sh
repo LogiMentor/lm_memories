@@ -26,6 +26,9 @@
 #                        evaluated again with the current checks, no tool
 #                        run (tools/campaign/resume.py); postsynth: run again
 #                        from scratch (the old ps kept as ps.before_<time>).
+#                        Refused if a kept step's sources, manifest, harness
+#                        or configuration changed since it ran
+#                        (tools/campaign/deps.py, logs/deps.json).
 #                        Then the tool-errors of these steps run again, and
 #                        the summary is written again. The results of the
 #                        other steps stay as they are; logs/steps.txt records
@@ -97,6 +100,8 @@ if [ -n "$RESUME" ]; then
   [ -f "$ROOT/logs/steps.txt" ] || fail "LM_CAMPAIGN_RESUME: $ROOT is not a campaign root (no logs/steps.txt)"
   "$PY" -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1])).get("ok") else 1)' "$ROOT/pilot/pilot.json" \
     2>/dev/null || fail "LM_CAMPAIGN_RESUME: the pilot of $ROOT did not pass"
+  # The kept steps must have the dependencies they ran with (tools/campaign/deps.py).
+  "$PY" -m tools.campaign.deps check "$ROOT" $RESUME     || fail "LM_CAMPAIGN_RESUME: refused, the dependencies of a kept step changed (above)"
 elif [ -d "$ROOT" ] && [ -n "$(ls -A "$ROOT")" ]; then
   fail "campaign root $ROOT is not empty (move or delete it; set LM_CAMPAIGN_ROOT for another one)"
 fi
@@ -125,6 +130,7 @@ else
     echo "memory thresholds: $MEMORY"
     echo "retry waits: $RETRY_WAITS"
   } > "$STEPS"
+  "$PY" -m tools.campaign.deps record "$ROOT" > /dev/null || fail "cannot record the dependencies of the steps"
 fi
 echo "Campaign root: $ROOT"
 echo "Memory thresholds: $MEMORY"
@@ -162,6 +168,7 @@ if [ -n "$RESUME" ]; then
     fi
   done
   step rerun_tool_errors "$PY" -m tools.campaign.rerun "$ROOT" --steps $RESUME ${FRESH:+--fresh $FRESH}
+  "$PY" -m tools.campaign.deps record "$ROOT" $RESUME > /dev/null || fail "cannot record the dependencies of the steps"
   echo "$(stamp) done (resume)" >> "$STEPS"
   summarize
   exit $?

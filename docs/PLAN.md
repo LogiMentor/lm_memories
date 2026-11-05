@@ -878,7 +878,16 @@ the summary in `<campaign root>/summary.md`.
   `ps.before_<time>`). Then the tool-errors of these steps run again
   (`rerun.py --steps`): a rerun that passed before is kept, except for a
   step run from scratch. The other steps keep their results; the summary
-  names the commit of the resume.
+  names the commit of the resume. A kept result is valid only for the
+  inputs it ran with: `tools/campaign/deps.py` records in
+  `logs/deps.json`, for each step, the commit and the SHA-256 of its
+  sources (`src/`), manifest, harness (simulation steps: `sim/vunit` VHDL,
+  `sim/ref`) and configuration (vendor_synth configuration, cases and
+  expected results; `run_postsynth.py` and `configs.py`; the VUnit runner;
+  the mutations; the pilot configuration). A resume first compares them
+  for every kept step with the commit of the resume and is refused on a
+  difference, naming the steps to run again; a root without the record is
+  derived from git at the commits of `logs/steps.txt`.
 - **Retries in the pilot:** the pilot follows the same policy, case by
   case (each launcher case, the 1000-for-1024 run, each old-code case): a
   case that ends as `tool-error` (a transient signature of

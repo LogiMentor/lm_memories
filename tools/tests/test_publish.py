@@ -110,7 +110,8 @@ def make_campaign(base: Path, rerun_sha: str | None = None, problem: str = "") -
     {"step": "postsynth", "job": "postsynth", "part": "xcku3p-ffva676-2-e", "case": "rw_rw.16x48",
      "rerun_status": "pass"}]})
   _write(root / "summary.json", {"commit": C1, "ok": True, "resumes": [{"commit": C2, "steps": ["checks_vivado"]}],
-                                 "pilot": {"ok": True, "cases": []}, "steps": {},
+                                 "pilot": {"ok": True, "cases": []},
+                                 "steps": {"postsynth": {"ok": True, "runs": 1, "reruns": 1}},
                                  "driver_archive": c.archive("driver.tar.xz")})
   return c
 
@@ -166,6 +167,16 @@ class PublishTest(unittest.TestCase):
     campaign = files["amd_campaign.json"]
     self.assertEqual([a["archive"] for a in campaign["superseded_archives"]], ["ps_old.tar.xz"])
     self.assertIn("vivado_rerun_b.tar.xz", [a["archive"] for a in campaign["archives"]])
+
+  def test_postsynth_runs_are_explained(self):
+    # Second review of PR #4: "runs" of the post-synthesis step (74) did not
+    # say what it counts, next to the 78 published results.
+    c = make_campaign(self.base)
+    step = publish.collect(c.root, c.archives)["amd_campaign.json"]["steps"]["postsynth"]
+    self.assertEqual((step["main_step_runs"], step["reruns"], step["rerun_netlist_runs"], step["consolidated_results"]),
+                     (1, 1, 1, 2))
+    self.assertNotIn("runs", step)
+    self.assertIn("consolidated_results", step["meaning"])
 
   def test_wrong_sha_stops(self):
     c = make_campaign(self.base, rerun_sha="0" * 64)

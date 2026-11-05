@@ -284,6 +284,23 @@ def _sim_dirs(root: Path) -> list[tuple[str, Path, str]]:
   return out
 
 
+def _postsynth_counts(step: dict, published: dict) -> dict:
+  """The counts of the post-synthesis step, each with its meaning (summary.json says only "runs" and "reruns")."""
+  rerun_runs = sum(1 for r in published["results"] if r.get("first_run"))
+  out = {k: v for k, v in step.items() if k not in ("runs", "reruns")}
+  out.update(main_step_runs=step.get("runs"), reruns=step.get("reruns"), rerun_netlist_runs=rerun_runs,
+             consolidated_results=published["total"])
+  out["meaning"] = ("main_step_runs: simulation runs of the post-synthesis step itself, RTL and netlist, on both "
+                    "simulators (a synthesis that ended as tool-error has no netlist run there); reruns: syntheses "
+                    "that ended as tool-error and ran again (tools/campaign/rerun.py); rerun_netlist_runs: the "
+                    "netlist runs of those reruns; consolidated_results: the results published in "
+                    f"{POSTSYNTH_FILE} = main_step_runs + rerun_netlist_runs")
+  if step.get("runs") is not None and step["runs"] + rerun_runs != published["total"]:
+    raise PublishError(f"postsynth: {step['runs']} runs of the step + {rerun_runs} of its reruns are not the "
+                       f"{published['total']} published results")
+  return out
+
+
 def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
   """Every published file: name -> content, local paths removed and checked."""
   directory = directory or archive_dir()
@@ -321,6 +338,9 @@ def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
     "archives": sorted(archives.values(), key=lambda a: a["archive"]),
     "superseded_archives": superseded, "driver_archive": driver,
   }
+  steps = files[CAMPAIGN_FILE]["steps"]
+  if "postsynth" in steps:
+    steps["postsynth"] = _postsynth_counts(steps["postsynth"], files[POSTSYNTH_FILE])
   scrub = scrubber(root)
   files = {name: scrub(content) for name, content in files.items()}
   leftover = [p for name, content in files.items() for p in local_paths(content, name)]

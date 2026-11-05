@@ -7,10 +7,16 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-11-05
+## [0.2.0] - 2026-11-05
 
-First numbered release (issue #3, PR #4). It has breaking changes, so the
-major number changes; read **Migration for vendored copies** first.
+First numbered release (issue #3, PR #4). It has breaking changes; before
+1.0.0 they raise the minor number. Read **Migration for vendored copies**
+first.
+
+**Validated vendors:** AMD Vivado 2023.1 on Artix-7 (`xc7a35tfgg484-2`) and
+Kintex UltraScale+ (`xcku3p-ffva676-2-e`); Intel Quartus 23.1
+(`5CEBA4F23C7`) only for the portable cores and the static checks; Lattice
+and Microchip not verified.
 
 ### Migration for vendored copies
 
@@ -51,8 +57,8 @@ in the design that uses the library.
 5. **`g_simulation` is deprecated.** It has no effect and still exists in
    every entity, so instantiations that set it keep compiling; each RAM core
    prints the note `g_simulation is deprecated and ignored` at the start of
-   simulation. Remove it from your instantiations before the next major
-   release, which removes it.
+   simulation. Remove it from your instantiations: a later release removes
+   it, listed under its breaking changes.
 6. **`LM_MEM_BUILD_DIR` is replaced by `LM_EDA_WORKDIR`** for the heavy runs:
    `tools/vendor_synth` and `sim/scripts/run_postsynth.py` work under
    `$LM_EDA_WORKDIR` (default `C:/lmeda` on Windows, `lmeda` in the system
@@ -178,7 +184,7 @@ in the design that uses the library.
 - `g_simulation` has no effect. It stays in every entity for compatibility,
   and each RAM core reports `g_simulation is deprecated and ignored` as a note
   at the start of simulation. Vivado 2023.1 does not print that note during
-  synthesis. It will be removed in a future major release.
+  synthesis. It will be removed in a later release, as a breaking change.
 
 ### Changed
 

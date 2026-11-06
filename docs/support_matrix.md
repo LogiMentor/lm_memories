@@ -52,6 +52,11 @@ Wrong generics stop synthesis for every entity (static checks,
   read-during-write behavior of a dual-clock RAM is undefined` for
   `lm_mem_ram_r_w` 32 x 1024 on Cyclone V; whether old data holds on Intel is
   checked in phase 4.
+- Read-output reset (`rd_rst_n_i`, `rst_a_n_i`, `rst_b_n_i`; issue #7):
+  simulated on GHDL and Questa, latency 1 and 2. Its mapping on the block
+  RAM reset pins of AMD (no extra LUT or flip-flop) is not checked yet;
+  Intel (M10K, M9K) is checked in phase 4 (issue #6). Not on the two-writer
+  RAMs and the FIFOs.
 - Collisions between the ports of a true dual-port RAM, and accesses beyond
   a depth that is not a power of two, are undefined on every vendor.
 - URAM: Vivado chooses it by itself for `lm_mem_ram_r_w` 36 x 4096 on

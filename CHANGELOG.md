@@ -7,6 +7,51 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Optional synchronous reset of the read output** (#7). New ports, last in
+  the port list, active low, default `'1'` (inactive):
+  - `rd_rst_n_i` on `lm_mem_ram_sdp`, `lm_mem_ram_r_w`, `lm_mem_ram_cr_cw`,
+    `lm_mem_ram_r_w_ratio` and `lm_mem_ram_cr_cw_ratio`, in the read clock
+    domain;
+  - `rst_a_n_i` and `rst_b_n_i` on `lm_mem_ram_tdp1w` and
+    `lm_mem_ram_crw_cr`, one per read output, each in the clock domain of
+    its port.
+
+  A reset acts **only while the enable of its port is high** (`enb_i`, or
+  `ena_i` for port A), as the output reset of the 7-series block RAM; with
+  the enable low it has no effect and the output holds its value. With
+  latency 1 it clears the output register (block RAM `RSTRAM` on AMD). With
+  latency 2 it clears both stages (`RSTRAM` and `RSTREG`): the output stays
+  zero until a read made after the reset reaches it. The read of a reset
+  cycle is discarded; the storage is never reset, and a write in a reset
+  cycle is done. The two-writer RAMs (`lm_mem_ram_crw_crw`,
+  `lm_mem_ram_rw_rw`, `lm_mem_ram_crw_cw`) and the FIFOs have no read-output
+  reset.
+
+### Changed
+
+- **Read outputs before the first read:** still undefined until the first
+  enabled read reaches them, unless a read-output reset is applied with the
+  enable high: then they are zero from that cycle.
+
+### Migration
+
+Instances that do not use the reset need no change:
+- named association: the new ports take their default `'1'`;
+- positional association: the new ports are last, after the existing ones;
+- a component declaration of your own without the new port (written for
+  v0.2.0) still binds to the entity by default binding, and the port takes
+  its default. Checked with `sim/tb/tb_lm_mem_component_compat.vhd`: GHDL
+  6.0.0 (`--std=93c` and `--std=08`) prints a warning for each such port,
+  `port "rd_rst_n_i" of entity "..." is not bound [-Wbinding]`; Questa Sim
+  2021.1 (`-93`, `-2008`) prints none.
+
+To use the reset, add the port to your component declaration and connect it.
+It is not a reset of the memory content, and with the enable low it does
+nothing: a design that must see zero on the output after its reset keeps the
+read enable high during that reset.
+
 ## [0.2.0] - 2026-11-05
 
 First numbered release (issue #3, PR #4). It has breaking changes; before

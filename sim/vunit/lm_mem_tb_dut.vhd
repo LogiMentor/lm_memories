@@ -12,6 +12,11 @@
 --  with clock, enable, write enable, address, write data and read data.
 --  For simple dual-port entities, port A is the write port and port B the read
 --  port; the unused outputs are driven with zeros.
+--  rst_a_n_i and rst_b_n_i are the read-output resets of port A and port B
+--  (default '1'). They reach the entities that have them: rd_rst_n_i of the
+--  simple dual-port entities (port B), rst_a_n_i and rst_b_n_i of
+--  lm_mem_ram_tdp1w and lm_mem_ram_crw_cr. The two-writer RAMs have no read
+--  reset and ignore them.
 --
 --  This file holds the "rtl" architecture, which instantiates the library
 --  entity named by g_dut with generics. A post-synthesis flow replaces this
@@ -34,18 +39,20 @@ entity lm_mem_tb_dut is
     g_b_latency : positive := 1
   );
   port(
-    clk_a_i  : in  std_logic;
-    clk_b_i  : in  std_logic;
-    ena_i    : in  std_logic;
-    enb_i    : in  std_logic;
-    wen_a_i  : in  std_logic;
-    wen_b_i  : in  std_logic;
-    addr_a_i : in  std_logic_vector(f_ceil_log2(g_a_depth) - 1 downto 0);
-    addr_b_i : in  std_logic_vector(f_ceil_log2((g_a_depth * g_a_data_w) / g_b_data_w) - 1 downto 0);
-    din_a_i  : in  std_logic_vector(g_a_data_w - 1 downto 0);
-    din_b_i  : in  std_logic_vector(g_b_data_w - 1 downto 0);
-    dout_a_o : out std_logic_vector(g_a_data_w - 1 downto 0);
-    dout_b_o : out std_logic_vector(g_b_data_w - 1 downto 0)
+    clk_a_i   : in  std_logic;
+    clk_b_i   : in  std_logic;
+    ena_i     : in  std_logic;
+    enb_i     : in  std_logic;
+    wen_a_i   : in  std_logic;
+    wen_b_i   : in  std_logic;
+    addr_a_i  : in  std_logic_vector(f_ceil_log2(g_a_depth) - 1 downto 0);
+    addr_b_i  : in  std_logic_vector(f_ceil_log2((g_a_depth * g_a_data_w) / g_b_data_w) - 1 downto 0);
+    din_a_i   : in  std_logic_vector(g_a_data_w - 1 downto 0);
+    din_b_i   : in  std_logic_vector(g_b_data_w - 1 downto 0);
+    dout_a_o  : out std_logic_vector(g_a_data_w - 1 downto 0);
+    dout_b_o  : out std_logic_vector(g_b_data_w - 1 downto 0);
+    rst_a_n_i : in  std_logic := '1';
+    rst_b_n_i : in  std_logic := '1'
   );
 end entity lm_mem_tb_dut;
 
@@ -62,15 +69,16 @@ begin
         g_rd_latency => g_b_latency
       )
       port map(
-        wr_clk_i  => clk_a_i,
-        rd_clk_i  => clk_b_i,
-        ena_i     => ena_i,
-        enb_i     => enb_i,
-        wen_i     => wen_a_i,
-        wr_addr_i => addr_a_i,
-        wr_dat_i  => din_a_i,
-        rd_addr_i => addr_b_i,
-        rd_dat_o  => dout_b_o
+        wr_clk_i   => clk_a_i,
+        rd_clk_i   => clk_b_i,
+        ena_i      => ena_i,
+        enb_i      => enb_i,
+        wen_i      => wen_a_i,
+        wr_addr_i  => addr_a_i,
+        wr_dat_i   => din_a_i,
+        rd_addr_i  => addr_b_i,
+        rd_dat_o   => dout_b_o,
+        rd_rst_n_i => rst_b_n_i
       );
   end generate gen_sdp;
 
@@ -92,7 +100,9 @@ begin
         addr_a_i    => addr_a_i,
         addr_b_i    => addr_b_i,
         data_rd_a_o => dout_a_o,
-        data_rd_b_o => dout_b_o
+        data_rd_b_o => dout_b_o,
+        rst_a_n_i   => rst_a_n_i,
+        rst_b_n_i   => rst_b_n_i
       );
   end generate gen_tdp1w;
 
@@ -106,14 +116,15 @@ begin
         g_ram_depth   => g_a_depth
       )
       port map(
-        clk_i     => clk_a_i,
-        ena_i     => ena_i,
-        enb_i     => enb_i,
-        wen_i     => wen_a_i,
-        wr_addr_i => addr_a_i,
-        wr_dat_i  => din_a_i,
-        rd_addr_i => addr_b_i,
-        rd_dat_o  => dout_b_o
+        clk_i      => clk_a_i,
+        ena_i      => ena_i,
+        enb_i      => enb_i,
+        wen_i      => wen_a_i,
+        wr_addr_i  => addr_a_i,
+        wr_dat_i   => din_a_i,
+        rd_addr_i  => addr_b_i,
+        rd_dat_o   => dout_b_o,
+        rd_rst_n_i => rst_b_n_i
       );
   end generate gen_r_w;
 
@@ -127,15 +138,16 @@ begin
         g_ram_depth   => g_a_depth
       )
       port map(
-        wr_clk_i  => clk_a_i,
-        rd_clk_i  => clk_b_i,
-        ena_i     => ena_i,
-        enb_i     => enb_i,
-        wen_i     => wen_a_i,
-        wr_addr_i => addr_a_i,
-        wr_dat_i  => din_a_i,
-        rd_addr_i => addr_b_i,
-        rd_dat_o  => dout_b_o
+        wr_clk_i   => clk_a_i,
+        rd_clk_i   => clk_b_i,
+        ena_i      => ena_i,
+        enb_i      => enb_i,
+        wen_i      => wen_a_i,
+        wr_addr_i  => addr_a_i,
+        wr_dat_i   => din_a_i,
+        rd_addr_i  => addr_b_i,
+        rd_dat_o   => dout_b_o,
+        rd_rst_n_i => rst_b_n_i
       );
   end generate gen_cr_cw;
 
@@ -151,14 +163,15 @@ begin
         g_ram_b_data_w  => g_b_data_w
       )
       port map(
-        clk_i     => clk_a_i,
-        ena_i     => ena_i,
-        enb_i     => enb_i,
-        wen_i     => wen_a_i,
-        wr_addr_i => addr_a_i,
-        wr_dat_i  => din_a_i,
-        rd_addr_i => addr_b_i,
-        rd_dat_o  => dout_b_o
+        clk_i      => clk_a_i,
+        ena_i      => ena_i,
+        enb_i      => enb_i,
+        wen_i      => wen_a_i,
+        wr_addr_i  => addr_a_i,
+        wr_dat_i   => din_a_i,
+        rd_addr_i  => addr_b_i,
+        rd_dat_o   => dout_b_o,
+        rd_rst_n_i => rst_b_n_i
       );
   end generate gen_r_w_ratio;
 
@@ -174,15 +187,16 @@ begin
         g_ram_b_data_w  => g_b_data_w
       )
       port map(
-        wr_clk_i  => clk_a_i,
-        rd_clk_i  => clk_b_i,
-        ena_i     => ena_i,
-        enb_i     => enb_i,
-        wen_i     => wen_a_i,
-        wr_addr_i => addr_a_i,
-        wr_dat_i  => din_a_i,
-        rd_addr_i => addr_b_i,
-        rd_dat_o  => dout_b_o
+        wr_clk_i   => clk_a_i,
+        rd_clk_i   => clk_b_i,
+        ena_i      => ena_i,
+        enb_i      => enb_i,
+        wen_i      => wen_a_i,
+        wr_addr_i  => addr_a_i,
+        wr_dat_i   => din_a_i,
+        rd_addr_i  => addr_b_i,
+        rd_dat_o   => dout_b_o,
+        rd_rst_n_i => rst_b_n_i
       );
   end generate gen_cr_cw_ratio;
 
@@ -203,7 +217,9 @@ begin
         addr_a_i    => addr_a_i,
         addr_b_i    => addr_b_i,
         data_rd_a_o => dout_a_o,
-        data_rd_b_o => dout_b_o
+        data_rd_b_o => dout_b_o,
+        rst_a_n_i   => rst_a_n_i,
+        rst_b_n_i   => rst_b_n_i
       );
   end generate gen_crw_cr;
 

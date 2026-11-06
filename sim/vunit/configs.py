@@ -20,11 +20,12 @@ TWO_WRITERS = ("lm_mem_ram_crw_crw", "lm_mem_ram_rw_rw", "lm_mem_ram_crw_cw")
 
 
 def ram(name, dut, roles, *, a_w=32, b_w=None, depth=1024, a_lat=1, b_lat=1,
-        same_clock=True, a_per=FAST, b_per=FAST, cycles=2000, hot=8, seed=1, min_checked=1000):
+        same_clock=True, a_per=FAST, b_per=FAST, cycles=2000, hot=8, seed=1, min_checked=1000, rst=False):
   """One RAM configuration. Common-clock simple dual port reads old data across ports.
 
   min_checked: the test fails if fewer reads than this are compared after
   the collision and beyond-depth exclusions.
+  rst: drive the read-output reset of every read port (g_a_rst, g_b_rst).
   """
   b_w = a_w if b_w is None else b_w
   cross_rdw_valid = same_clock and roles is SDP
@@ -37,6 +38,7 @@ def ram(name, dut, roles, *, a_w=32, b_w=None, depth=1024, a_lat=1, b_lat=1,
     # write/write collision with 'X'; the harness checks it.
     g_x_on_undef=dut in TWO_WRITERS,
     g_min_checked=min_checked,
+    g_a_rst=rst and roles["g_a_reads"], g_b_rst=rst and roles["g_b_reads"],
     **roles,
   )
   return name, generics
@@ -101,6 +103,32 @@ RAM_CONFIGS = [
   ram("r_w.36x4096", "lm_mem_ram_r_w", SDP, a_w=36, depth=4096, hot=16, seed=71),
   ram("crw_cr.1clk.36x4096", "lm_mem_ram_crw_cr", TDP1W, a_w=36, depth=4096, hot=16, seed=72),
   ram("rw_rw.36x4096", "lm_mem_ram_rw_rw", TDP2W, a_w=36, depth=4096, hot=16, seed=73),
+  # Read-output reset (rd_rst_n_i, rst_a_n_i, rst_b_n_i): every entity that
+  # has it, latency 1 and 2, one and two clocks, mixed width.
+  ram("sdp.1clk.32x1024.lat1.rst", "lm_mem_ram_sdp", SDP, seed=81, rst=True),
+  ram("sdp.1clk.32x1024.lat2.rst", "lm_mem_ram_sdp", SDP, b_lat=2, seed=82, rst=True),
+  ram("sdp.2clk.32x1024.lat2.rst", "lm_mem_ram_sdp", SDP, b_lat=2, same_clock=False, b_per=SLOW, seed=83, rst=True),
+  ram("sdp.1clk.32to8.rst", "lm_mem_ram_sdp", SDP, b_w=8, depth=256, seed=84, rst=True),
+  ram("sdp.2clk.8to32.lat2.rst", "lm_mem_ram_sdp", SDP, a_w=8, b_w=32, depth=1024, b_lat=2,
+      same_clock=False, b_per=SLOW, hot=16, seed=85, rst=True),
+  ram("tdp1w.1clk.32x1024.lat11.rst", "lm_mem_ram_tdp1w", TDP1W, seed=86, rst=True),
+  ram("tdp1w.2clk.32x1024.lat12.rst", "lm_mem_ram_tdp1w", TDP1W, b_lat=2, same_clock=False, b_per=SLOW, seed=87,
+      rst=True),
+  ram("tdp1w.2clk.16x64.lat21.rst", "lm_mem_ram_tdp1w", TDP1W, a_w=16, depth=64, a_lat=2,
+      same_clock=False, a_per=SLOW, seed=88, rst=True),
+  ram("r_w.32x1024.lat1.rst", "lm_mem_ram_r_w", SDP, seed=89, rst=True),
+  ram("r_w.32x1024.lat2.rst", "lm_mem_ram_r_w", SDP, b_lat=2, seed=90, rst=True),
+  ram("cr_cw.32x1024.lat1.rst", "lm_mem_ram_cr_cw", SDP, same_clock=False, b_per=SLOW, seed=91, rst=True),
+  ram("cr_cw.32x1024.lat2.rst", "lm_mem_ram_cr_cw", SDP, b_lat=2, same_clock=False, a_per=SLOW, seed=92, rst=True),
+  ram("r_w_ratio.32to8.rst", "lm_mem_ram_r_w_ratio", SDP, b_w=8, depth=256, seed=93, rst=True),
+  ram("r_w_ratio.8to32.lat2.rst", "lm_mem_ram_r_w_ratio", SDP, a_w=8, b_w=32, b_lat=2, hot=16, seed=94, rst=True),
+  ram("cr_cw_ratio.32to8.rst", "lm_mem_ram_cr_cw_ratio", SDP, b_w=8, depth=256, same_clock=False, b_per=SLOW,
+      seed=95, rst=True),
+  ram("cr_cw_ratio.8to32.lat2.rst", "lm_mem_ram_cr_cw_ratio", SDP, a_w=8, b_w=32, b_lat=2, hot=16,
+      same_clock=False, a_per=SLOW, seed=96, rst=True),
+  ram("crw_cr.1clk.32x1024.lat1.rst", "lm_mem_ram_crw_cr", TDP1W, seed=97, rst=True),
+  ram("crw_cr.2clk.32x1024.lat2.rst", "lm_mem_ram_crw_cr", TDP1W, a_lat=2, b_lat=2, same_clock=False, b_per=SLOW,
+      seed=98, rst=True),
 ]
 
 

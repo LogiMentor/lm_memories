@@ -186,18 +186,22 @@ entity lm_mem_tb_dut is
     g_b_latency : positive := 1
   );
   port(
-    clk_a_i  : in  std_logic;
-    clk_b_i  : in  std_logic;
-    ena_i    : in  std_logic;
-    enb_i    : in  std_logic;
-    wen_a_i  : in  std_logic;
-    wen_b_i  : in  std_logic;
-    addr_a_i : in  std_logic_vector(f_ceil_log2(g_a_depth) - 1 downto 0);
-    addr_b_i : in  std_logic_vector(f_ceil_log2((g_a_depth * g_a_data_w) / g_b_data_w) - 1 downto 0);
-    din_a_i  : in  std_logic_vector(g_a_data_w - 1 downto 0);
-    din_b_i  : in  std_logic_vector(g_b_data_w - 1 downto 0);
-    dout_a_o : out std_logic_vector(g_a_data_w - 1 downto 0);
-    dout_b_o : out std_logic_vector(g_b_data_w - 1 downto 0)
+    clk_a_i   : in  std_logic;
+    clk_b_i   : in  std_logic;
+    ena_i     : in  std_logic;
+    enb_i     : in  std_logic;
+    wen_a_i   : in  std_logic;
+    wen_b_i   : in  std_logic;
+    addr_a_i  : in  std_logic_vector(f_ceil_log2(g_a_depth) - 1 downto 0);
+    addr_b_i  : in  std_logic_vector(f_ceil_log2((g_a_depth * g_a_data_w) / g_b_data_w) - 1 downto 0);
+    din_a_i   : in  std_logic_vector(g_a_data_w - 1 downto 0);
+    din_b_i   : in  std_logic_vector(g_b_data_w - 1 downto 0);
+    dout_a_o  : out std_logic_vector(g_a_data_w - 1 downto 0);
+    dout_b_o  : out std_logic_vector(g_b_data_w - 1 downto 0);
+    -- Read-output resets of the harness (sim/vunit/lm_mem_tb_dut.vhd); not
+    -- connected to the netlists yet.
+    rst_a_n_i : in  std_logic := '1';
+    rst_b_n_i : in  std_logic := '1'
   );
 end entity lm_mem_tb_dut;
 

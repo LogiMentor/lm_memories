@@ -40,6 +40,8 @@ entity tb_lm_mem_ram_plain is
     g_seed             : positive := 1;
     g_max_excluded_pct : natural  := 25;
     g_min_checked      : natural  := 1000;
+    g_a_rst            : boolean  := false;
+    g_b_rst            : boolean  := false;
     g_sim_info         : string   := "unknown simulator"
   );
 end entity tb_lm_mem_ram_plain;
@@ -73,6 +75,8 @@ begin
       g_seed             => g_seed,
       g_max_excluded_pct => g_max_excluded_pct,
       g_min_checked      => g_min_checked,
+      g_a_rst            => g_a_rst,
+      g_b_rst            => g_b_rst,
       g_sim_info         => g_sim_info
     )
     port map(

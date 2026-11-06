@@ -33,6 +33,19 @@
 --    of that output must be 'U' or 'X': the RTL has no initial value on its
 --    output registers. A netlist powers up with defined values, so the
 --    post-synthesis runs set it to false and that phase is not compared.
+--  - g_a_rst, g_b_rst: drive the read-output reset of that port (rst_a_n_i,
+--    rst_b_n_i of lm_mem_tb_dut). Expected behaviour: a reset acts only
+--    with the enable of the port high; it clears every output stage, so the
+--    output is zero until a read made after the reset reaches it; with the
+--    enable low it has no effect. The stimulus applies a reset with the
+--    enable low in the first idle cycle (the output must stay undefined), a
+--    reset with the enable high right after the idle cycles (before the
+--    first read: the output must become zero), and then random resets during
+--    the traffic. Reads of a reset cycle are discarded and not compared;
+--    outputs cleared by a reset are checked to be zero (not compared with the
+--    reference model, which has no reset). Fails if a port with a reset has
+--    no reset before the first read, during reads, with the enable low, no
+--    zero check, or (latency 2) no read discarded from the first stage.
 --  - Process order: inputs change on falling edges and are sampled on rising
 --    edges; outputs are observed on falling edges; every scoreboard decision
 --    uses the state before the current instant (see lm_mem_tb_pkg).
@@ -68,6 +81,8 @@ entity lm_mem_tb_harness is
     g_seed             : positive := 1;
     g_max_excluded_pct : natural  := 25;
     g_min_checked      : natural  := 1000;
+    g_a_rst            : boolean  := false;
+    g_b_rst            : boolean  := false;
     g_sim_info         : string   := "unknown simulator"
   );
   port(
@@ -96,6 +111,8 @@ architecture a_tb of lm_mem_tb_harness is
   -- before any read (g_undef_until_rd).
   constant C_IDLE     : positive := 3;
   constant C_READERS  : natural  := boolean'pos(g_a_reads) + boolean'pos(g_b_reads);
+  -- Probability of a read-output reset in a cycle of the random traffic.
+  constant C_RST_PROB : real     := 0.06;
 
   shared variable sv_sb : t_scoreboard;
 
@@ -105,6 +122,8 @@ architecture a_tb of lm_mem_tb_harness is
   signal s_enb      : std_logic := '0';
   signal s_wen_a    : std_logic := '0';
   signal s_wen_b    : std_logic := '0';
+  signal s_rst_a_n  : std_logic := '1';
+  signal s_rst_b_n  : std_logic := '1';
   signal s_addr_a   : std_logic_vector(C_A_AW - 1 downto 0) := (others => '0');
   signal s_addr_b   : std_logic_vector(C_B_AW - 1 downto 0) := (others => '0');
   signal s_din_a    : std_logic_vector(g_a_data_w - 1 downto 0) := (others => '0');
@@ -178,18 +197,20 @@ begin
       g_b_latency => g_b_latency
     )
     port map(
-      clk_a_i  => s_clk_a,
-      clk_b_i  => s_clk_b,
-      ena_i    => s_ena,
-      enb_i    => s_enb,
-      wen_a_i  => s_wen_a,
-      wen_b_i  => s_wen_b,
-      addr_a_i => s_addr_a,
-      addr_b_i => s_addr_b,
-      din_a_i  => s_din_a,
-      din_b_i  => s_din_b,
-      dout_a_o => s_dout_a,
-      dout_b_o => s_dout_b
+      clk_a_i   => s_clk_a,
+      clk_b_i   => s_clk_b,
+      ena_i     => s_ena,
+      enb_i     => s_enb,
+      wen_a_i   => s_wen_a,
+      wen_b_i   => s_wen_b,
+      addr_a_i  => s_addr_a,
+      addr_b_i  => s_addr_b,
+      din_a_i   => s_din_a,
+      din_b_i   => s_din_b,
+      dout_a_o  => s_dout_a,
+      dout_b_o  => s_dout_b,
+      rst_a_n_i => s_rst_a_n,
+      rst_b_n_i => s_rst_b_n
     );
 
   s_ref_wenb <= s_wen_b when g_b_writes else '0';
@@ -240,6 +261,7 @@ begin
     variable v_bit  : std_logic;
     variable v_int  : natural;
     variable v_data : std_logic_vector(g_a_data_w - 1 downto 0);
+    variable v_rst  : std_logic;
   begin
     wait until s_cfg_done;
     for i in 1 to g_n_cycles loop
@@ -247,6 +269,19 @@ begin
       p_tb_rand_bit(v_s1, v_s2, 0.85, v_bit);
       if i <= C_IDLE then
         v_bit := '0';
+      end if;
+      if g_a_rst then
+        -- A reset with the enable low (no effect), then a reset with the
+        -- enable high before the first read, then random resets.
+        if i = 1 then
+          s_rst_a_n <= '0';
+        elsif i = C_IDLE + 1 then
+          v_bit := '1';
+          s_rst_a_n <= '0';
+        else
+          p_tb_rand_bit(v_s1, v_s2, C_RST_PROB, v_rst);
+          s_rst_a_n <= not v_rst;
+        end if;
       end if;
       s_ena <= v_bit;
       if g_a_writes then
@@ -266,6 +301,7 @@ begin
     wait until falling_edge(s_clk_a);
     s_ena   <= '0';
     s_wen_a <= '0';
+    s_rst_a_n <= '1';
     s_a_done <= true;
     wait;
   end process proc_stim_a;
@@ -276,6 +312,7 @@ begin
     variable v_bit  : std_logic;
     variable v_int  : natural;
     variable v_data : std_logic_vector(g_b_data_w - 1 downto 0);
+    variable v_rst  : std_logic;
   begin
     wait until s_cfg_done;
     for i in 1 to g_n_cycles loop
@@ -283,6 +320,19 @@ begin
       p_tb_rand_bit(v_s1, v_s2, 0.85, v_bit);
       if i <= C_IDLE then
         v_bit := '0';
+      end if;
+      if g_b_rst then
+        -- A reset with the enable low (no effect), then a reset with the
+        -- enable high before the first read, then random resets.
+        if i = 1 then
+          s_rst_b_n <= '0';
+        elsif i = C_IDLE + 1 then
+          v_bit := '1';
+          s_rst_b_n <= '0';
+        else
+          p_tb_rand_bit(v_s1, v_s2, C_RST_PROB, v_rst);
+          s_rst_b_n <= not v_rst;
+        end if;
       end if;
       s_enb <= v_bit;
       if g_b_writes then
@@ -302,6 +352,7 @@ begin
     wait until falling_edge(s_clk_b);
     s_enb   <= '0';
     s_wen_b <= '0';
+    s_rst_b_n <= '1';
     s_b_done <= true;
     wait;
   end process proc_stim_b;
@@ -315,10 +366,14 @@ begin
     variable v_have_out : boolean;
     variable v_have_obs : boolean := false;
     variable v_last     : std_logic_vector(g_a_data_w - 1 downto 0);
+    variable v_z1       : boolean := false;  -- latency 2: stage 1 cleared by a reset
+    variable v_zero     : boolean;           -- the output of this edge is a reset value
+    variable v_read_on  : boolean := false;  -- a read of this port was issued
   begin
     wait until s_cfg_done;
     while not s_stop loop
       wait until rising_edge(s_clk_a);
+      v_zero := false;
       v_have_out := false;
       v_base := to_integer(unsigned(s_addr_a)) * C_A_WORDS;
       if g_a_writes and (s_wen_a = '1') then
@@ -328,18 +383,45 @@ begin
           sv_sb.count_masked_write;
         end if;
       end if;
-      if g_a_reads and (s_ena = '1') then
+      if g_a_reads and (s_ena = '1') and g_a_rst and (s_rst_a_n = '0') then
+        -- Reset: every stage cleared, the read of this cycle discarded.
+        if v_read_on then
+          sv_sb.count_reset(C_PORT_A, C_TB_RST_DURING_READS);
+        else
+          sv_sb.count_reset(C_PORT_A, C_TB_RST_BEFORE_READ);
+        end if;
+        if (g_a_latency = 2) and v_tok1.valid then
+          sv_sb.count_reset(C_PORT_A, C_TB_RST_FLUSH);
+        end if;
+        v_tok1 := C_TB_NO_READ;
+        v_z1   := true;
+        v_out  := C_TB_NO_READ;
+        v_zero := true;
+      elsif g_a_reads and (s_ena = '1') then
         v_new := sv_sb.snapshot(v_base, C_A_WORDS, now);
+        v_read_on := true;
         if g_a_latency = 1 then
           v_out := v_new;
         else
           v_out  := v_tok1;
+          v_zero := v_z1;
           v_tok1 := v_new;
+          v_z1   := false;
         end if;
         v_have_out := v_out.valid;
+      elsif g_a_reads and g_a_rst and (s_rst_a_n = '0') then
+        sv_sb.count_reset(C_PORT_A, C_TB_RST_DISABLED);
       end if;
       wait until falling_edge(s_clk_a);
-      if v_have_out then
+      if v_zero then
+        if s_dout_a /= (s_dout_a'range => '0') then
+          sv_sb.add_error("port A output is " & to_hstring(s_dout_a) &
+                          " after a reset with the enable high; expected zero");
+        end if;
+        sv_sb.count_reset(C_PORT_A, C_TB_RST_ZERO_CHECK);
+        v_last := s_dout_a;
+        v_have_obs := true;
+      elsif v_have_out then
         sv_sb.push_read(C_PORT_A, v_out, s_dout_a, s_rdout_a, "port A");
         v_last := s_dout_a;
         v_have_obs := true;
@@ -369,10 +451,14 @@ begin
     variable v_have_out : boolean;
     variable v_have_obs : boolean := false;
     variable v_last     : std_logic_vector(g_b_data_w - 1 downto 0);
+    variable v_z1       : boolean := false;  -- latency 2: stage 1 cleared by a reset
+    variable v_zero     : boolean;           -- the output of this edge is a reset value
+    variable v_read_on  : boolean := false;  -- a read of this port was issued
   begin
     wait until s_cfg_done;
     while not s_stop loop
       wait until rising_edge(s_clk_b);
+      v_zero := false;
       v_have_out := false;
       v_base := to_integer(unsigned(s_addr_b)) * C_B_WORDS;
       if g_b_writes and (s_wen_b = '1') then
@@ -382,18 +468,45 @@ begin
           sv_sb.count_masked_write;
         end if;
       end if;
-      if g_b_reads and (s_enb = '1') then
+      if g_b_reads and (s_enb = '1') and g_b_rst and (s_rst_b_n = '0') then
+        -- Reset: every stage cleared, the read of this cycle discarded.
+        if v_read_on then
+          sv_sb.count_reset(C_PORT_B, C_TB_RST_DURING_READS);
+        else
+          sv_sb.count_reset(C_PORT_B, C_TB_RST_BEFORE_READ);
+        end if;
+        if (g_b_latency = 2) and v_tok1.valid then
+          sv_sb.count_reset(C_PORT_B, C_TB_RST_FLUSH);
+        end if;
+        v_tok1 := C_TB_NO_READ;
+        v_z1   := true;
+        v_out  := C_TB_NO_READ;
+        v_zero := true;
+      elsif g_b_reads and (s_enb = '1') then
         v_new := sv_sb.snapshot(v_base, C_B_WORDS, now);
+        v_read_on := true;
         if g_b_latency = 1 then
           v_out := v_new;
         else
           v_out  := v_tok1;
+          v_zero := v_z1;
           v_tok1 := v_new;
+          v_z1   := false;
         end if;
         v_have_out := v_out.valid;
+      elsif g_b_reads and g_b_rst and (s_rst_b_n = '0') then
+        sv_sb.count_reset(C_PORT_B, C_TB_RST_DISABLED);
       end if;
       wait until falling_edge(s_clk_b);
-      if v_have_out then
+      if v_zero then
+        if s_dout_b /= (s_dout_b'range => '0') then
+          sv_sb.add_error("port B output is " & to_hstring(s_dout_b) &
+                          " after a reset with the enable high; expected zero");
+        end if;
+        sv_sb.count_reset(C_PORT_B, C_TB_RST_ZERO_CHECK);
+        v_last := s_dout_b;
+        v_have_obs := true;
+      elsif v_have_out then
         sv_sb.push_read(C_PORT_B, v_out, s_dout_b, s_rdout_b, "port B");
         v_last := s_dout_b;
         v_have_obs := true;
@@ -418,6 +531,29 @@ begin
   proc_end : process
     variable v_c        : t_tb_counts;
     variable v_excluded : natural;
+
+    -- Coverage of the read-output reset of one port.
+    procedure p_check_reset_coverage(port_id : natural; name : string; active : boolean; latency : positive) is
+    begin
+      if not active then
+        return;
+      end if;
+      if sv_sb.reset_count(port_id, C_TB_RST_BEFORE_READ) = 0 then
+        sv_sb.add_error("coverage: port " & name & ": no reset before the first read");
+      end if;
+      if sv_sb.reset_count(port_id, C_TB_RST_DURING_READS) = 0 then
+        sv_sb.add_error("coverage: port " & name & ": no reset during reads");
+      end if;
+      if sv_sb.reset_count(port_id, C_TB_RST_DISABLED) = 0 then
+        sv_sb.add_error("coverage: port " & name & ": no reset with the enable low");
+      end if;
+      if sv_sb.reset_count(port_id, C_TB_RST_ZERO_CHECK) = 0 then
+        sv_sb.add_error("coverage: port " & name & ": no output checked after a reset");
+      end if;
+      if (latency = 2) and (sv_sb.reset_count(port_id, C_TB_RST_FLUSH) = 0) then
+        sv_sb.add_error("coverage: port " & name & ": no read discarded from the first stage by a reset");
+      end if;
+    end procedure p_check_reset_coverage;
   begin
     done_o   <= false;
     errors_o <= 0;
@@ -454,6 +590,8 @@ begin
                       " checks of an output before the first read, minimum " &
                       integer'image(C_IDLE * C_READERS));
     end if;
+    p_check_reset_coverage(C_PORT_A, "A", g_a_rst and g_a_reads, g_a_latency);
+    p_check_reset_coverage(C_PORT_B, "B", g_b_rst and g_b_reads, g_b_latency);
     if not C_POW2 then
       if (g_a_writes or g_b_writes) and (v_c.writes_oor = 0) then
         sv_sb.add_error("coverage: no write beyond the depth");

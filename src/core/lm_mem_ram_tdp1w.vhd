@@ -26,10 +26,22 @@
 --    read returns undefined data. There is no address comparison in the core:
 --    the storage covers the whole address range, so a non-power-of-two depth
 --    uses the next power of two words.
+--  - rst_a_n_i, rst_b_n_i: optional synchronous resets of the read outputs
+--    of port A and port B, active low, each in the clock domain of its port.
+--    Each acts only while the enable of its port (ena_i, enb_i) is high; with
+--    the enable low it has no effect and the output holds its value. With
+--    latency 1 a reset clears the output register (block RAM output latch
+--    reset, RSTRAM on AMD). With latency 2 it clears both stages (RSTRAM and
+--    RSTREG): after the reset the output stays zero until a read made after
+--    the reset reaches it. The read of a reset cycle is discarded. A reset
+--    never affects the storage: a port A write in a reset cycle is done. The
+--    default is '1' (inactive): an instance that leaves them unconnected
+--    keeps its behaviour and resources.
 --  - Read outputs have no initial value: they are undefined until the first
 --    enabled read reaches them (with latency 2, until the second enabled read
---    of that port).
---  - Initial content is zero; there is no reset.
+--    of that port), or until a reset applied with the enable of the port high
+--    clears them to zero.
+--  - Initial content is zero; the storage has no reset.
 --  - g_simulation is deprecated and ignored.
 -------------------------------------------------------------------------------
 
@@ -58,7 +70,9 @@ entity lm_mem_ram_tdp1w is
     addr_a_i    : in  std_logic_vector(f_ceil_log2(g_depth) - 1 downto 0);
     addr_b_i    : in  std_logic_vector(f_ceil_log2(g_depth) - 1 downto 0);
     data_rd_a_o : out std_logic_vector(g_data_w - 1 downto 0);
-    data_rd_b_o : out std_logic_vector(g_data_w - 1 downto 0)
+    data_rd_b_o : out std_logic_vector(g_data_w - 1 downto 0);
+    rst_a_n_i   : in  std_logic := '1';
+    rst_b_n_i   : in  std_logic := '1'
   );
 end entity lm_mem_ram_tdp1w;
 
@@ -93,11 +107,16 @@ begin
   begin
     if rising_edge(clk_a_i) then
       if ena_i = '1' then
-        s_data_rd_a <= s_mem(to_integer(unsigned(addr_a_i)));
+        if rst_a_n_i = '0' then
+          s_data_rd_a   <= (others => '0');
+          s_data_rd_a_p <= (others => '0');
+        else
+          s_data_rd_a   <= s_mem(to_integer(unsigned(addr_a_i)));
+          s_data_rd_a_p <= s_data_rd_a;
+        end if;
         if wen_a_i = '1' then
           s_mem(to_integer(unsigned(addr_a_i))) <= data_wr_a_i;
         end if;
-        s_data_rd_a_p <= s_data_rd_a;
       end if;
     end if;
   end process proc_port_a;
@@ -106,8 +125,13 @@ begin
   begin
     if rising_edge(clk_b_i) then
       if enb_i = '1' then
-        s_data_rd_b <= s_mem(to_integer(unsigned(addr_b_i)));
-        s_data_rd_b_p <= s_data_rd_b;
+        if rst_b_n_i = '0' then
+          s_data_rd_b   <= (others => '0');
+          s_data_rd_b_p <= (others => '0');
+        else
+          s_data_rd_b   <= s_mem(to_integer(unsigned(addr_b_i)));
+          s_data_rd_b_p <= s_data_rd_b;
+        end if;
       end if;
     end if;
   end process proc_port_b;

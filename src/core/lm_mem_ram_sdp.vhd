@@ -28,10 +28,20 @@
 --    read returns undefined data. There is no address comparison in the core:
 --    the storage covers the whole address range, so a non-power-of-two depth
 --    uses the next power of two words.
+--  - rd_rst_n_i: optional synchronous reset of the read output, active low,
+--    in the read clock domain. It acts only while enb_i is high; with enb_i
+--    low it has no effect and the output holds its value. With latency 1 it
+--    clears the output register (block RAM output latch reset, RSTRAM on
+--    AMD). With latency 2 it clears both stages (RSTRAM and RSTREG): after
+--    the reset the output stays zero until a read made after the reset
+--    reaches it. The read of a reset cycle is discarded. The reset never
+--    affects the storage or the write port. Default '1' (inactive): an
+--    instance that leaves it unconnected keeps its behaviour and resources.
 --  - Read outputs have no initial value: they are undefined until the first
 --    enabled read reaches them (with latency 2, until the second enabled read
---    of that port).
---  - Initial content is zero; there is no reset.
+--    of that port), or until a reset applied with enb_i high clears them to
+--    zero.
+--  - Initial content is zero; the storage has no reset.
 --  - g_simulation is deprecated and ignored.
 -------------------------------------------------------------------------------
 
@@ -51,15 +61,16 @@ entity lm_mem_ram_sdp is
     g_simulation : integer  := 1
   );
   port(
-    wr_clk_i  : in  std_logic;
-    rd_clk_i  : in  std_logic;
-    ena_i     : in  std_logic := '1';
-    enb_i     : in  std_logic := '1';
-    wen_i     : in  std_logic;
-    wr_addr_i : in  std_logic_vector(f_ceil_log2(g_wr_depth) - 1 downto 0);
-    wr_dat_i  : in  std_logic_vector(g_wr_data_w - 1 downto 0);
-    rd_addr_i : in  std_logic_vector(f_ceil_log2((g_wr_depth * g_wr_data_w) / g_rd_data_w) - 1 downto 0);
-    rd_dat_o  : out std_logic_vector(g_rd_data_w - 1 downto 0)
+    wr_clk_i   : in  std_logic;
+    rd_clk_i   : in  std_logic;
+    ena_i      : in  std_logic := '1';
+    enb_i      : in  std_logic := '1';
+    wen_i      : in  std_logic;
+    wr_addr_i  : in  std_logic_vector(f_ceil_log2(g_wr_depth) - 1 downto 0);
+    wr_dat_i   : in  std_logic_vector(g_wr_data_w - 1 downto 0);
+    rd_addr_i  : in  std_logic_vector(f_ceil_log2((g_wr_depth * g_wr_data_w) / g_rd_data_w) - 1 downto 0);
+    rd_dat_o   : out std_logic_vector(g_rd_data_w - 1 downto 0);
+    rd_rst_n_i : in  std_logic := '1'
   );
 end entity lm_mem_ram_sdp;
 
@@ -119,11 +130,16 @@ begin
   begin
     if rising_edge(rd_clk_i) then
       if enb_i = '1' then
-        for i in 0 to C_RD_WORDS - 1 loop
-          s_rd_dat((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH) <=
-            s_mem(to_integer(unsigned(rd_addr_i) & to_unsigned(i, C_RD_SEL)));
-        end loop;
-        s_rd_dat_p <= s_rd_dat;
+        if rd_rst_n_i = '0' then
+          s_rd_dat   <= (others => '0');
+          s_rd_dat_p <= (others => '0');
+        else
+          for i in 0 to C_RD_WORDS - 1 loop
+            s_rd_dat((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH) <=
+              s_mem(to_integer(unsigned(rd_addr_i) & to_unsigned(i, C_RD_SEL)));
+          end loop;
+          s_rd_dat_p <= s_rd_dat;
+        end if;
       end if;
     end if;
   end process proc_rd;

@@ -9,6 +9,19 @@
 -- Description:
 --  Dual-clock RAM wrapper with one write port and one read port.
 --  Implemented on lm_mem_ram_sdp, independent clocks.
+--
+--  - rd_rst_n_i: optional synchronous reset of the read output, active low,
+--    in the rd_clk_i domain. It acts only while enb_i is high; with enb_i
+--    low it has no effect and the output holds its value. With latency 1 it
+--    clears the output register (block RAM output latch reset, RSTRAM on
+--    AMD). With latency 2 it clears both stages (RSTRAM and RSTREG): after
+--    the reset the output stays zero until a read made after the reset
+--    reaches it. The read of a reset cycle is discarded; the storage and the
+--    write port are never affected. Default '1' (inactive): an instance that
+--    leaves it unconnected keeps its behaviour and resources.
+--  - The read output has no initial value: it is undefined until the first
+--    enabled read reaches it (with latency 2, until the second), or until a
+--    reset applied with enb_i high clears it to zero.
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -25,15 +38,16 @@ entity lm_mem_ram_cr_cw is
     g_simulation  : integer  := 1
   );
   port(
-    wr_clk_i  : in  std_logic;
-    rd_clk_i  : in  std_logic;
-    ena_i     : in  std_logic := '1';
-    enb_i     : in  std_logic := '1';
-    wen_i     : in  std_logic;
-    wr_addr_i : in  std_logic_vector(f_ceil_log2(g_ram_depth) - 1 downto 0);
-    wr_dat_i  : in  std_logic_vector(g_ram_data_w - 1 downto 0);
-    rd_addr_i : in  std_logic_vector(f_ceil_log2(g_ram_depth) - 1 downto 0);
-    rd_dat_o  : out std_logic_vector(g_ram_data_w - 1 downto 0)
+    wr_clk_i   : in  std_logic;
+    rd_clk_i   : in  std_logic;
+    ena_i      : in  std_logic := '1';
+    enb_i      : in  std_logic := '1';
+    wen_i      : in  std_logic;
+    wr_addr_i  : in  std_logic_vector(f_ceil_log2(g_ram_depth) - 1 downto 0);
+    wr_dat_i   : in  std_logic_vector(g_ram_data_w - 1 downto 0);
+    rd_addr_i  : in  std_logic_vector(f_ceil_log2(g_ram_depth) - 1 downto 0);
+    rd_dat_o   : out std_logic_vector(g_ram_data_w - 1 downto 0);
+    rd_rst_n_i : in  std_logic := '1'
   );
 end entity lm_mem_ram_cr_cw;
 
@@ -49,14 +63,15 @@ begin
       g_simulation => g_simulation
     )
     port map(
-      wr_clk_i  => wr_clk_i,
-      rd_clk_i  => rd_clk_i,
-      ena_i     => ena_i,
-      enb_i     => enb_i,
-      wen_i     => wen_i,
-      wr_addr_i => wr_addr_i,
-      wr_dat_i  => wr_dat_i,
-      rd_addr_i => rd_addr_i,
-      rd_dat_o  => rd_dat_o
+      wr_clk_i   => wr_clk_i,
+      rd_clk_i   => rd_clk_i,
+      ena_i      => ena_i,
+      enb_i      => enb_i,
+      wen_i      => wen_i,
+      wr_addr_i  => wr_addr_i,
+      wr_dat_i   => wr_dat_i,
+      rd_addr_i  => rd_addr_i,
+      rd_dat_o   => rd_dat_o,
+      rd_rst_n_i => rd_rst_n_i
     );
 end architecture a_rtl;

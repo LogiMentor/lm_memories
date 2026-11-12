@@ -200,18 +200,18 @@ if [ -n "$RESUME" ]; then
   exit $?
 fi
 
-if ! step pilot "$PY" -m tools.campaign.pilot "$ROOT/pilot"; then
+if ! step pilot "$PY" -m tools.campaign.pilot "$ROOT/pilot" --toolset "$TOOLSET"; then
   echo "$(stamp) pilot failed: campaigns not started" | tee -a "$STEPS"
   summarize
   exit 1
 fi
 
 step vivado "$PY" -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going \
-  --campaign "$N_VIVADO" --work-root "$ROOT/vs"
+  --campaign "$N_VIVADO" --work-root "$ROOT/vs" --toolset "$TOOLSET"
 step checks_vivado "$PY" -m tools.vendor_synth --config tools/vendor_synth/fallback_check.toml --keep-going \
-  --campaign "$N_CHECKS_VIVADO" --work-root "$ROOT/fc"
+  --campaign "$N_CHECKS_VIVADO" --work-root "$ROOT/fc" --toolset "$TOOLSET"
 step checks_quartus "$PY" -m tools.vendor_synth --config tools/vendor_synth/quartus_check.toml --keep-going \
-  --campaign "$N_CHECKS_QUARTUS" --work-root "$ROOT/qc"
+  --campaign "$N_CHECKS_QUARTUS" --work-root "$ROOT/qc" --toolset "$TOOLSET"
 step postsynth "$PY" sim/scripts/run_postsynth.py --campaign "$N_POSTSYNTH" --work-root "$ROOT/ps"
 step vunit_ghdl env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/scripts/run_vunit_campaign.py "$N_VUNIT_GHDL" -p 2
 step vunit_questa env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=modelsim \

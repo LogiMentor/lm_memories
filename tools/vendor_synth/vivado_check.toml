@@ -3,7 +3,7 @@
 #
 # Vivado inference check for the RAM cores, wrappers, FIFOs and two-writer RAMs
 # (issue #3).
-# Expected results: expected/amd.toml. Cases: cases.toml.
+# Expected results: expected/amd/<Vivado version>.toml. Cases: cases.toml.
 #
 #   python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going
 #

@@ -244,7 +244,9 @@ Vendor synthesis checks run as local scripts rather than in hosted CI, because
 the FPGA tools and their licenses must be installed on the developer machine.
 
 `tools/vendor_synth` synthesizes each case and compares the results with the
-expected results in `tools/vendor_synth/expected/<vendor>.toml`. Each entry
+expected results of its tool version, in
+`tools/vendor_synth/expected/<vendor>/<version>.toml` (the version in the
+synthesis log; a version without its own file fails). Each entry
 gives the number of block RAM tiles, LUTs used as memory, URAM, ceilings on
 registers and logic LUTs, zero CRITICAL WARNINGs, and message IDs that must
 not appear (for example Vivado `Synth 8-6859` multi-driven nets). A case

@@ -2,7 +2,12 @@
 # Copyright 2026 LogiMentor Srl
 """Pilot of the AMD campaign: corrections that only the real tools can show.
 
-  python -m tools.campaign.pilot <pilot directory>
+  python -m tools.campaign.pilot <pilot directory> [--toolset FILE]
+
+--toolset: the toolset of the campaign (logs/toolset.json,
+tools/campaign/toolset.py), passed to vendor_synth: the log of every run of
+the current code must be of that tool version, and is compared with the
+expected results of that version.
 
 Writes <pilot directory>/pilot.json and exits with 1 if any check fails:
 
@@ -36,6 +41,7 @@ Every tool run holds the machine-wide EDA lock.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import os
@@ -164,10 +170,14 @@ def _tool_runs(r: dict) -> int:
   return retried if retried > MAX_RETRIES else retried + 1
 
 
-def launcher_attempt(job: str, case: str) -> Callable[[Path], Attempt]:
+def _toolset_args(toolset: Path | None) -> list[str]:
+  return ["--toolset", str(toolset)] if toolset else []
+
+
+def launcher_attempt(job: str, case: str, toolset: Path | None = None) -> Callable[[Path], Attempt]:
   def attempt(work: Path) -> Attempt:
     vendor_synth(["--config", str(PILOT_CONFIG), "--job", job, "--case", case, "--keep-work",
-                  "--work-root", str(work)])
+                  "--work-root", str(work), *_toolset_args(toolset)])
     r = single_result(work)
     record = json.loads((Path(r["work_dir"]) / "run.json").read_text(encoding="utf-8"))
     rc = record.get("return_code")
@@ -185,7 +195,7 @@ def launcher_attempt(job: str, case: str) -> Callable[[Path], Attempt]:
   return attempt
 
 
-def generic_1000_attempt(source: Path) -> Callable[[Path], Attempt]:
+def generic_1000_attempt(source: Path, toolset: Path | None = None) -> Callable[[Path], Attempt]:
   """source: the case directory of the passing r_w_32x1024 run."""
   def attempt(work: Path) -> Attempt:
     case_dir = work / "pilot_artix7" / "r_w_32x1024"
@@ -220,7 +230,7 @@ def generic_1000_attempt(source: Path) -> Callable[[Path], Attempt]:
     record["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
     record_file.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     vendor_synth(["--config", str(PILOT_CONFIG), "--job", "pilot-artix7", "--case", "r_w_32x1024",
-                  "--evaluate-only", "--work-root", str(work)])
+                  "--evaluate-only", "--work-root", str(work), *_toolset_args(toolset)])
     r = single_result(work)
     base = {"exit_code": record["return_code"], "tool_runs": 1, "work_dir": str(case_dir),
             "transient": _signatures(r, _log_text(case_dir / "run.log")),
@@ -333,16 +343,16 @@ def run_pilot(base: Path, plan: list[tuple[str, str, MakeAttempt]], max_retries:
   return report
 
 
-def default_plan(base: Path) -> list[tuple[str, str, MakeAttempt]]:
+def default_plan(base: Path, toolset: Path | None = None) -> list[tuple[str, str, MakeAttempt]]:
   def launcher(job: str, case: str) -> MakeAttempt:
-    return lambda done: launcher_attempt(job, case)
+    return lambda done: launcher_attempt(job, case, toolset)
 
   def generic_1000(done: list[dict]) -> Callable[[Path], Attempt]:
     # The tampered run starts from the passing r_w_32x1024 run of the launcher.
     entry = next((c for c in done if c["case"] == "pilot-artix7/r_w_32x1024"), None)
     if entry is None or entry["status"] != "pass":
       raise PilotStop("launcher pilot-artix7/r_w_32x1024 did not pass")
-    return generic_1000_attempt(Path(entry["history"][-1]["work_dir"]))
+    return generic_1000_attempt(Path(entry["history"][-1]["work_dir"]), toolset)
 
   old: dict[str, Path] = {}
 
@@ -361,9 +371,13 @@ def default_plan(base: Path) -> list[tuple[str, str, MakeAttempt]]:
 
 def main(argv: list[str] | None = None) -> int:
   argv = sys.argv[1:] if argv is None else argv
-  base = Path(argv[0])
+  parser = argparse.ArgumentParser(prog="python -m tools.campaign.pilot", description="Pilot of the AMD campaign.")
+  parser.add_argument("base", type=Path, help="pilot directory")
+  parser.add_argument("--toolset", type=Path, help="toolset of the campaign (logs/toolset.json)")
+  args = parser.parse_args(argv)
+  base, toolset = args.base, (args.toolset.resolve() if args.toolset else None)
   base.mkdir(parents=True, exist_ok=True)
-  report = run_pilot(base, default_plan(base))
+  report = run_pilot(base, default_plan(base, toolset))
   report["commit_of_old_code"] = OLD_COMMIT
   (base / "pilot.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
   for check in CHECKS:

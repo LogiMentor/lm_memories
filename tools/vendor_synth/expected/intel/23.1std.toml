@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 #
-# Expected Quartus results for the cases in ../cases.toml.
+# Expected Quartus 23.1std results for the cases in ../../cases.toml.
+#
+# One file per Quartus release (tools/vendor_synth/check.py load_expected):
+# a run is compared with the file of the release in its log ("Info: Version
+# 23.1std.0 Build 991" -> 23.1std), and [meta] tool_version must name it.
 #
 # There is no validated Intel two-writer architecture yet, so the synth-intel
 # flow compiles the fallback (src/vendor/unsupported). Expected result for the
@@ -14,6 +18,9 @@
 # required as well.
 #
 # Device: 5CEBA4F23C7 (Cyclone V E).
+
+[meta]
+tool_version = "23.1std"
 
 [[expect]]
 case = "crw_crw_32x1024"

@@ -1,8 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 #
-# Expected Vivado synthesis results (out-of-context) for the cases in
-# ../cases.toml. A case passes only if every listed field matches.
+# Expected Vivado 2024.1 synthesis results (out-of-context) for the cases in
+# ../../cases.toml. A case passes only if every listed field matches.
+#
+# One file per tool version (tools/vendor_synth/check.py load_expected): a
+# run is compared with the file of the Vivado version in its log, and
+# [meta] tool_version must name that version.
+#
+# NOT YET MEASURED WITH 2024.1: this file starts as a copy of 2023.1.toml
+# ([meta] basis), so that the first Vivado 2024.1 campaign, on the code of
+# v0.2.0, is compared with the 2023.1 values. Each difference it finds is an
+# effect of the tool and is written here with the archive of its run; the
+# "Measured" notes below are those of 2023.1 until then.
 #
 # Fields:
 #   bram_tiles     exact number of block RAM tiles (RAMB18 = 0.5)
@@ -25,6 +35,10 @@
 # "synth_design completed successfully", exit code 0, no error of the
 # project, a utilization report written by this run with every row, and the
 # generics read back from the log.
+
+[meta]
+tool_version = "2024.1"
+basis = "copy of 2023.1.toml, not yet measured with Vivado 2024.1"
 
 [defaults]
 max_critical_warnings = 0

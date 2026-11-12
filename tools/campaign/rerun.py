@@ -70,7 +70,8 @@ def tool_errors(root: Path) -> list[dict]:
       todo.append({"step": step, "job": r["job"], "part": r.get("part", ""), "case": r["case"],
                    "first_status": r["status"], "first_problems": r.get("problems", []), "work_root": str(work),
                    "command": [sys.executable, "-m", "tools.vendor_synth", "--config", config, "--job", r["job"],
-                               "--case", r["case"], "--campaign", f"{campaign}_rerun", "--work-root", str(work)]})
+                               "--case", r["case"], "--campaign", f"{campaign}_rerun", "--work-root", str(work),
+                               "--toolset", str(root / "logs" / toolset.TOOLSET_FILE)]})
   data = _load(root / "ps" / "results.json") or {}
   for part, pd in data.get("parts", {}).items():
     names = [name for name, s in pd.get("synth", {}).items() if s.get("tool_error")]

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 #
-# Static checks with Vivado (expected/amd.toml):
+# Static checks with Vivado (expected/amd/<Vivado version>.toml):
 # - fallback_*: the synth-unsupported flow compiles
 #   src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd, and synthesis must stop;
 # - bad_*: a wrong generic must stop synthesis at its check.

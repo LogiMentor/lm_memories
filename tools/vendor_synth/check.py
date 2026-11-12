@@ -155,14 +155,52 @@ def load_cases(path: Path = CASES_FILE) -> list[dict[str, Any]]:
     return list(tomllib.load(handle).get("cases", []))
 
 
-def load_expected(vendor: str) -> dict[str, Any]:
+class ExpectedError(Exception):
+  """No expected results can be chosen for a run: a fail of the run, never a fallback to another version."""
+
+
+def expected_key(vendor: str, version: str) -> str:
+  """Name of the expected-results file of a tool version (without .toml):
+  Vivado "2024.1" -> "2024.1"; Quartus "25.1std.0 Build 1129" -> "25.1std"
+  (the release: the expected results do not change with the build)."""
+  if VENDOR_FILES.get(vendor.lower()) == "intel":
+    release = re.match(r"\d+\.\d+[A-Za-z]*", version)
+    return release.group(0) if release else version
+  return version
+
+
+def expected_path(vendor: str, version: str) -> Path | None:
+  """expected/<vendor>/<key>.toml, or None for a vendor without expected results."""
   name = VENDOR_FILES.get(vendor.lower())
-  path = EXPECTED_DIR / f"{name}.toml" if name else None
-  if path is None or not path.is_file():
+  return EXPECTED_DIR / name / f"{expected_key(vendor, version)}.toml" if name else None
+
+
+def load_expected(vendor: str, version: str | None) -> dict[str, Any]:
+  """Expected results of a vendor for one tool version (expected/<vendor>/<key>.toml).
+
+  A vendor without a directory of expected results has none (its cases are
+  "unchecked"). For a vendor with expected results, an unknown version, a
+  version without its own file, or a file whose [meta] tool_version is
+  another version raises ExpectedError: a run is never compared with the
+  results of another version.
+  """
+  name = VENDOR_FILES.get(vendor.lower())
+  if name is None or not (EXPECTED_DIR / name).is_dir():
     return {"defaults": {}, "expect": []}
+  if not version or version == "unknown" or version.startswith("mixed"):
+    raise ExpectedError(f"tool version {version or 'unknown'}: no expected results can be chosen")
+  key = expected_key(vendor, version)
+  path = expected_path(vendor, version)
+  if not path.is_file():
+    raise ExpectedError(f"no expected results for {name} {key} (tool version {version}): "
+                        f"tools/vendor_synth/expected/{name}/{key}.toml does not exist")
   with path.open("rb") as handle:
     data = tomllib.load(handle)
-  return {"defaults": data.get("defaults", {}), "expect": data.get("expect", [])}
+  declared = data.get("meta", {}).get("tool_version")
+  if declared != key:
+    raise ExpectedError(f"tools/vendor_synth/expected/{name}/{key}.toml: [meta] tool_version is {declared!r}, "
+                        f"not {key!r}")
+  return {"defaults": data.get("defaults", {}), "expect": data.get("expect", []), "tool_version": key}
 
 
 def find_expectation(expected: dict[str, Any], case: str, part: str) -> dict[str, Any] | None:

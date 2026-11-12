@@ -21,6 +21,11 @@ from unittest import mock
 
 from tools.eda_archive import sha256_file
 from tools.tests import toolsets
+
+
+def expected_versions(vendor: str) -> list[str]:
+  """Every tool version with expected results of a vendor (expected/<vendor>/<version>.toml)."""
+  return sorted(p.stem for p in (check.EXPECTED_DIR / vendor).glob("*.toml"))
 from tools.vendor_synth import check
 from tools.vendor_synth.cli import main
 
@@ -59,7 +64,7 @@ def status(outcome, message=""):
         handle.write(json.dumps({"run_id": run_id, "step": "synth_design", "outcome": outcome if outcome != "other-run"
                                  else "ok", "time": "2026-11-04T00:00:00Z", "message": message}) + "\n")
 
-print("****** Vivado v2023.1 (64-bit)")
+print("****** Vivado v%s (64-bit)" % spec.get("version", "2023.1"))
 if spec.get("status_outcome") != "missing":
     status("started")
 if calls < spec.get("fail_reads", 0):
@@ -148,16 +153,18 @@ class CheckParsingTest(unittest.TestCase):
   def test_fifo_logic_regression_fails(self) -> None:
     # Review of PR #4: the FIFO cases had no LUT ceiling, so 1000000 LUTs passed.
     log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}
-    fifo = [e for e in check.load_expected("amd")["expect"] if e["case"].startswith("fifo_")]
-    self.assertEqual(len(fifo), 6)
-    for entry in fifo:
-      for part in entry["parts"]:
-        expectation = check.find_expectation(check.load_expected("amd"), entry["case"], part)
-        metrics = {"luts": 1e6, "luts_logic": 1e6, "lutram": float(entry["lutram"]), "registers": 0.0,
-                   "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0}
-        problems = check.compare(metrics, log, expectation, part)
-        self.assertEqual(len(problems), 1, (entry["case"], part, problems))
-        self.assertIn("luts_logic", problems[0])
+    for version in expected_versions("amd"):
+      expected = check.load_expected("amd", version)
+      fifo = [e for e in expected["expect"] if e["case"].startswith("fifo_")]
+      self.assertEqual(len(fifo), 6, version)
+      for entry in fifo:
+        for part in entry["parts"]:
+          expectation = check.find_expectation(expected, entry["case"], part)
+          metrics = {"luts": 1e6, "luts_logic": 1e6, "lutram": float(entry["lutram"]), "registers": 0.0,
+                     "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0}
+          problems = check.compare(metrics, log, expectation, part)
+          self.assertEqual(len(problems), 1, (version, entry["case"], part, problems))
+          self.assertIn("luts_logic", problems[0])
 
   def test_uram_absent_only_on_families_without_uram(self) -> None:
     log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}
@@ -254,6 +261,26 @@ class VendorRunTest(unittest.TestCase):
     self.assertNotIn(".Xil", kept)
     self.assertIn("run.log", kept)
     self.assertTrue((Path(result["work_dir"]) / "reports" / "utilization.rpt").is_file())
+
+  def test_another_tool_version_has_its_own_expected_results(self) -> None:
+    # Vivado 2024.1 is compared with expected/amd/2024.1.toml.
+    result = self._run(self._good_spec(version="2024.1"))
+    self.assertEqual((result["status"], result["tool_version"]), ("pass", "2024.1"), result["problems"])
+
+  def test_a_version_without_expected_results_fails(self) -> None:
+    result = self._run(self._good_spec(version="2025.2"))
+    self.assertEqual(result["status"], "fail")
+    self.assertIn("no expected results for amd 2025.2", result["problems"][0])
+    self.assertIn("expected/amd/2025.2.toml does not exist", result["problems"][0])
+
+  def test_the_log_must_be_of_the_campaign_toolset(self) -> None:
+    toolset = self.root / "toolset.json"
+    toolset.write_text(json.dumps(toolsets.PCL01), encoding="utf-8")
+    result = self._run(self._good_spec(), extra_args=("--toolset", str(toolset)))
+    self.assertEqual(result["status"], "fail")
+    self.assertIn("the log is of vivado 2023.1, the campaign toolset has 2024.1", result["problems"][0])
+    result = self._run(self._good_spec(version="2024.1"), extra_args=("--toolset", str(toolset)))
+    self.assertEqual(result["status"], "pass", result["problems"])
 
   def test_flip_flop_ram_fails(self) -> None:
     result = self._run(self._good_spec(util=UTIL_TEMPLATE.format(luts=338, lutram=0, regs=1040, bram=0)))
@@ -719,7 +746,8 @@ class ExpectedFailureTest(unittest.TestCase):
     expectation_log = self._range_error(self.src, 4).replace(
       "ERROR: [Synth 8-11323]", "\tParameter g_ram_latency bound to: 7 - type: integer \nERROR: [Synth 8-11323]", 1)
     with mock.patch.object(check, "find_expectation", lambda *a: self.EXPECT):
-      result = cli._evaluate(job, case, "e", expectation_log, Path(self.tmp.name), [self.src], {"return_code": 1})
+      result = cli._evaluate(job, case, "e", expectation_log, Path(self.tmp.name), [self.src], {"return_code": 1},
+                             tool_version="2023.1")
     self.assertEqual(result["status"], "fail")
     self.assertTrue(any("requested 3, synthesized with 7" in p for p in result["problems"]), result["problems"])
 
@@ -768,11 +796,12 @@ class ExpectedFailureTest(unittest.TestCase):
     from tools.manifest import load
     sources = {flow: [s.path for s in load().files(flow)] for flow in ("synth-amd", "synth-intel", "synth-unsupported")}
     for vendor, flows in (("amd", ("synth-amd", "synth-unsupported")), ("intel", ("synth-intel",))):
-      for entry in check.load_expected(vendor)["expect"]:
-        name = entry.get("expect_failure_constant")
-        if name:
-          found = [p for flow in flows for p in check.locate_constant(name, sources[flow])]
-          self.assertTrue(found, f"{vendor} {entry['case']}: {name} not declared in {flows}")
+      for version in expected_versions(vendor):
+        for entry in check.load_expected(vendor, version)["expect"]:
+          name = entry.get("expect_failure_constant")
+          if name:
+            found = [p for flow in flows for p in check.locate_constant(name, sources[flow])]
+            self.assertTrue(found, f"{vendor} {version} {entry['case']}: {name} not declared in {flows}")
 
 
 if __name__ == "__main__":

@@ -52,7 +52,8 @@ def reevaluate(root: Path, step: str, run=subprocess.run) -> tuple[int, list[dic
   shutil.copyfile(work / "summary.json", before_file)
   archive = _load(work / "summary_public.json").get("archive")
   code = run([sys.executable, "-m", "tools.vendor_synth", "--config", config, "--keep-going", "--keep-work",
-              "--evaluate-only", "--work-root", str(work)], cwd=ROOT_DIR).returncode
+              "--evaluate-only", "--work-root", str(work), "--toolset", str(root / "logs" / "toolset.json")],
+             cwd=ROOT_DIR).returncode
   if archive is not None:
     # --evaluate-only writes the summary without the archive of the run it read.
     public = _load(work / "summary_public.json")

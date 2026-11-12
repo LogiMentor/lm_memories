@@ -12,7 +12,7 @@ Status values:
 - **simulated**: the VUnit harness (scoreboard, frozen reference model,
   coverage thresholds) passes on GHDL and Questa; the legacy GHDL tests pass.
 - **synthesis checked**: `tools/vendor_synth` passes with the expected
-  results of `tools/vendor_synth/expected/<vendor>.toml` (memory primitives,
+  results of `tools/vendor_synth/expected/<vendor>/<version>.toml` (memory primitives,
   register and LUT ceilings, 0 CRITICAL WARNINGs, generics read back).
 - **netlist checked**: the same harness passes on the synthesized netlist
   (`sim/scripts/run_postsynth.py`, GHDL with UNISIM and xsim).

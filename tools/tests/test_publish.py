@@ -12,6 +12,7 @@ from pathlib import Path
 
 from tools.campaign import publish
 from tools.campaign.rerun import ROOT_DIR
+from tools.tests import toolsets
 
 C1, C2 = "1" * 40, "2" * 40
 REPO = ROOT_DIR.as_posix()
@@ -113,6 +114,7 @@ def make_campaign(base: Path, rerun_sha: str | None = None, problem: str = "") -
                                  "pilot": {"ok": True, "cases": []},
                                  "steps": {"postsynth": {"ok": True, "runs": 1, "reruns": 1}},
                                  "driver_archive": c.archive("driver.tar.xz")})
+  toolsets.write(root)
   return c
 
 

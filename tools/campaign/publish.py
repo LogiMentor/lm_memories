@@ -34,16 +34,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from tools.campaign.rerun import POSTSYNTH_CAMPAIGN, ROOT_DIR, SYNTH_STEPS, _safe
+from tools.campaign import toolset
+from tools.campaign.rerun import ROOT_DIR, SYNTH_STEPS, _safe
 from tools.eda_archive import archive_dir, sha256_file
+from tools.harness_counts import campaign_parts
 
-# Output file of each vendor_synth step; device column of the README.
-SYNTH_FILES = {
-  "vivado": "vivado_2023.1_amd.json",
-  "checks_vivado": "static_checks_vivado_2023.1.json",
-  "checks_quartus": "static_checks_quartus_23.1.json",
-}
-POSTSYNTH_FILE = "postsynth_vivado_2023.1_amd.json"
 CAMPAIGN_FILE = "amd_campaign.json"
 BEGIN, END = "<!-- publish:begin -->", "<!-- publish:end -->"
 _QUARTUS_VERSION_RE = re.compile(r"Info: Version (\S+ Build \d+) .*Edition")
@@ -152,7 +147,7 @@ def _synth_entry(job: str, public: dict, archive: dict, evaluated_on: str | None
 
 def synth_step(root: Path, step: str, reruns: list[dict], directory: Path) -> dict:
   """Published results of one vendor_synth step, the passed reruns in place of the tool-errors."""
-  sub, _, _ = SYNTH_STEPS[step]
+  sub, _ = SYNTH_STEPS[step]
   work = root / sub
   full = _load(work / "summary.json")
   public = _load(work / "summary_public.json")
@@ -232,7 +227,7 @@ def _ps_runs(data: dict, archive: dict, configs_only: set[str] | None = None, pa
   return out
 
 
-def postsynth_step(root: Path, reruns: list[dict], directory: Path) -> dict:
+def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: str) -> dict:
   data = _load(root / "ps" / "results.json")
   if not data:
     raise PublishError(f"postsynth: no results.json in {root / 'ps'}")
@@ -264,7 +259,7 @@ def postsynth_step(root: Path, reruns: list[dict], directory: Path) -> dict:
   verdicts: dict[str, int] = {}
   for e in results:
     verdicts[e["verdict"]] = verdicts.get(e["verdict"], 0) + 1
-  return {"step": "postsynth", "campaign": POSTSYNTH_CAMPAIGN, "configs": data["configs"],
+  return {"step": "postsynth", "campaign": campaign, "configs": data["configs"],
           "verdicts": verdicts, "total": len(results), "results": results}
 
 
@@ -273,8 +268,9 @@ def sim_step(root: Path, step: str, work: Path, directory: Path) -> dict:
   data = _load(work / "results.json")
   if not data:
     raise PublishError(f"{step}: no results.json in {work}")
-  tool, _, version = work.name.partition("_")
-  return {"step": step, "tool": tool, "tool_version": version, "part": None, **data,
+  tool, edition, version = campaign_parts(work.name)
+  return {"step": step, "tool": tool, **({"edition": edition} if edition else {}), "tool_version": version,
+          "part": None, **data,
           "archive": verify_archive(data.get("archive"), directory)}
 
 
@@ -284,7 +280,7 @@ def _sim_dirs(root: Path) -> list[tuple[str, Path, str]]:
   return out
 
 
-def _postsynth_counts(step: dict, published: dict) -> dict:
+def _postsynth_counts(step: dict, published: dict, name: str) -> dict:
   """The counts of the post-synthesis step, each with its meaning (summary.json says only "runs" and "reruns")."""
   rerun_runs = sum(1 for r in published["results"] if r.get("first_run"))
   out = {k: v for k, v in step.items() if k not in ("runs", "reruns")}
@@ -294,7 +290,7 @@ def _postsynth_counts(step: dict, published: dict) -> dict:
                     "simulators (a synthesis that ended as tool-error has no netlist run there); reruns: syntheses "
                     "that ended as tool-error and ran again (tools/campaign/rerun.py); rerun_netlist_runs: the "
                     "netlist runs of those reruns; consolidated_results: the results published in "
-                    f"{POSTSYNTH_FILE} = main_step_runs + rerun_netlist_runs")
+                    f"{name} = main_step_runs + rerun_netlist_runs")
   if step.get("runs") is not None and step["runs"] + rerun_runs != published["total"]:
     raise PublishError(f"postsynth: {step['runs']} runs of the step + {rerun_runs} of its reruns are not the "
                        f"{published['total']} published results")
@@ -310,8 +306,14 @@ def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
   if not summary.get("ok"):
     raise PublishError(f"the campaign in {root} did not pass (summary.json)")
   reruns = (_load(root / "rerun" / "rerun.json") or {}).get("items", [])
-  files = {name: synth_step(root, step, reruns, directory) for step, name in SYNTH_FILES.items()}
-  files[POSTSYNTH_FILE] = postsynth_step(root, reruns, directory)
+  try:
+    # The file of each step is named after its campaign (tools/campaign/toolset.py).
+    names = toolset.names(root)
+  except toolset.ToolsetError as exc:
+    raise PublishError(str(exc)) from exc
+  files = {f"{names[step]}.json": synth_step(root, step, reruns, directory) for step in SYNTH_STEPS}
+  postsynth_file = f"{names['postsynth']}.json"
+  files[postsynth_file] = postsynth_step(root, reruns, directory, names["postsynth"])
   for step, work, name in _sim_dirs(root):
     files[name] = sim_step(root, step, work, directory)
   driver = verify_archive(summary.get("driver_archive"), directory)
@@ -340,7 +342,7 @@ def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
   }
   steps = files[CAMPAIGN_FILE]["steps"]
   if "postsynth" in steps:
-    steps["postsynth"] = _postsynth_counts(steps["postsynth"], files[POSTSYNTH_FILE])
+    steps["postsynth"] = _postsynth_counts(steps["postsynth"], files[postsynth_file], postsynth_file)
   scrub = scrubber(root)
   files = {name: scrub(content) for name, content in files.items()}
   leftover = [p for name, content in files.items() for p in local_paths(content, name)]
@@ -389,16 +391,20 @@ def table(files: dict[str, dict]) -> str:
         commit += "; evaluated on " + ", ".join(_short(c) for c in evaluated)
     elif "tests" in content:
       result = f"{content['passed']} of {content['total']} pass"
-      tools, parts, commit = [f"{content['tool']} {content['tool_version']}"], ["- (simulation)"], _short(content["commit"])
+      tools, parts, commit = [_sim_tool(content)], ["- (simulation)"], _short(content["commit"])
     else:
       baseline = (content.get("baseline") or {}).get("verdict")
       muts = content.get("mutations", [])
       detected = sum(1 for m in muts if m.get("verdict") == "DETECTED")
       result = f"{detected} of {len(muts)} mutations detected, baseline {baseline}"
-      tools, parts, commit = [f"{content['tool']} {content['tool_version']}"], ["- (simulation)"], _short(content["commit"])
+      tools, parts, commit = [_sim_tool(content)], ["- (simulation)"], _short(content["commit"])
     archives = "<br>".join(f"`{a['archive']}` (`{a['sha256']}`)" for a in _unique(_archives(content)))
     rows.append(f"| [`{name}`]({name}) | {result} | {commit} | {', '.join(tools)} | {', '.join(f'`{p}`' if p[0] != '-' and ' ' not in p else p for p in parts)} | {archives} |")
   return "\n".join(rows)
+
+
+def _sim_tool(content: dict) -> str:
+  return " ".join(filter(None, (content["tool"], content.get("edition"), content["tool_version"])))
 
 
 def _unique(records: list[dict]) -> list[dict]:

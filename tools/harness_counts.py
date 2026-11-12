@@ -55,8 +55,12 @@ def parse_counts(text: str) -> tuple[dict[str, int], list[str]]:
 # "modelsim_Questa_Sim-64_vsim_2021.1_..."): the VUnit simulator, then the
 # first line of its version output.
 _SIMULATOR_RE = re.compile(r"lm_mem_tb_harness \S+ \[([^\]]*)\]")
-# Campaign name "<tool>_<version>" -> VUNIT_SIMULATOR.
+# Campaign name "<tool>[_<edition>]_<version>" -> VUNIT_SIMULATOR.
 CAMPAIGN_SIMULATORS = {"ghdl": "ghdl", "questa": "modelsim", "modelsim": "modelsim"}
+# Editions a campaign name may state (questa_starter_2025.2). The harness
+# line of such a campaign must name the edition; a Questa campaign without
+# one must not run on an edition (tools/campaign/toolset.py).
+CAMPAIGN_EDITIONS = {"questa": ("starter",)}
 
 
 def harness_simulators(text: str) -> list[str]:
@@ -64,16 +68,30 @@ def harness_simulators(text: str) -> list[str]:
   return _SIMULATOR_RE.findall(text)
 
 
+def campaign_parts(name: str) -> tuple[str, str, str]:
+  """(tool, edition, version) of a campaign name: ghdl_6.0.0 -> ("ghdl", "", "6.0.0"),
+  questa_starter_2025.2 -> ("questa", "starter", "2025.2")."""
+  tool, _, rest = name.partition("_")
+  edition = ""
+  first, _, after = rest.partition("_")
+  if first in CAMPAIGN_EDITIONS.get(tool, ()) and after:
+    edition, rest = first, after
+  if tool not in CAMPAIGN_SIMULATORS or not rest or "_" in rest:
+    raise SystemExit(f"campaign name {name}: expected <tool>[_<edition>]_<version> with tool in "
+                     f"{', '.join(CAMPAIGN_SIMULATORS)}")
+  return tool, edition, rest
+
+
 def campaign_simulator(name: str) -> tuple[str, str]:
-  """(VUNIT_SIMULATOR, version) of a campaign name such as ghdl_6.0.0 or questa_2021.1."""
-  tool, _, version = name.partition("_")
-  if tool not in CAMPAIGN_SIMULATORS or not version:
-    raise SystemExit(f"campaign name {name}: expected <tool>_<version> with tool in {', '.join(CAMPAIGN_SIMULATORS)}")
+  """(VUNIT_SIMULATOR, version) of a campaign name such as ghdl_6.0.0 or questa_starter_2025.2."""
+  tool, _, version = campaign_parts(name)
   return CAMPAIGN_SIMULATORS[tool], version
 
 
-def simulator_problems(ids: list[str], requested: str, version: str | None = None) -> list[str]:
-  """Problems if the harness did not run on one simulator, the requested one, of this version."""
+def simulator_problems(ids: list[str], requested: str, version: str | None = None,
+                       campaign: str | None = None) -> list[str]:
+  """Problems if the harness did not run on one simulator, the requested one, of this version
+  (and of the edition the campaign name states, or of none)."""
   found = sorted(set(ids))
   if not found:
     return ["no harness line names the simulator"]
@@ -83,4 +101,11 @@ def simulator_problems(ids: list[str], requested: str, version: str | None = Non
     return [f"the harness ran on simulator {found[0]}, not on the requested {requested}"]
   if version and not re.search(rf"(?<![0-9.]){re.escape(version)}(?![0-9])", found[0]):
     return [f"the harness ran on simulator {found[0]}, not on version {version}"]
+  if campaign:
+    tool, edition, _ = campaign_parts(campaign)
+    named = [e for e in CAMPAIGN_EDITIONS.get(tool, ()) if re.search(rf"(?<![a-z]){e}(?![a-z])", found[0].lower())]
+    if edition and edition not in named:
+      return [f"the harness ran on simulator {found[0]}, not on the {edition} edition of {campaign}"]
+    if not edition and named:
+      return [f"the harness ran on simulator {found[0]}, an edition ({named[0]}) that {campaign} does not name"]
   return []

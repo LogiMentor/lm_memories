@@ -20,6 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.eda_archive import sha256_file
+from tools.tests import toolsets
 from tools.vendor_synth import check
 from tools.vendor_synth.cli import main
 
@@ -398,6 +399,7 @@ class VendorRunTest(unittest.TestCase):
     root = self.root / "campaign"
     root.mkdir(exist_ok=True)
     (self.root / "work").rename(root / sub)
+    toolsets.write(root)
     return root
 
   def test_project_error_is_a_fail_from_classification_to_summary(self) -> None:
@@ -408,7 +410,7 @@ class VendorRunTest(unittest.TestCase):
     self.assertIn("Synth 8-1031", "; ".join(result["problems"]))
     root = self._campaign_step()
     self.assertEqual(rerun.tool_errors(root), [])  # a fail is never selected for a rerun
-    step = summarize._synthesis(root, "vs", [])
+    step = summarize._synthesis(root, "vs", [], "2023.1")
     self.assertFalse(step["ok"])
     self.assertEqual(step["counts"], {"fail": 1})
     self.assertIn("r_w_16x64: fail", step["failures"][0])
@@ -428,7 +430,7 @@ class VendorRunTest(unittest.TestCase):
     self.assertTrue(all("tool-died" in r for r in result["retries"]), result["retries"])
     root = self._campaign_step()
     self.assertEqual([(i["step"], i["case"]) for i in rerun.tool_errors(root)], [("vivado", "r_w_16x64")])
-    step = summarize._synthesis(root, "vs", [{"job": "fake", "case": "r_w_16x64", "rerun_status": "pass"}])
+    step = summarize._synthesis(root, "vs", [{"job": "fake", "case": "r_w_16x64", "rerun_status": "pass"}], "2023.1")
     self.assertTrue(step["ok"], step)
 
   def test_a_stop_that_returned_is_not_run_again(self) -> None:

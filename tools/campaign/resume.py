@@ -43,7 +43,7 @@ def _statuses(path: Path) -> dict[tuple[str, str], str]:
 
 def reevaluate(root: Path, step: str, run=subprocess.run) -> tuple[int, list[dict]]:
   """Evaluate the step again; returns the exit code of vendor_synth and the changed cases."""
-  sub, config, _ = SYNTH_STEPS[step]
+  sub, config = SYNTH_STEPS[step]
   work = root / sub
   if not (work / "summary.json").is_file():
     raise SystemExit(f"resume: no {work / 'summary.json'}: the step never ran in this campaign")

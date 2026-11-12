@@ -54,6 +54,11 @@
 #                   as tool-error runs once more (never a fail); the summary
 #                   lists each one with its first and second result
 #
+# Tool versions: detected once at the start (tools/campaign/toolset.py) and
+# written to logs/toolset.json; the campaign names, and so the names of the
+# result files, come from there (vivado_<version>_amd, ...). A resume
+# requires the same versions installed.
+#
 # The memory thresholds of the EDA lock (LM_EDA_MIN_FREE_MB_SYNTH, default
 # 4096 MB, and LM_EDA_MIN_FREE_MB_SIM, default 2048 MB) are recorded in
 # logs/steps.txt and in the summary.
@@ -94,6 +99,7 @@ export LM_VIVADO_DIR LM_QUARTUS_DIR VUNIT_MODELSIM_PATH
 
 ROOT=${LM_CAMPAIGN_ROOT:-$("$PY" -c 'from tools.eda_workdir import work_root; print(work_root("c").as_posix())')}
 RESUME=${LM_CAMPAIGN_RESUME:-}
+TOOLSET="$ROOT/logs/toolset.json"
 TAG=$(date -u +%Y%m%dT%H%M%SZ)
 if [ -n "$RESUME" ]; then
   for s in $RESUME; do
@@ -106,10 +112,25 @@ if [ -n "$RESUME" ]; then
     2>/dev/null || fail "LM_CAMPAIGN_RESUME: the pilot of $ROOT did not pass"
   # The kept steps must have the dependencies they ran with (tools/campaign/deps.py).
   "$PY" -m tools.campaign.deps check "$ROOT" $RESUME     || fail "LM_CAMPAIGN_RESUME: refused, the dependencies of a kept step changed (above)"
-elif [ -d "$ROOT" ] && [ -n "$(ls -A "$ROOT")" ]; then
-  fail "campaign root $ROOT is not empty (move or delete it; set LM_CAMPAIGN_ROOT for another one)"
+  # And the tools they ran with (tools/campaign/toolset.py).
+  "$PY" -m tools.campaign.toolset check "$TOOLSET" || fail "LM_CAMPAIGN_RESUME: refused, the tools are not those of the campaign (above)"
+else
+  [ -d "$ROOT" ] && [ -n "$(ls -A "$ROOT")" ] \
+    && fail "campaign root $ROOT is not empty (move or delete it; set LM_CAMPAIGN_ROOT for another one)"
+  # The tool versions, before anything is written (tools/campaign/toolset.py).
+  DETECTED=$("$PY" -m tools.campaign.toolset detect) || fail "cannot read the version of every tool (above)"
 fi
 mkdir -p "$ROOT/logs" || fail "cannot create $ROOT"
+[ -n "$RESUME" ] || printf '%s\n' "$DETECTED" > "$TOOLSET" || fail "cannot write $TOOLSET"
+# Campaign name of a step, from the toolset of the campaign.
+name() { "$PY" -m tools.campaign.toolset name "$TOOLSET" "$1" || fail "no campaign name for $1 in $TOOLSET"; }
+N_VIVADO=$(name vivado) || exit 2
+N_CHECKS_VIVADO=$(name checks_vivado) || exit 2
+N_CHECKS_QUARTUS=$(name checks_quartus) || exit 2
+N_POSTSYNTH=$(name postsynth) || exit 2
+N_VUNIT_GHDL=$(name vunit_ghdl) || exit 2
+N_VUNIT_QUESTA=$(name vunit_questa) || exit 2
+N_MUTATION=$(name mutation) || exit 2
 STEPS="$ROOT/logs/steps.txt"
 stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 # Memory thresholds of the EDA lock in effect for every run of the campaign
@@ -131,6 +152,7 @@ else
   {
     echo "$(stamp) start commit $(git rev-parse HEAD)"
     echo "python: $("$PY" --version 2>&1); ghdl: $("$GHDL" --version | head -1); vivado: $LM_VIVADO_DIR"
+    echo "campaigns: $N_VIVADO $N_CHECKS_VIVADO $N_CHECKS_QUARTUS $N_POSTSYNTH $N_VUNIT_GHDL $N_VUNIT_QUESTA $N_MUTATION"
     echo "memory thresholds: $MEMORY"
     echo "retry waits: $RETRY_WAITS"
   } > "$STEPS"
@@ -165,7 +187,7 @@ if [ -n "$RESUME" ]; then
   for s in $RESUME; do
     if [ "$s" = postsynth ]; then
       [ -d "$ROOT/ps" ] && mv "$ROOT/ps" "$ROOT/ps.before_$TAG"
-      step postsynth "$PY" sim/scripts/run_postsynth.py --campaign postsynth_vivado_2023.1_amd --work-root "$ROOT/ps"
+      step postsynth "$PY" sim/scripts/run_postsynth.py --campaign "$N_POSTSYNTH" --work-root "$ROOT/ps"
       FRESH="postsynth"
     else
       step "reevaluate_$s" "$PY" -m tools.campaign.resume "$ROOT" "$s"
@@ -185,16 +207,16 @@ if ! step pilot "$PY" -m tools.campaign.pilot "$ROOT/pilot"; then
 fi
 
 step vivado "$PY" -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going \
-  --campaign vivado_2023.1_amd --work-root "$ROOT/vs"
+  --campaign "$N_VIVADO" --work-root "$ROOT/vs"
 step checks_vivado "$PY" -m tools.vendor_synth --config tools/vendor_synth/fallback_check.toml --keep-going \
-  --campaign static_checks_vivado_2023.1 --work-root "$ROOT/fc"
+  --campaign "$N_CHECKS_VIVADO" --work-root "$ROOT/fc"
 step checks_quartus "$PY" -m tools.vendor_synth --config tools/vendor_synth/quartus_check.toml --keep-going \
-  --campaign static_checks_quartus_23.1 --work-root "$ROOT/qc"
-step postsynth "$PY" sim/scripts/run_postsynth.py --campaign postsynth_vivado_2023.1_amd --work-root "$ROOT/ps"
-step vunit_ghdl env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/scripts/run_vunit_campaign.py ghdl_6.0.0 -p 2
+  --campaign "$N_CHECKS_QUARTUS" --work-root "$ROOT/qc"
+step postsynth "$PY" sim/scripts/run_postsynth.py --campaign "$N_POSTSYNTH" --work-root "$ROOT/ps"
+step vunit_ghdl env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/scripts/run_vunit_campaign.py "$N_VUNIT_GHDL" -p 2
 step vunit_questa env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=modelsim \
-  "$PY" sim/scripts/run_vunit_campaign.py questa_2021.1 -p 1
-step mutation env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/vunit/mutation_check.py --campaign ghdl_6.0.0
+  "$PY" sim/scripts/run_vunit_campaign.py "$N_VUNIT_QUESTA" -p 1
+step mutation env LM_EDA_WORKDIR="$ROOT" VUNIT_SIMULATOR=ghdl "$PY" sim/vunit/mutation_check.py --campaign "$N_MUTATION"
 # Once more, only the cases that ended as tool-error (never a fail).
 step rerun_tool_errors "$PY" -m tools.campaign.rerun "$ROOT"
 echo "$(stamp) done" >> "$STEPS"

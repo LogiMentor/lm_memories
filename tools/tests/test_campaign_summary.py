@@ -13,7 +13,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tools.campaign import rerun, summarize
+from tools.campaign import rerun, summarize, toolset
+from tools.tests import toolsets
 
 
 class SummaryTest(unittest.TestCase):
@@ -24,6 +25,7 @@ class SummaryTest(unittest.TestCase):
     (root / "logs" / "steps.txt").write_text("t start commit abc\nt end pilot rc=%d\n" % (0 if pilot_ok else 1))
     pilot = {"ok": pilot_ok, "launcher": {"ok": pilot_ok, "problems": [] if pilot_ok else ["exit code 0"]}}
     (root / "pilot" / "pilot.json").write_text(json.dumps(pilot))
+    toolsets.write(root)
     return root
 
   def _run(self, root: Path) -> int:
@@ -64,12 +66,12 @@ def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
     "t start commit abc\nmemory thresholds: synthesis 4096 MB (LM_EDA_MIN_FREE_MB_SYNTH); simulation 2048 MB "
     "(LM_EDA_MIN_FREE_MB_SIM)\nretry waits: 30, 60 s (LM_EDA_RETRY_DELAYS)\n" + "".join(f"t end {k} rc={v}\n" for k, v in codes.items()))
   (root / "pilot" / "pilot.json").write_text(json.dumps({"ok": True, "launcher": {"ok": True, "problems": []}}))
-  results = [{"job": "artix7", "part": "xc7a35tfgg484-2", "case": f"case{i}", "status": s,
+  results = [{"job": "artix7", "part": "xc7a35tfgg484-2", "case": f"case{i}", "status": s, "tool_version": "2023.1",
               "problems": [] if s == "pass" else [f"{s} of case{i}"]} for i, s in enumerate(vivado_statuses)]
   (root / "vs" / "summary.json").write_text(json.dumps({"results": results}))
-  for sub in ("fc", "qc"):
+  for sub, version in (("fc", "2023.1"), ("qc", "23.1std.0 Build 991")):
     (root / sub / "summary.json").write_text(json.dumps({"results": [
-      {"job": "j", "part": "p", "case": "x", "status": "pass", "problems": []}]}))
+      {"job": "j", "part": "p", "case": "x", "status": "pass", "tool_version": version, "problems": []}]}))
   synth = {"ok": not ps_tool_error, "tool_error": ps_tool_error, "problems": ["transient"] if ps_tool_error else []}
   sims = {} if ps_tool_error else {"ghdl": {"results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
   (root / "ps" / "results.json").write_text(json.dumps({"configs": ["crw_crw.1clk.16x64"], "rtl": {}, "parts": {
@@ -82,6 +84,7 @@ def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
   if rerun_items is not None:
     (root / "rerun").mkdir()
     (root / "rerun" / "rerun.json").write_text(json.dumps({"ok": True, "items": rerun_items}))
+  toolsets.write(root)
   return root
 
 
@@ -241,15 +244,22 @@ class RerunTest(unittest.TestCase):
 
   def test_steps_match_the_campaign_script(self) -> None:
     script = (Path(rerun.ROOT_DIR) / "tools" / "campaign" / "run_amd.sh").read_text(encoding="utf-8")
-    for step, (sub, config, campaign) in rerun.SYNTH_STEPS.items():
+    variables = {"vivado": "N_VIVADO", "checks_vivado": "N_CHECKS_VIVADO", "checks_quartus": "N_CHECKS_QUARTUS"}
+    for step, (sub, config) in rerun.SYNTH_STEPS.items():
       line = next(l for l in script.splitlines() if l.startswith(f"step {step} "))
       following = script[script.index(line):].split("\n", 2)
       text = following[0] + following[1]
       self.assertIn(config, text, step)
-      self.assertIn(f"--campaign {campaign}", text, step)
+      self.assertIn(f'--campaign "${variables[step]}"', text, step)
+      self.assertIn(f"{variables[step]}=$(name {step})", script, step)
       self.assertIn(f'"$ROOT/{sub}"', text, step)
-    self.assertIn(f"--campaign {rerun.POSTSYNTH_CAMPAIGN}", script)
+    self.assertIn('--campaign "$N_POSTSYNTH"', script)
     self.assertIn("step rerun_tool_errors", script)
+    # No campaign name, and so no tool version, is written in the script.
+    code = "\n".join(l for l in script.splitlines() if not l.lstrip().startswith("#"))
+    self.assertNotRegex(code, r"--campaign [a-z]|run_vunit_campaign\.py [a-z]")
+    self.assertIn("tools.campaign.toolset detect", script)
+    self.assertIn('tools.campaign.toolset check "$TOOLSET"', script)
 
 
 if __name__ == "__main__":

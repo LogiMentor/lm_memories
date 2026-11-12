@@ -3,8 +3,9 @@
 # Copyright 2026 LogiMentor Srl
 """VUnit campaign for docs/results: the whole suite, with its logs archived.
 
-Runs sim/vunit/run.py on the simulator of the campaign name (<tool>_<version>:
-ghdl_6.0.0 -> VUNIT_SIMULATOR=ghdl, questa_2021.1 -> modelsim), whatever
+Runs sim/vunit/run.py on the simulator of the campaign name
+(<tool>[_<edition>]_<version>: ghdl_6.0.0 -> VUNIT_SIMULATOR=ghdl,
+questa_2021.1 and questa_starter_2025.2 -> modelsim), whatever
 VUNIT_SIMULATOR the environment holds (an inherited other value is recorded
 as simulator_environment_ignored), into a new work directory
 ($LM_EDA_WORKDIR/vu/<name>), reads the
@@ -13,12 +14,14 @@ RAM test (counters), writes results.json there, and archives the whole
 directory (tools/eda_archive.py). The campaign passes only if every test
 passed and every RAM test printed exactly one harness line with every
 counter and errors=0 written explicitly (tools/harness_counts.py), and
-every harness line names the requested simulator of that version: the
-published simulator is the one that ran.
+every harness line names the requested simulator of that version and
+edition: the published simulator is the one that ran. The campaign of
+tools/campaign/run_amd.sh takes the name from its toolset
+(tools/campaign/toolset.py).
 
   python sim/scripts/run_vunit_campaign.py ghdl_6.0.0
-  VUNIT_MODELSIM_PATH=C:/questasim64_2021.1/win64 \\
-    python sim/scripts/run_vunit_campaign.py questa_2021.1 -p 1
+  VUNIT_MODELSIM_PATH=<Questa bin directory> \\
+    python sim/scripts/run_vunit_campaign.py questa_starter_2025.2 -p 1
 """
 
 from __future__ import annotations
@@ -64,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
          "--output-path", str(root / "vunit_out"), "--xunit-xml", str(xunit)]
   with (root / "console.log").open("w", encoding="utf-8") as handle:
     code = subprocess.run(cmd, cwd=ROOT_DIR, env=env, stdout=handle, stderr=subprocess.STDOUT).returncode
-  result = {"campaign": args.name, **evaluate(xunit, code, requested, version), "commit": commit(),
+  result = {"campaign": args.name, **evaluate(xunit, code, requested, version, args.name), "commit": commit(),
             "manifest_hash": manifest_hash()}
   if inherited and inherited != requested:
     result["simulator_environment_ignored"] = inherited
@@ -78,12 +81,14 @@ def main(argv: list[str] | None = None) -> int:
   return 0 if not result["problems"] else 1
 
 
-def evaluate(xunit: Path, code: int | None, requested: str | None = None, version: str | None = None) -> dict:
+def evaluate(xunit: Path, code: int | None, requested: str | None = None, version: str | None = None,
+             campaign: str | None = None) -> dict:
   """Verdict of a VUnit run from its xunit file and the exit code of run.py.
 
   Every test must pass; every RAM test must print exactly one harness line
   with every counter and errors=0 written explicitly; with requested, every
-  harness line must name that simulator (and version). Returns simulator
+  harness line must name that simulator (and version; with campaign, the
+  edition its name states, or none). Returns simulator
   (as the harness printed it), exit_code, passed, total, problems and tests.
   """
   tests = []
@@ -114,7 +119,7 @@ def evaluate(xunit: Path, code: int | None, requested: str | None = None, versio
                if "harness_lines" in t and t["harness_lines"] != 1]
   problems += [f"{t['test']}: {p}" for t in tests for p in t.get("count_problems", [])]
   if requested:
-    problems += simulator_problems(simulators, requested, version)
+    problems += simulator_problems(simulators, requested, version, campaign)
   return {"simulator": ", ".join(sorted(set(simulators))), "simulator_requested": requested, "exit_code": code, "passed": sum(t["status"] == "pass" for t in tests),
           "total": len(tests), "problems": problems, "tests": tests}
 

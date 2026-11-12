@@ -286,8 +286,11 @@ python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --eva
   are kept in `docs/results/`.
 
 Jobs configure the tool with `executable`, `install_dir`, optional
-`setup_script`, or `command`. On Windows, point Vivado jobs at
-`bin/vivado.bat` or set `install_dir`.
+`setup_script`, or `command`. `install_dir_env` names an environment
+variable that holds the installation directory instead: the checked
+configurations use `LM_VIVADO_DIR` and `LM_QUARTUS_DIR`, and stop when the
+variable is not set. On Windows, point Vivado jobs at `bin/vivado.bat` or
+set the installation directory.
 
 ## lm_memgen Quick Start
 

@@ -56,7 +56,6 @@ from tools.vendor_synth.check import RUN_ID_ENV
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PILOT_CONFIG = ROOT_DIR / "tools" / "campaign" / "pilot.toml"
-VIVADO_DIR = Path(os.environ.get("LM_VIVADO_DIR", "C:/Xilinx/Vivado/2023.1"))
 LAUNCHER_CASES = [  # (job, case) of pilot.toml, in this order
   ("pilot-artix7", "r_w_32x1024"),
   ("pilot-artix7", "bad_ccd_resync_levels1"),
@@ -78,6 +77,15 @@ OLD_CASES = [
 ]
 COMPLETED = "synth_design completed successfully"
 CHECKS = ("launcher", "generic_1000_for_1024", "old_code")
+
+
+def vivado_dir() -> Path:
+  """The Vivado installation of the pilot: $LM_VIVADO_DIR, the same one as
+  pilot.toml (install_dir_env). There is no default installation."""
+  value = os.environ.get("LM_VIVADO_DIR", "").strip()
+  if not value:
+    raise SystemExit("pilot: set LM_VIVADO_DIR to the Vivado installation directory")
+  return Path(value)
 
 
 class PilotStop(Exception):
@@ -144,7 +152,7 @@ def _signatures(r: dict, log_text: str) -> list[str]:
   """Transient signatures of a vendor_synth result: its retried runs, and its last run if transient."""
   found = [record_reason(entry) for entry in r.get("retries", [])]
   if r["status"] == "tool-error":
-    last = transient_reason(log_text, [VIVADO_DIR])
+    last = transient_reason(log_text, [vivado_dir()])
     if last is not None and last not in found[-1:]:
       found.append(last)
   return found
@@ -200,7 +208,7 @@ def generic_1000_attempt(source: Path) -> Callable[[Path], Attempt]:
     # The script records the outcome of synth_design under this run id.
     record["run_id"] = uuid.uuid4().hex
     env = {**os.environ, RUN_ID_ENV: record["run_id"]}
-    vivado = VIVADO_DIR / "bin" / ("vivado.bat" if sys.platform == "win32" else "vivado")
+    vivado = vivado_dir() / "bin" / ("vivado.bat" if sys.platform == "win32" else "vivado")
     cmd = (["cmd", "/c", str(vivado)] if sys.platform == "win32" else [str(vivado)]) + [
       "-mode", "batch", "-nojournal", "-source", script.resolve().as_posix()]
     with (case_dir / "run.log").open("w", encoding="utf-8") as handle, \
@@ -238,7 +246,7 @@ def old_code_status(log_text: str) -> tuple[str, str | None]:
   """
   if COMPLETED in log_text:
     return "pass", None
-  reason = retry_reason(log_text, completed=False, roots=[VIVADO_DIR])
+  reason = retry_reason(log_text, completed=False, roots=[vivado_dir()])
   return ("tool-error", reason) if reason else ("fail", None)
 
 
@@ -255,7 +263,7 @@ def prepare_old_code(base: Path) -> tuple[Path, Path]:
   config = base / "old_static.json"
   config.write_text(json.dumps({"cases": OLD_CASES, "jobs": [{
     "name": OLD_JOB, "enabled": True, "tool": "vivado", "vendor": "amd", "family": "artix7",
-    "part": "xc7a35tfgg484-2", "install_dir": VIVADO_DIR.as_posix(), "manifest_flow": "synth-unsupported",
+    "part": "xc7a35tfgg484-2", "install_dir": vivado_dir().as_posix(), "manifest_flow": "synth-unsupported",
     "threads": 2, "timeout_seconds": 1800, "cases": [c["name"] for c in OLD_CASES]}]}), encoding="utf-8")
   return old_tree, config
 

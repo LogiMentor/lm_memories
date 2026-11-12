@@ -14,10 +14,13 @@
 #                        [$LM_EDA_WORKDIR/c; default C:/lmeda/c on Windows,
 #                        lmeda/c in the system temp elsewhere]
 #   LM_EDA_ARCHIVE_DIR   archives [~/lm_eda_archive]
-#   LM_VIVADO_DIR        [C:/Xilinx/Vivado/2023.1]
-#   LM_QUARTUS_DIR       [C:/intelFPGA_lite/23.1std/quartus] (checked only)
-#   VUNIT_MODELSIM_PATH  Questa [C:/questasim64_2021.1/win64]
-#   GHDL                 GHDL executable [ghdl on PATH, else C:/msys64/ucrt64/bin/ghdl]
+#   LM_VIVADO_DIR        Vivado installation directory (required; the
+#                        configurations of vendor_synth read it through
+#                        install_dir_env, run_postsynth.py and the pilot too)
+#   LM_QUARTUS_DIR       Quartus installation directory, the one with bin/
+#                        or bin64/ (required)
+#   VUNIT_MODELSIM_PATH  directory of the Questa executables (required)
+#   GHDL                 GHDL executable [$VUNIT_GHDL_PATH/ghdl, else ghdl on PATH]
 #   LM_EDA_RETRY_DELAYS  seconds to wait before the first, second rerun of a
 #                        transient tool failure [30,60] (tools/eda_retry.py)
 #   LM_CAMPAIGN_RESUME   resume an existing campaign root (its pilot passed)
@@ -70,21 +73,22 @@ PY=${PYTHON:-python}
   || fail "Python 3.11 or newer is needed as '$PY' (set PYTHON)"
 "$PY" -c 'import vunit' 2>/dev/null || fail "VUnit is not installed for $PY (pip install vunit_hdl)"
 if [ -z "${GHDL:-}" ]; then
-  if command -v ghdl >/dev/null 2>&1; then GHDL=$(command -v ghdl)
-  elif [ -x /c/msys64/ucrt64/bin/ghdl.exe ] || [ -x /c/msys64/ucrt64/bin/ghdl ]; then GHDL=/c/msys64/ucrt64/bin/ghdl
-  else fail "GHDL not found: put it on PATH or set GHDL"; fi
+  if [ -n "${VUNIT_GHDL_PATH:-}" ] && { [ -x "$VUNIT_GHDL_PATH/ghdl" ] || [ -x "$VUNIT_GHDL_PATH/ghdl.exe" ]; }; then
+    GHDL=$VUNIT_GHDL_PATH/ghdl
+  elif command -v ghdl >/dev/null 2>&1; then GHDL=$(command -v ghdl)
+  else fail "GHDL not found: set GHDL or VUNIT_GHDL_PATH, or put ghdl on PATH"; fi
 fi
 export GHDL
 export PATH="$(dirname "$GHDL"):$PATH"
-export LM_VIVADO_DIR=${LM_VIVADO_DIR:-C:/Xilinx/Vivado/2023.1}
-LM_QUARTUS_DIR=${LM_QUARTUS_DIR:-C:/intelFPGA_lite/23.1std/quartus}
-export VUNIT_MODELSIM_PATH=${VUNIT_MODELSIM_PATH:-C:/questasim64_2021.1/win64}
+# The tool installations come from the environment only: no default
+# directory, and the configurations read the same variables.
+[ -n "${LM_VIVADO_DIR:-}" ] || fail "set LM_VIVADO_DIR to the Vivado installation directory"
+[ -n "${LM_QUARTUS_DIR:-}" ] || fail "set LM_QUARTUS_DIR to the Quartus installation directory"
+[ -n "${VUNIT_MODELSIM_PATH:-}" ] || fail "set VUNIT_MODELSIM_PATH to the directory of the Questa executables"
+export LM_VIVADO_DIR LM_QUARTUS_DIR VUNIT_MODELSIM_PATH
 [ -d "$LM_VIVADO_DIR/bin" ] || fail "Vivado not found in $LM_VIVADO_DIR"
 [ -d "$LM_QUARTUS_DIR" ] || fail "Quartus not found in $LM_QUARTUS_DIR"
 [ -d "$VUNIT_MODELSIM_PATH" ] || fail "Questa not found in $VUNIT_MODELSIM_PATH"
-# The tool configurations name these directories; a different installation needs them changed too.
-grep -q "install_dir = \"$LM_VIVADO_DIR\"" tools/vendor_synth/vivado_check.toml \
-  || fail "tools/vendor_synth/*.toml name another Vivado directory than $LM_VIVADO_DIR"
 [ -z "$(git status --porcelain --untracked-files=no)" ] \
   || fail "tracked files differ from HEAD: commit first, the results record the commit"
 

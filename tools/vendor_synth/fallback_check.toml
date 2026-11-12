@@ -13,6 +13,8 @@
 # side is quartus_check.toml.
 #
 #   python -m tools.vendor_synth --config tools/vendor_synth/fallback_check.toml --keep-going
+#
+# Vivado: the installation in $LM_VIVADO_DIR (install_dir_env).
 
 [[jobs]]
 name = "vivado-artix7-checks"
@@ -21,7 +23,7 @@ tool = "vivado"
 vendor = "amd"
 family = "artix7"
 part = "xc7a35tfgg484-2"
-install_dir = "C:/Xilinx/Vivado/2023.1"
+install_dir_env = "LM_VIVADO_DIR"
 manifest_flow = "synth-unsupported"
 threads = 2
 timeout_seconds = 1800
@@ -39,7 +41,7 @@ tool = "vivado"
 vendor = "amd"
 family = "artix7"
 part = "xc7a35tfgg484-2"
-install_dir = "C:/Xilinx/Vivado/2023.1"
+install_dir_env = "LM_VIVADO_DIR"
 manifest_flow = "synth-unsupported"
 assert = true
 threads = 2
@@ -59,7 +61,7 @@ tool = "vivado"
 vendor = "amd"
 family = "artix7"
 part = "xc7a35tfgg484-2"
-install_dir = "C:/Xilinx/Vivado/2023.1"
+install_dir_env = "LM_VIVADO_DIR"
 threads = 2
 timeout_seconds = 1800
 cases = ["bad_crw_crw_latency3", "bad_crw_crw_ratio_24to8"]

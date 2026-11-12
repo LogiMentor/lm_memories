@@ -7,7 +7,8 @@
 #
 #   python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml --keep-going
 #
-# Adjust install_dir to the local Vivado installation. Results go to
+# Vivado: the installation in $LM_VIVADO_DIR (install_dir_env; unset stops
+# the run). Results go to
 # $LM_EDA_WORKDIR/vs (default: lmeda/vs in the system temporary directory).
 
 [[jobs]]
@@ -17,7 +18,7 @@ tool = "vivado"
 vendor = "amd"
 family = "artix7"
 part = "xc7a35tfgg484-2"
-install_dir = "C:/Xilinx/Vivado/2023.1"
+install_dir_env = "LM_VIVADO_DIR"
 threads = 2
 timeout_seconds = 1800
 cases = [
@@ -37,7 +38,7 @@ tool = "vivado"
 vendor = "amd"
 family = "kintexuplus"
 part = "xcku3p-ffva676-2-e"
-install_dir = "C:/Xilinx/Vivado/2023.1"
+install_dir_env = "LM_VIVADO_DIR"
 threads = 2
 timeout_seconds = 1800
 cases = [

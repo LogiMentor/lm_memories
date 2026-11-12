@@ -14,7 +14,17 @@ from unittest import mock
 
 from tools.campaign import pilot, summarize
 
-INSTALL = pilot.VIVADO_DIR.as_posix()
+INSTALL = "C:/Xilinx/Vivado/2023.1"
+_ENV = mock.patch.dict("os.environ", {"LM_VIVADO_DIR": INSTALL})
+
+
+def setUpModule() -> None:
+  _ENV.start()
+
+
+def tearDownModule() -> None:
+  _ENV.stop()
+
 # The end of a run of the old code on 2026-11-04 (C:/lmeda/c, bad_r_w_infer_latency3).
 TRANSIENT_LOG = f"""Starting synth_design
 INFO: [Synth 8-7075] Helper process launched with PID 12144
@@ -131,7 +141,7 @@ class VendorSynthRecordTest(unittest.TestCase):
     self.assertEqual(pilot._tool_runs({"retries": ["attempt 1: x", "attempt 2: x", "attempt 3: x"]}), 3)
 
   def test_signatures_are_not_repeated(self) -> None:
-    last = pilot.transient_reason(TRANSIENT_LOG, [pilot.VIVADO_DIR])
+    last = pilot.transient_reason(TRANSIENT_LOG, [pilot.vivado_dir()])
     persisted = {"status": "tool-error",
                  "retries": ["attempt 1: rt-undefined: x; waited 30 s before attempt 2", f"attempt 2: {last}"]}
     self.assertEqual(pilot._signatures(persisted, TRANSIENT_LOG), ["rt-undefined: x", last])

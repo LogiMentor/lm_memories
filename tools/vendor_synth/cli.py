@@ -283,6 +283,23 @@ def _job_path(job: dict[str, Any], key: str) -> Path | None:
   return ROOT_DIR / path
 
 
+def _install_dir(job: dict[str, Any]) -> Path | None:
+  """Installation directory of the job's tool: install_dir, or the directory
+  held by the environment variable that install_dir_env names (the checked
+  configurations use LM_VIVADO_DIR and LM_QUARTUS_DIR). An unset variable
+  stops the run: there is no default installation."""
+  variable = job.get("install_dir_env")
+  if not variable:
+    return _job_path(job, "install_dir")
+  if job.get("install_dir"):
+    raise SystemExit(f"{_job_name(job)}: set install_dir or install_dir_env, not both")
+  value = os.environ.get(str(variable), "").strip()
+  if not value:
+    raise SystemExit(f"{_job_name(job)}: {variable} is not set; set it to the installation directory of "
+                     f"{_tool(job) or 'the tool'} (install_dir_env)")
+  return _job_path({"install_dir": value}, "install_dir")
+
+
 def _existing_or_first(candidates: list[Path]) -> Path:
   for candidate in candidates:
     if candidate.exists():
@@ -297,7 +314,7 @@ def _platform_candidates(windows: list[Path], posix: list[Path]) -> list[Path]:
 
 
 def _install_command(job: dict[str, Any], default: str) -> list[str] | None:
-  install_dir = _job_path(job, "install_dir")
+  install_dir = _install_dir(job)
   if install_dir is None:
     return None
 
@@ -351,7 +368,7 @@ def _configured_command(job: dict[str, Any], default: str) -> list[str]:
 
 
 def _auto_setup_script(job: dict[str, Any]) -> Path | None:
-  install_dir = _job_path(job, "install_dir")
+  install_dir = _install_dir(job)
   if install_dir is None:
     return None
 
@@ -1051,7 +1068,7 @@ def _generics_module(case: dict[str, Any], top: str) -> str | None:
 
 def _tool_roots(job: dict[str, Any]) -> list[Path]:
   """Installation directories of the job's tool (for the retry signatures)."""
-  install_dir = _job_path(job, "install_dir")
+  install_dir = _install_dir(job)
   return [install_dir] if install_dir is not None else []
 
 

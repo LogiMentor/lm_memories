@@ -148,12 +148,14 @@ class CheckParsingTest(unittest.TestCase):
     # Review of PR #4: the FIFO cases had no LUT ceiling, so 1000000 LUTs passed.
     log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}
     fifo = [e for e in check.load_expected("amd")["expect"] if e["case"].startswith("fifo_")]
-    self.assertEqual(len(fifo), 6)
+    # Six FIFO cases of v0.2.0 plus the two with a read port wider than the write port (issue #7).
+    self.assertEqual(len(fifo), 8)
     for entry in fifo:
       for part in entry["parts"]:
         expectation = check.find_expectation(check.load_expected("amd"), entry["case"], part)
         metrics = {"luts": 1e6, "luts_logic": 1e6, "lutram": float(entry["lutram"]), "registers": 0.0,
-                   "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0}
+                   "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0,
+                   "ramb36": float(entry.get("ramb36", 0)), "ramb18": float(entry.get("ramb18", 0))}
         problems = check.compare(metrics, log, expectation, part)
         self.assertEqual(len(problems), 1, (entry["case"], part, problems))
         self.assertIn("luts_logic", problems[0])

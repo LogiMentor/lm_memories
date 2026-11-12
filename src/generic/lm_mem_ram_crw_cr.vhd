@@ -9,22 +9,27 @@
 -- Description:
 --  Dual-clock RAM wrapper with one read/write port and one read-only port.
 --  Implemented on lm_mem_ram_tdp1w.
---
---  - rst_a_n_i, rst_b_n_i: optional synchronous resets of the read outputs
---    of port A and port B, active low, each in the clock domain of its port
---    (clk_a_i, clk_b_i). Each acts only while the enable of its port (ena_i,
---    enb_i) is high; with the enable low it has no effect and the output
---    holds its value. With latency 1 a reset clears the output register
---    (block RAM output latch reset, RSTRAM on AMD). With latency 2 it clears
---    both stages (RSTRAM and RSTREG): after the reset the output stays zero
---    until a read made after the reset reaches it. The read of a reset cycle
---    is discarded; the storage is never affected (a port A write in a reset
---    cycle is done). Default '1' (inactive): an instance that leaves them
---    unconnected keeps its behaviour and resources.
+--  - Read-output resets (issue #7), one per read port: g_ram_a_rst_en and
+--    g_ram_b_rst_en enable them, rst_a_n_i and rst_b_n_i drive them.
+--    - Enable false (default): the port is the one of v0.2.0, with no reset
+--      logic, so tools infer the same memory with the same resources; the
+--      reset input is ignored, and a simulation warning reports it when it
+--      is low.
+--    - Enable true: a synchronous reset of the read output of that port,
+--      active low, in the clock domain of the port (clk_a_i, clk_b_i). It
+--      acts only while the enable of the port (ena_i, enb_i) is high; with
+--      the enable low it has no effect and the output holds its value. With
+--      latency 1 it clears the output register (block RAM output latch
+--      reset, RSTRAM on AMD). With latency 2 it clears both stages (RSTRAM
+--      and RSTREG): after the reset the output stays zero until a read made
+--      after the reset reaches it. The read of a reset cycle is discarded;
+--      the storage is never affected (a port A write in a reset cycle is
+--      done). Vivado 2023.1 builds each reset with one LUT ("enable AND NOT
+--      reset") on the reset pins of the memory.
 --  - Read outputs have no initial value: each is undefined until the first
 --    enabled read of its port reaches it (with latency 2, until the second),
---    or until a reset applied with the enable of its port high clears it to
---    zero.
+--    or, with the reset of the port enabled, until a reset applied with the
+--    enable of the port high clears it to zero.
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -34,11 +39,13 @@ use work.lm_mem_pkg.all;
 
 entity lm_mem_ram_crw_cr is
   generic(
-    g_ram_latency : positive := 1;
-    g_ram_data_w  : positive := 32;
-    g_ram_depth   : positive := 1024;
-    g_init_file   : string   := "";
-    g_simulation  : integer  := 1
+    g_ram_latency  : positive := 1;
+    g_ram_data_w   : positive := 32;
+    g_ram_depth    : positive := 1024;
+    g_init_file    : string   := "";
+    g_simulation   : integer  := 1;
+    g_ram_a_rst_en : boolean  := false;
+    g_ram_b_rst_en : boolean  := false
   );
   port(
     clk_a_i     : in  std_logic;
@@ -65,7 +72,9 @@ begin
       g_a_latency  => g_ram_latency,
       g_b_latency  => g_ram_latency,
       g_init_file  => g_init_file,
-      g_simulation => g_simulation
+      g_simulation => g_simulation,
+      g_a_rst_en   => g_ram_a_rst_en,
+      g_b_rst_en   => g_ram_b_rst_en
     )
     port map(
       clk_a_i     => clk_a_i,

@@ -80,3 +80,9 @@ case = "bad_r_w_infer_latency3"
 parts = ["5CEBA4F23C7"]
 expect_failure_constant = "C_ERROR_LATENCY_NOT_1_OR_2"
 expect_failure = ["lm_mem_ram_r_w_infer: latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_r_w_ratio_8to32_rst"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_RD_RST_WITH_WIDE_READ"
+expect_failure = ["lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port"]

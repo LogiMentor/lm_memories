@@ -30,6 +30,7 @@ cases = [
   "bad_r_w_latency3", "bad_r_w_ratio_24to8", "bad_crw_cr_latency3", "bad_fifo_sync_depth24",
   "bad_ccd_resync_levels1", "bad_fifo_almost_full_0", "bad_fifo_almost_empty_15",
   "bad_r_w_infer_latency3", "bad_r_w_infer_no_vendor", "bad_xilinx_prim_no_family",
+  "bad_r_w_ratio_8to32_rst",
 ]
 
 [[jobs]]
@@ -49,6 +50,7 @@ cases = [
   "bad_r_w_latency3", "bad_r_w_ratio_24to8", "bad_crw_cr_latency3", "bad_fifo_sync_depth24",
   "bad_ccd_resync_levels1", "bad_fifo_almost_full_0", "bad_fifo_almost_empty_15",
   "bad_r_w_infer_latency3", "bad_r_w_infer_no_vendor", "bad_xilinx_prim_no_family",
+  "bad_r_w_ratio_8to32_rst",
 ]
 
 # The AMD two-writer architecture with wrong generics (flow synth-amd).

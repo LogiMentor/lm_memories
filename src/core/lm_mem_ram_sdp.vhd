@@ -28,19 +28,29 @@
 --    read returns undefined data. There is no address comparison in the core:
 --    the storage covers the whole address range, so a non-power-of-two depth
 --    uses the next power of two words.
---  - rd_rst_n_i: optional synchronous reset of the read output, active low,
---    in the read clock domain. It acts only while enb_i is high; with enb_i
---    low it has no effect and the output holds its value. With latency 1 it
---    clears the output register (block RAM output latch reset, RSTRAM on
---    AMD). With latency 2 it clears both stages (RSTRAM and RSTREG): after
---    the reset the output stays zero until a read made after the reset
---    reaches it. The read of a reset cycle is discarded. The reset never
---    affects the storage or the write port. Default '1' (inactive): an
---    instance that leaves it unconnected keeps its behaviour and resources.
+--  - Read-output reset (issue #7): g_rd_rst_en enables it, rd_rst_n_i
+--    drives it.
+--    - g_rd_rst_en = false (default): the read port is the one of v0.2.0, with
+--      no reset logic, so tools infer the same memory with the same
+--      resources; rd_rst_n_i is ignored, and a simulation warning reports it
+--      when it is low.
+--    - g_rd_rst_en = true: rd_rst_n_i is a synchronous reset of the read
+--      output, active low, in the read clock domain. It acts only while enb_i
+--      is high; with enb_i low it has no effect and the output holds its
+--      value. With latency 1 it clears the output register (block RAM output
+--      latch reset, RSTRAM on AMD). With latency 2 it clears both stages
+--      (RSTRAM and RSTREG): after the reset the output stays zero until a
+--      read made after the reset reaches it. The read of a reset cycle is
+--      discarded. The reset never affects the storage or the write port.
+--      Vivado 2023.1 builds it with one LUT ("enable AND NOT reset") on the
+--      reset pins of the memory.
+--    - g_rd_rst_en = true with a read port wider than the write port stops
+--      elaboration (static check): Vivado 2023.1 then no longer infers the
+--      asymmetric block RAM and replicates the memory.
 --  - Read outputs have no initial value: they are undefined until the first
 --    enabled read reaches them (with latency 2, until the second enabled read
---    of that port), or until a reset applied with enb_i high clears them to
---    zero.
+--    of that port), or, with g_rd_rst_en, until a reset applied with enb_i
+--    high clears them to zero.
 --  - Initial content is zero; the storage has no reset.
 --  - g_simulation is deprecated and ignored.
 -------------------------------------------------------------------------------
@@ -58,7 +68,8 @@ entity lm_mem_ram_sdp is
     g_rd_data_w  : positive := 32;
     g_rd_latency : positive := 1;
     g_init_file  : string   := "";
-    g_simulation : integer  := 1
+    g_simulation : integer  := 1;
+    g_rd_rst_en  : boolean  := false
   );
   port(
     wr_clk_i   : in  std_logic;
@@ -85,14 +96,18 @@ architecture a_rtl of lm_mem_ram_sdp is
   constant C_OK_RATIO    : boolean := ((C_MAX_WIDTH mod C_MIN_WIDTH) = 0) and f_is_power_of_two(C_RATIO);
   constant C_OK_DEPTH    : boolean := ((g_wr_depth * g_wr_data_w) mod g_rd_data_w) = 0;
   constant C_OK_INIT     : boolean := g_init_file = "";
+  constant C_OK_RD_RST   : boolean := not (g_rd_rst_en and (g_rd_data_w > g_wr_data_w));
   constant C_MSG_LATENCY : string  := "lm_mem_ram_sdp: read latency must be 1 or 2";
   constant C_MSG_RATIO   : string  := "lm_mem_ram_sdp: port widths must have a power-of-two ratio";
   constant C_MSG_DEPTH   : string  := "lm_mem_ram_sdp: read depth must resolve to an integer";
   constant C_MSG_INIT    : string  := "lm_mem_ram_sdp: initialization files are reserved for a future import step";
+  constant C_MSG_RD_RST  : string  :=
+    "lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port";
   constant C_ERROR_RD_LATENCY_NOT_1_OR_2   : t_static_check := f_static_check(C_OK_LATENCY, C_MSG_LATENCY);  -- ERROR: g_rd_latency must be 1 or 2
   constant C_ERROR_WIDTH_RATIO_NOT_POW2    : t_static_check := f_static_check(C_OK_RATIO, C_MSG_RATIO);  -- ERROR: port width ratio must be a power of two
   constant C_ERROR_RD_DEPTH_NOT_INTEGER    : t_static_check := f_static_check(C_OK_DEPTH, C_MSG_DEPTH);  -- ERROR: g_wr_depth * g_wr_data_w / g_rd_data_w must be an integer
   constant C_ERROR_INIT_FILE_NOT_SUPPORTED : t_static_check := f_static_check(C_OK_INIT, C_MSG_INIT);  -- ERROR: g_init_file must be ""
+  constant C_ERROR_RD_RST_WITH_WIDE_READ   : t_static_check := f_static_check(C_OK_RD_RST, C_MSG_RD_RST);  -- ERROR: g_rd_rst_en needs g_rd_data_w <= g_wr_data_w
 
   constant C_RD_DEPTH      : positive := (g_wr_depth * g_wr_data_w) / g_rd_data_w;
   constant C_WR_WORDS      : positive := g_wr_data_w / C_MIN_WIDTH;
@@ -126,14 +141,16 @@ begin
     end if;
   end process proc_wr;
 
-  proc_rd : process(rd_clk_i)
-  begin
-    if rising_edge(rd_clk_i) then
-      if enb_i = '1' then
-        if rd_rst_n_i = '0' then
-          s_rd_dat   <= (others => '0');
-          s_rd_dat_p <= (others => '0');
-        else
+  -- The read-output reset is a function selected by a generic, the exception
+  -- of docs/coding_style.md: without it the read process is the one of
+  -- v0.2.0, with no reset logic (Vivado infers the memory inside this core
+  -- before it propagates the constants of the instance, so an unused reset
+  -- port would still change the inferred memory).
+  gen_rd : if not g_rd_rst_en generate
+    proc_rd : process(rd_clk_i)
+    begin
+      if rising_edge(rd_clk_i) then
+        if enb_i = '1' then
           for i in 0 to C_RD_WORDS - 1 loop
             s_rd_dat((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH) <=
               s_mem(to_integer(unsigned(rd_addr_i) & to_unsigned(i, C_RD_SEL)));
@@ -141,8 +158,34 @@ begin
           s_rd_dat_p <= s_rd_dat;
         end if;
       end if;
-    end if;
-  end process proc_rd;
+    end process proc_rd;
+
+    -- Simulation only: synthesis tools do not evaluate an assertion on a
+    -- signal.
+    assert rd_rst_n_i /= '0'
+      report "lm_mem_ram_sdp: rd_rst_n_i is low, but the read-output reset is disabled (g_rd_rst_en = false)"
+      severity warning;
+  end generate gen_rd;
+
+  gen_rd_rst : if g_rd_rst_en generate
+    proc_rd_rst : process(rd_clk_i)
+    begin
+      if rising_edge(rd_clk_i) then
+        if enb_i = '1' then
+          if rd_rst_n_i = '0' then
+            s_rd_dat   <= (others => '0');
+            s_rd_dat_p <= (others => '0');
+          else
+            for i in 0 to C_RD_WORDS - 1 loop
+              s_rd_dat((i + 1) * C_MIN_WIDTH - 1 downto i * C_MIN_WIDTH) <=
+                s_mem(to_integer(unsigned(rd_addr_i) & to_unsigned(i, C_RD_SEL)));
+            end loop;
+            s_rd_dat_p <= s_rd_dat;
+          end if;
+        end if;
+      end if;
+    end process proc_rd_rst;
+  end generate gen_rd_rst;
 
   gen_latency_1 : if g_rd_latency = 1 generate
     rd_dat_o <= s_rd_dat;

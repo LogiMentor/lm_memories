@@ -67,6 +67,11 @@ NEGATIVE = [
    "inst : entity work.lm_mem_xilinx_ram_r_w_prim generic map(g_ram_data_w => 8, g_ram_depth => 16, g_family => \"\")\n"
    "  port map(clk_i => s_clk, wen_i => s_bit, wr_addr_i => s_nib, wr_dat_i => s_byte, rd_addr_i => s_nib);",
    "lm_mem_xilinx_ram_r_w_prim: family and primitive must be set"),
+  ("r_w_ratio_wide_read_reset",
+   "inst : entity work.lm_mem_ram_r_w_ratio\n"
+   "  generic map(g_ram_a_data_w => 8, g_ram_a_depth => 16, g_ram_b_data_w => 16, g_ram_b_rst_en => true)\n"
+   "  port map(clk_i => s_clk, wen_i => s_bit, wr_addr_i => s_nib, wr_dat_i => s_byte, rd_addr_i => s_nib(2 downto 0));",
+   "lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port"),
   ("bin2gray_1bit", "s_one <= f_bin2gray(s_bitv);", "lm_mem_pkg.f_bin2gray: input length must be greater than 1"),
   ("gray2bin_1bit", "s_one <= f_gray2bin(s_bitv);", "lm_mem_pkg.f_gray2bin: input length must be greater than 1"),
 ]
@@ -175,6 +180,24 @@ class StaticCheckGhdlTest(unittest.TestCase):
                               "--stop-time=10ns"], cwd=self.work, capture_output=True, text=True)
         self.assertNotEqual(run.returncode, 0, f"{name}: elaboration did not stop")
         self.assertIn(message, run.stdout + run.stderr)
+
+
+  def test_reset_of_a_disabled_port_warns_in_simulation(self) -> None:
+    # Issue #7: with the read-output reset disabled (default), a low reset
+    # input has no effect, and simulation warns about it; it does not stop.
+    body = ("inst : entity work.lm_mem_ram_r_w generic map(g_ram_data_w => 8, g_ram_depth => 16)\n"
+            "  port map(clk_i => s_clk, wen_i => s_bit, wr_addr_i => s_nib, wr_dat_i => s_byte, "
+            "rd_addr_i => s_nib, rd_rst_n_i => s_bit);")
+    top = self.work / "tb_static_disabled_reset.vhd"
+    top.write_text(TOP.format(name="disabled_reset", body=body), encoding="utf-8")
+    analyze = subprocess.run([GHDL, "-a", "--std=08", f"--workdir={self.work}", str(top)],
+                             capture_output=True, text=True)
+    self.assertEqual(analyze.returncode, 0, analyze.stderr)
+    run = subprocess.run([GHDL, "--elab-run", "--std=08", f"--workdir={self.work}", "tb_static_disabled_reset",
+                          "--stop-time=10ns", "--assert-level=error"], cwd=self.work, capture_output=True, text=True)
+    self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+    self.assertIn("lm_mem_ram_sdp: rd_rst_n_i is low, but the read-output reset is disabled (g_rd_rst_en = false)",
+                  run.stdout + run.stderr)
 
 
 if __name__ == "__main__":

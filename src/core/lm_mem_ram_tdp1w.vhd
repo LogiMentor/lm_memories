@@ -26,21 +26,27 @@
 --    read returns undefined data. There is no address comparison in the core:
 --    the storage covers the whole address range, so a non-power-of-two depth
 --    uses the next power of two words.
---  - rst_a_n_i, rst_b_n_i: optional synchronous resets of the read outputs
---    of port A and port B, active low, each in the clock domain of its port.
---    Each acts only while the enable of its port (ena_i, enb_i) is high; with
---    the enable low it has no effect and the output holds its value. With
---    latency 1 a reset clears the output register (block RAM output latch
---    reset, RSTRAM on AMD). With latency 2 it clears both stages (RSTRAM and
---    RSTREG): after the reset the output stays zero until a read made after
---    the reset reaches it. The read of a reset cycle is discarded. A reset
---    never affects the storage: a port A write in a reset cycle is done. The
---    default is '1' (inactive): an instance that leaves them unconnected
---    keeps its behaviour and resources.
+--  - Read-output resets (issue #7), one per read port: g_a_rst_en and
+--    g_b_rst_en enable them, rst_a_n_i and rst_b_n_i drive them.
+--    - Enable false (default): the port is the one of v0.2.0, with no reset
+--      logic, so tools infer the same memory with the same resources; the
+--      reset input is ignored, and a simulation warning reports it when it
+--      is low.
+--    - Enable true: a synchronous reset of the read output of that port,
+--      active low, in the clock domain of the port. It acts only while the
+--      enable of the port (ena_i, enb_i) is high; with the enable low it has
+--      no effect and the output holds its value. With latency 1 it clears the
+--      output register (block RAM output latch reset, RSTRAM on AMD). With
+--      latency 2 it clears both stages (RSTRAM and RSTREG): after the reset
+--      the output stays zero until a read made after the reset reaches it.
+--      The read of a reset cycle is discarded. A reset never affects the
+--      storage: a port A write in a reset cycle is done. Vivado 2023.1 builds
+--      each reset with one LUT ("enable AND NOT reset") on the reset pins of
+--      the memory.
 --  - Read outputs have no initial value: they are undefined until the first
 --    enabled read reaches them (with latency 2, until the second enabled read
---    of that port), or until a reset applied with the enable of the port high
---    clears them to zero.
+--    of that port), or, with the reset of the port enabled, until a reset
+--    applied with the enable of the port high clears them to zero.
 --  - Initial content is zero; the storage has no reset.
 --  - g_simulation is deprecated and ignored.
 -------------------------------------------------------------------------------
@@ -58,7 +64,9 @@ entity lm_mem_ram_tdp1w is
     g_a_latency   : positive := 1;
     g_b_latency   : positive := 1;
     g_init_file   : string   := "";
-    g_simulation  : integer  := 1
+    g_simulation  : integer  := 1;
+    g_a_rst_en    : boolean  := false;
+    g_b_rst_en    : boolean  := false
   );
   port(
     clk_a_i     : in  std_logic;
@@ -103,38 +111,84 @@ begin
     report "lm_mem_ram_tdp1w: g_simulation is deprecated and ignored"
     severity note;
 
-  proc_port_a : process(clk_a_i)
-  begin
-    if rising_edge(clk_a_i) then
-      if ena_i = '1' then
-        if rst_a_n_i = '0' then
-          s_data_rd_a   <= (others => '0');
-          s_data_rd_a_p <= (others => '0');
-        else
-          s_data_rd_a   <= s_mem(to_integer(unsigned(addr_a_i)));
+  -- The read-output resets are a function selected by a generic, the
+  -- exception of docs/coding_style.md: without one, the port process is the
+  -- one of v0.2.0, with no reset logic.
+  gen_port_a : if not g_a_rst_en generate
+    proc_port_a : process(clk_a_i)
+    begin
+      if rising_edge(clk_a_i) then
+        if ena_i = '1' then
+          s_data_rd_a <= s_mem(to_integer(unsigned(addr_a_i)));
+          if wen_a_i = '1' then
+            s_mem(to_integer(unsigned(addr_a_i))) <= data_wr_a_i;
+          end if;
           s_data_rd_a_p <= s_data_rd_a;
         end if;
-        if wen_a_i = '1' then
-          s_mem(to_integer(unsigned(addr_a_i))) <= data_wr_a_i;
+      end if;
+    end process proc_port_a;
+
+    -- Simulation only: synthesis tools do not evaluate an assertion on a
+    -- signal.
+    assert rst_a_n_i /= '0'
+      report "lm_mem_ram_tdp1w: rst_a_n_i is low, but the port A read-output reset is disabled (g_a_rst_en = false)"
+      severity warning;
+  end generate gen_port_a;
+
+  gen_port_a_rst : if g_a_rst_en generate
+    proc_port_a_rst : process(clk_a_i)
+    begin
+      if rising_edge(clk_a_i) then
+        if ena_i = '1' then
+          if rst_a_n_i = '0' then
+            s_data_rd_a   <= (others => '0');
+            s_data_rd_a_p <= (others => '0');
+          else
+            s_data_rd_a   <= s_mem(to_integer(unsigned(addr_a_i)));
+            s_data_rd_a_p <= s_data_rd_a;
+          end if;
+          if wen_a_i = '1' then
+            s_mem(to_integer(unsigned(addr_a_i))) <= data_wr_a_i;
+          end if;
         end if;
       end if;
-    end if;
-  end process proc_port_a;
+    end process proc_port_a_rst;
+  end generate gen_port_a_rst;
 
-  proc_port_b : process(clk_b_i)
-  begin
-    if rising_edge(clk_b_i) then
-      if enb_i = '1' then
-        if rst_b_n_i = '0' then
-          s_data_rd_b   <= (others => '0');
-          s_data_rd_b_p <= (others => '0');
-        else
-          s_data_rd_b   <= s_mem(to_integer(unsigned(addr_b_i)));
+  gen_port_b : if not g_b_rst_en generate
+    proc_port_b : process(clk_b_i)
+    begin
+      if rising_edge(clk_b_i) then
+        if enb_i = '1' then
+          s_data_rd_b <= s_mem(to_integer(unsigned(addr_b_i)));
           s_data_rd_b_p <= s_data_rd_b;
         end if;
       end if;
-    end if;
-  end process proc_port_b;
+    end process proc_port_b;
+
+    -- Simulation only: synthesis tools do not evaluate an assertion on a
+    -- signal.
+    assert rst_b_n_i /= '0'
+      report "lm_mem_ram_tdp1w: rst_b_n_i is low, but the port B read-output reset is disabled (g_b_rst_en = false)"
+      severity warning;
+  end generate gen_port_b;
+
+  gen_port_b_rst : if g_b_rst_en generate
+    proc_port_b_rst : process(clk_b_i)
+    begin
+      if rising_edge(clk_b_i) then
+        if enb_i = '1' then
+          if rst_b_n_i = '0' then
+            s_data_rd_b   <= (others => '0');
+            s_data_rd_b_p <= (others => '0');
+          else
+            s_data_rd_b   <= s_mem(to_integer(unsigned(addr_b_i)));
+            s_data_rd_b_p <= s_data_rd_b;
+          end if;
+        end if;
+      end if;
+    end process proc_port_b_rst;
+  end generate gen_port_b_rst;
 
   gen_port_a_latency_1 : if g_a_latency = 1 generate
     data_rd_a_o <= s_data_rd_a;

@@ -194,7 +194,9 @@ begin
       g_a_depth   => g_a_depth,
       g_b_data_w  => g_b_data_w,
       g_a_latency => g_a_latency,
-      g_b_latency => g_b_latency
+      g_b_latency => g_b_latency,
+      g_a_rst     => g_a_rst,
+      g_b_rst     => g_b_rst
     )
     port map(
       clk_a_i   => s_clk_a,

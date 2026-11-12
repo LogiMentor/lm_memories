@@ -710,7 +710,141 @@ def _render_top(job: dict[str, Any], case: dict[str, Any], entity: str) -> str:
   if kind == "crw_cr_common_clock":
     return _render_crw_cr_common_clock_top(entity, case)
 
+  if kind == "component_default":
+    return _render_component_default_top(job, case, entity)
+
   raise SystemExit(f"{case['name']}: unsupported case kind {kind}")
+
+
+def _balanced(text: str, start: int) -> tuple[str, int]:
+  """Content between the parenthesis at text[start] and its match, and the index after the match."""
+  if text[start] != "(":
+    raise ValueError("no opening parenthesis")
+  depth = 0
+  for i in range(start, len(text)):
+    if text[i] == "(":
+      depth += 1
+    elif text[i] == ")":
+      depth -= 1
+      if depth == 0:
+        return text[start + 1:i], i + 1
+  raise ValueError("unbalanced parentheses")
+
+
+def _split_decls(clause: str) -> list[str]:
+  """Interface declarations of a generic or port clause (split on ';' outside parentheses)."""
+  decls, depth, current = [], 0, ""
+  for ch in clause:
+    depth += (ch == "(") - (ch == ")")
+    if ch == ";" and depth == 0:
+      decls.append(" ".join(current.split()))
+      current = ""
+    else:
+      current += ch
+  if current.strip():
+    decls.append(" ".join(current.split()))
+  return decls
+
+
+def _entity_clauses(entity: str, sources: list[Path]) -> tuple[list[str], list[str]]:
+  """(generic declarations, port declarations) of a library entity, from its source."""
+  for path in sources:
+    text = re.sub(r"--[^\n]*", "", path.read_text(encoding="utf-8", errors="ignore"))
+    match = re.search(r"\bentity\s+" + re.escape(entity) + r"\s+is\b", text, re.IGNORECASE)
+    if not match:
+      continue
+    rest = text[match.end():]
+    generics: list[str] = []
+    gen = re.match(r"\s*generic\s*\(", rest, re.IGNORECASE)
+    if gen:
+      clause, end = _balanced(rest, gen.end() - 1)
+      generics = _split_decls(clause)
+      rest = rest[end:]
+    port = re.match(r"\s*;\s*port\s*\(|\s*port\s*\(", rest, re.IGNORECASE)
+    if not port:
+      raise SystemExit(f"entity {entity} in {path}: no port clause")
+    clause, _ = _balanced(rest, port.end() - 1)
+    return generics, _split_decls(clause)
+  raise SystemExit(f"entity {entity} not found in the sources of the flow")
+
+
+def _decl_name(decl: str) -> str:
+  name = decl.split(":", 1)[0].strip()
+  if "," in name:
+    raise SystemExit(f"declaration with several names is not supported: {decl}")
+  return name
+
+
+def _render_component_default_top(job: dict[str, Any], case: dict[str, Any], top: str) -> str:
+  """The library entity instantiated through a component declaration that
+  omits the generics in omit_generics and the ports in omit_ports, as a user
+  design written for an earlier release declares it. Default binding binds
+  the component to the entity, and the omitted generics and ports take
+  their defaults (issue #7: the read-output reset generics, default false,
+  and ports, default '1'). The generated top has the other generics of the
+  entity with the same defaults; the tool sets the generics of the case on
+  it (-generic), as for an entity case, and they are read back from the
+  entity inside."""
+  entity = str(case["entity"])
+  omit = [str(p) for p in case.get("omit_ports", [])]
+  omit_generics = [str(g) for g in case.get("omit_generics", [])]
+  generics = dict(case.get("generics", {}))
+  all_gen_decls, port_decls = _entity_clauses(entity, _source_files_for(job, case))
+  port_names = [_decl_name(d) for d in port_decls]
+  all_gen_names = [_decl_name(d) for d in all_gen_decls]
+  for name in omit:
+    if name not in port_names:
+      raise SystemExit(f"{case['name']}: {entity} has no port {name}")
+    if ":=" not in port_decls[port_names.index(name)]:
+      raise SystemExit(f"{case['name']}: port {name} of {entity} has no default, it cannot be omitted")
+  for name in omit_generics:
+    if name not in all_gen_names:
+      raise SystemExit(f"{case['name']}: {entity} has no generic {name}")
+    if ":=" not in all_gen_decls[all_gen_names.index(name)]:
+      raise SystemExit(f"{case['name']}: generic {name} of {entity} has no default, it cannot be omitted")
+  for name in generics:
+    if name not in all_gen_names or name in omit_generics:
+      raise SystemExit(f"{case['name']}: {entity} has no generic {name} in the component")
+  gen_decls = [d for n, d in zip(all_gen_names, all_gen_decls) if n not in omit_generics]
+  gen_names = [n for n in all_gen_names if n not in omit_generics]
+  kept = [d for n, d in zip(port_names, port_decls) if n not in omit]
+  kept_names = [n for n in port_names if n not in omit]
+
+  def clause(decls: list[str], indent: str) -> str:
+    return ";\n".join(indent + d for d in decls)
+
+  generic_map = ",\n".join(f"      {n} => {n}" for n in gen_names)
+  port_map = ",\n".join(f"      {n} => {n}" for n in kept_names)
+  generic_clause = f"  generic(\n{clause(gen_decls, '    ')}\n  );\n" if gen_decls else ""
+  component_generics = f"    generic(\n{clause(gen_decls, '      ')}\n    );\n" if gen_decls else ""
+  generic_map_text = f"    generic map(\n{generic_map}\n    )\n" if gen_decls else ""
+  return f"""-- Generated by tools/vendor_synth: {case['name']}, {entity} through a
+-- component declaration without {', '.join(omit_generics + omit) or 'nothing'} (default binding).
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+use work.lm_mem_pkg.all;
+
+entity {top} is
+{generic_clause}  port(
+{clause(kept, '    ')}
+  );
+end entity {top};
+
+architecture a_rtl of {top} is
+  component {entity} is
+{component_generics}    port(
+{clause(kept, '      ')}
+    );
+  end component {entity};
+begin
+  inst_mem : {entity}
+{generic_map_text}    port map(
+{port_map}
+    );
+end architecture a_rtl;
+"""
 
 
 def _render_crw_cr_common_clock_top(top: str, case: dict[str, Any]) -> str:
@@ -808,7 +942,7 @@ catch {{ set_param messaging.defaultLimit 1000000 }}
 {synth_line}
 report_utilization -file {{{_tcl_path(reports / "utilization.rpt")}}}
 catch {{ report_ram_utilization -file {{{_tcl_path(reports / "ram_utilization.rpt")}}} }}
-exit
+{check.ram_pins_tcl(_tcl_path(reports / check.RAM_PINS_FILE))}exit
 """
   script.write_text(text, encoding="utf-8")
   return _tool_command(job, "vivado", ["-mode", "batch", "-nojournal", "-source", _tcl_path(script)], script.parent)
@@ -1046,6 +1180,8 @@ def _generics_module(case: dict[str, Any], top: str) -> str | None:
   kind = case.get("kind")
   if kind == "entity":
     return top
+  if kind == "component_default":
+    return str(case["entity"])
   return GENERICS_MODULE.get(str(kind))
 
 
@@ -1161,7 +1297,18 @@ def _evaluate(
     problems.append(f"no expected results for case {case['name']} on {part}")
     return {"status": "unchecked", "problems": problems, "metrics": metrics, "log": log}
   problems += check.compare(metrics, log, expectation, part)
-  return {"status": "fail" if problems else "pass", "problems": problems, "metrics": metrics, "log": log}
+  # Read-output reset (issue #7): which block RAM reset pins each top-level
+  # port drives, and the check of the expected ones.
+  pins_file = reports / check.RAM_PINS_FILE
+  pins = None
+  if pins_file.is_file() and _report_is_fresh(pins_file, run.get("started_at")):
+    pins = check.parse_ram_reset_pins(pins_file.read_text(encoding="utf-8", errors="ignore"))
+  resets = dict(expectation.get("reset_ports", {}))
+  if resets:
+    problems += check.check_reset_pins(pins, resets, list(expectation.get("reset_pins", ["RSTRAM"])),
+                                       str(expectation.get("reset_cells", "RAMB")))
+  return {"status": "fail" if problems else "pass", "problems": problems, "metrics": metrics, "log": log,
+          "reset_pins": check.reset_pin_summary(pins)}
 
 
 def _inputs(job: dict[str, Any], case: dict[str, Any], sources: list[Path]) -> dict[str, str]:
@@ -1253,9 +1400,9 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
   inputs = _inputs(job, case, sources)
   generics: dict[str, Any] = {}
   top_text = None
-  if case.get("kind") == "entity":
+  if case.get("kind") in ("entity", "component_default"):
     generics = dict(case.get("generics", {}))
-  else:
+  if case.get("kind") != "entity":
     # Generated top: rendered again also for --evaluate-only, to check it.
     top_text = _render_top(job, case, top)
     if not evaluate_only:
@@ -1334,7 +1481,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     log = evaluation["log"]
     result.update(
       status=evaluation["status"], problems=evaluation["problems"], metrics=evaluation["metrics"],
-      tool_version=log.get("version", ""), critical_warnings=log.get("critical_warnings"),
+      reset_pins=evaluation.get("reset_pins", {}), tool_version=log.get("version", ""), critical_warnings=log.get("critical_warnings"),
       completed_at=record.get("completed_at", result["started_at"]), message="; ".join(evaluation["problems"])[:400],
     )
     return result
@@ -1409,6 +1556,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     status=evaluation["status"],
     problems=evaluation["problems"],
     metrics=evaluation["metrics"],
+    reset_pins=evaluation.get("reset_pins", {}),
     tool_version=log.get("version", ""),
     critical_warnings=log.get("critical_warnings"),
     message="; ".join(evaluation["problems"])[:400],

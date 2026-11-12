@@ -269,6 +269,172 @@ def parse_vivado_utilization(text: str) -> dict[str, float | None]:
 # Rows every complete utilization report has, on every AMD family.
 REQUIRED_METRICS = ("luts", "luts_logic", "lutram", "registers", "bram_tiles")
 
+# Report of the reset and enable pins of the memory cells (issue #7), written
+# by the Vivado script after synthesis (ram_pins_tcl). Tab-separated
+# key=value fields: one "cell" line per block RAM, URAM or flip-flop, one
+# "pin" line per reset or enable pin of it, and a final "end" line. A pin
+# line names the top-level ports on its net, the cell that drives it and, for
+# a LUT, its INIT and the top-level ports on each of its inputs. A cell line
+# also records the reset inversion attributes (IS_RST*_INVERTED,
+# IS_R_INVERTED), RSTREG_PRIORITY_A/B and DOA_REG/DOB_REG.
+RAM_PINS_FILE = "ram_reset_pins.rpt"
+_RAM_PINS_TCL = r"""proc lm_ports_of {lm_net} {
+  set lm_ports [lsort -unique [get_ports -quiet -of_objects [get_nets -quiet -segments $lm_net]]]
+  return [expr {[llength $lm_ports] ? [join $lm_ports ,] : "-"}]
+}
+if {[catch {
+  set lm_f [open {%(path)s} w]
+  foreach lm_c [get_cells -quiet -hierarchical -filter {REF_NAME =~ RAMB* || REF_NAME =~ URAM* || REF_NAME =~ FD*}] {
+    set lm_line "cell\tname=[get_property NAME $lm_c]\tref=[get_property REF_NAME $lm_c]"
+    foreach lm_p [list_property $lm_c] {
+      if {[string match IS_RST*_INVERTED $lm_p] || $lm_p eq "IS_R_INVERTED" || [string match RSTREG_PRIORITY_? $lm_p] || [string match DO?_REG $lm_p]} {
+        append lm_line "\t$lm_p=[get_property -quiet $lm_p $lm_c]"
+      }
+    }
+    puts $lm_f $lm_line
+    foreach lm_pin [get_pins -quiet -of_objects $lm_c -filter {DIRECTION == IN && (REF_PIN_NAME =~ RST* || REF_PIN_NAME =~ EN* || REF_PIN_NAME =~ REGCE* || REF_PIN_NAME =~ OREG_CE* || REF_PIN_NAME =~ RDB_WR* || REF_PIN_NAME == R || REF_PIN_NAME == CE)}] {
+      set lm_net [get_nets -quiet -of_objects $lm_pin]
+      set lm_drv [get_pins -quiet -leaf -of_objects [get_nets -quiet -segments $lm_net] -filter {DIRECTION == OUT}]
+      set lm_line "pin\tcell=[get_property NAME $lm_c]\tpin=[get_property REF_PIN_NAME $lm_pin]\tports=[lm_ports_of $lm_net]"
+      if {[llength $lm_drv] == 1} {
+        set lm_dc [get_cells -of_objects $lm_drv]
+        append lm_line "\tdriver=[get_property REF_NAME $lm_dc]"
+        if {[string match LUT* [get_property REF_NAME $lm_dc]]} {
+          append lm_line "\tinit=[get_property INIT $lm_dc]"
+          foreach lm_in [get_pins -of_objects $lm_dc -filter {DIRECTION == IN}] {
+            append lm_line "\t[get_property REF_PIN_NAME $lm_in]=[lm_ports_of [get_nets -quiet -of_objects $lm_in]]"
+          }
+        }
+      } else {
+        append lm_line "\tdriver=[expr {[llength $lm_drv] ? "several" : "-"}]"
+      }
+      puts $lm_f $lm_line
+    }
+  }
+  puts $lm_f "end"
+  close $lm_f
+} lm_err]} {
+  puts "lm_vendor_synth: RAM reset pin report failed: $lm_err"
+}
+"""
+
+# Enable pins of the memory cells: none of them may depend on a reset port.
+_ENABLE_PINS = ("EN", "REGCE", "OREG_CE", "RDB_WR", "CE")
+
+
+def ram_pins_tcl(path: str) -> str:
+  """Tcl that writes the reset and enable pin report of the memory cells to path."""
+  return _RAM_PINS_TCL % {"path": path}
+
+
+def parse_ram_reset_pins(text: str) -> dict[str, Any]:
+  """{"cells": {name: {field: value}}, "pins": [{field: value}], "complete": bool} of a RAM_PINS_FILE."""
+  cells: dict[str, dict[str, str]] = {}
+  pins: list[dict[str, str]] = []
+  complete = False
+  for line in text.splitlines():
+    kind, *fields = line.rstrip("\r").split("\t")
+    values = dict(field.split("=", 1) for field in fields if "=" in field)
+    if kind == "cell":
+      cells[values.get("name", "")] = values
+    elif kind == "pin":
+      pins.append(values)
+    elif kind == "end":
+      complete = True
+  return {"cells": cells, "pins": pins, "complete": complete}
+
+
+def _lut_inputs(pin: dict[str, str]) -> dict[int, set[str]]:
+  """{input index: top-level ports on that input} of the LUT that drives pin."""
+  inputs = {}
+  for key, value in pin.items():
+    if re.fullmatch(r"I\d", key):
+      inputs[int(key[1:])] = set() if value == "-" else set(value.split(","))
+  return inputs
+
+
+def lut_function(pin: dict[str, str]) -> dict[tuple[int, ...], int] | None:
+  """Truth table {(I0, I1, ...): output} of the LUT that drives pin, or None."""
+  match = re.fullmatch(r"\d+'h([0-9A-Fa-f]+)", pin.get("init", ""))
+  if not pin.get("driver", "").startswith("LUT") or not match:
+    return None
+  init = int(match.group(1), 16)
+  n = len(_lut_inputs(pin))
+  return {tuple((i >> b) & 1 for b in range(n)): (init >> i) & 1 for i in range(2 ** n)}
+
+
+def _is_enable_and_not_reset(pin: dict[str, str], enable: str, reset: str) -> bool:
+  """True if pin is driven by a LUT2 whose inputs are exactly the enable port
+  and the reset port, computing enable AND NOT reset (the reset is active low
+  and acts only while the enable is high)."""
+  inputs = _lut_inputs(pin)
+  table = lut_function(pin)
+  if table is None or len(inputs) != 2 or {frozenset(p) for p in inputs.values()} != {
+      frozenset({enable}), frozenset({reset})}:
+    return False
+  e = next(i for i, ports in inputs.items() if ports == {enable})
+  for bits, out in table.items():
+    want = int(bits[e] == 1 and bits[1 - e] == 0)
+    if out != want:
+      return False
+  return True
+
+
+def _depends_on(pin: dict[str, str], port: str) -> bool:
+  """True if the net of pin is the port or is driven by a LUT with the port on an input."""
+  if port in pin.get("ports", "-").split(","):
+    return True
+  return any(port in ports for ports in _lut_inputs(pin).values())
+
+
+def check_reset_pins(report: dict[str, Any] | None, resets: dict[str, str], stages: list[str],
+                     cells: str = "RAMB") -> list[str]:
+  """Problems unless every memory cell whose type starts with cells (RAMB,
+  URAM, FD) has, for each reset port (resets: {reset port: enable port of
+  the same read port}) and each stage (pin name prefix: RSTRAM, RSTREG,
+  RST_, or R for a flip-flop), a pin driven by one LUT2 that computes
+  enable AND NOT reset from the two top-level ports, and no enable pin
+  (EN*, REGCE*, OREG_CE*, RDB_WR*, CE) that depends on a reset port."""
+  if report is None or not report["complete"]:
+    return ["RAM reset pin report missing or incomplete"]
+  names = sorted(n for n, c in report["cells"].items() if c.get("ref", "").startswith(cells))
+  if not names:
+    return [f"no {cells} cell in the design: the reset pins cannot be checked"]
+  problems = []
+  for name in names:
+    ref = report["cells"][name].get("ref")
+    cell_pins = [p for p in report["pins"] if p.get("cell") == name]
+    for reset, enable in resets.items():
+      for stage in stages:
+        candidates = [p for p in cell_pins if (p.get("pin") == "R" if stage == "R" else p.get("pin", "").startswith(stage))]
+        driven = [p for p in candidates if _is_enable_and_not_reset(p, enable, reset)]
+        if not driven:
+          seen = "; ".join(f"{p.get('pin')} <- {p.get('driver')} {p.get('init', '')}".strip() for p in candidates)
+          problems.append(f"{name} ({ref}): no {stage} pin driven by {enable} AND NOT {reset} ({seen or 'no pin'})")
+        for pin in driven:
+          # The LUT already gives an active-high reset: the pin must not invert it.
+          inverted = report["cells"][name].get(f"IS_{pin['pin']}_INVERTED", "")
+          if inverted.strip().upper() in ("1'B1", "1", "TRUE"):
+            problems.append(f"{name} ({ref}): IS_{pin['pin']}_INVERTED = {inverted} inverts the reset of {reset}")
+    for pin in cell_pins:
+      if pin.get("pin", "").startswith(_ENABLE_PINS) and pin.get("pin") != "R":
+        for reset in resets:
+          if _depends_on(pin, reset):
+            problems.append(f"{name} ({ref}): enable pin {pin['pin']} depends on {reset}")
+  return problems
+
+
+def reset_pin_summary(report: dict[str, Any] | None, resets: dict[str, str] | None = None) -> dict[str, list[str]]:
+  """{reset port: sorted "cell/pin <- LUTn INIT" names} of the memory cell
+  pins that depend on a top-level port whose name contains "rst"."""
+  summary: dict[str, list[str]] = {}
+  for pin in (report or {}).get("pins", []):
+    ports = set(pin.get("ports", "-").split(",")) | set().union(*_lut_inputs(pin).values()) if _lut_inputs(pin) \
+      else set(pin.get("ports", "-").split(","))
+    for port in sorted(p for p in ports if "rst" in p and (resets is None or p in resets)):
+      summary.setdefault(port, []).append(f"{pin.get('cell')}/{pin.get('pin')} <- {pin.get('driver')} {pin.get('init', '')}".strip())
+  return {port: sorted(names) for port, names in sorted(summary.items())}
+
 
 def uram_applicable(part: str) -> bool:
   """False for AMD families without URAM (7-series parts xc7...), whose report has no URAM row."""
@@ -295,7 +461,8 @@ def compare(metrics: dict[str, Any], log: dict[str, Any], expectation: dict[str,
   if missing:
     problems.append("utilization report incomplete: no " + ", ".join(missing))
   exact = (("bram_tiles", "block RAM tiles"), ("ramb36", "RAMB36"), ("ramb18", "RAMB18"),
-           ("lutram", "LUTs as memory"), ("uram", "URAM blocks"))
+           ("lutram", "LUTs as memory"), ("uram", "URAM blocks"), ("luts_logic", "LUTs as logic"),
+           ("registers", "registers"))
   for key, label in exact:
     if key in expectation:
       got = metrics.get(key)

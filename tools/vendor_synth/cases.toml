@@ -5,6 +5,12 @@
 # out-of-context top, with the generics below. Generics are written into the
 # tool script (never on a command line) and read back from the synthesis log.
 # Expected results per vendor are in expected/<vendor>.toml.
+#
+# Kind "component_default": a generated top instantiates the entity through a
+# component declaration without the generics in omit_generics and the ports
+# in omit_ports, as a design written for v0.2.0 declares it, so default
+# binding must bind it to the entity of this release (issue #7). The generics
+# of the case are set on the generated top and read back from the entity.
 
 [[cases]]
 name = "r_w_32x1024"
@@ -324,3 +330,164 @@ kind = "entity"
 entity = "lm_mem_ram_rw_rw"
 description = "Common-clock true dual port with two writers, 36 x 4096."
 generics = { g_ram_data_w = 36, g_ram_depth = 4096, g_ram_latency = 1 }
+
+# Read-output reset (issue #7): enabled by its generic, and the reset ports are
+# ports of the out-of-context top, so they are driven. Expected results
+# (expected/amd.toml): those of the same case without the reset, plus exactly
+# one LUT per reset port that drives the reset pins of the memory (block RAM
+# latency 1: RSTRAM; latency 2: RSTRAM and RSTREG; URAM: RST; distributed
+# RAM: the R pins of the output flip-flops).
+
+[[cases]]
+name = "r_w_32x1024_rst"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Common-clock simple dual port, 32 x 1024, latency 1, read-output reset enabled and driven."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1, g_ram_rst_en = true }
+
+[[cases]]
+name = "r_w_32x1024_lat2_rst"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Common-clock simple dual port, 32 x 1024, latency 2, read-output reset enabled and driven."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 2, g_ram_rst_en = true }
+
+[[cases]]
+name = "r_w_32x1536_rst"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "32 x 1536 (storage 2048 words, two block RAMs), read-output reset enabled and driven."
+generics = { g_ram_data_w = 32, g_ram_depth = 1536, g_ram_latency = 1, g_ram_rst_en = true }
+
+[[cases]]
+name = "r_w_16x64_rst"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Small common-clock simple dual port, 16 x 64, read-output reset enabled and driven (distributed RAM on UltraScale+)."
+generics = { g_ram_data_w = 16, g_ram_depth = 64, g_ram_latency = 1, g_ram_rst_en = true }
+
+[[cases]]
+name = "r_w_36x4096_rst"
+kind = "entity"
+entity = "lm_mem_ram_r_w"
+description = "Common-clock simple dual port, 36 x 4096, read-output reset enabled and driven (URAM on UltraScale+ without it)."
+generics = { g_ram_data_w = 36, g_ram_depth = 4096, g_ram_latency = 1, g_ram_rst_en = true }
+
+[[cases]]
+name = "cr_cw_32x1024_rst"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw"
+description = "Dual-clock simple dual port, 32 x 1024, latency 1, read-output reset enabled and driven."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1, g_ram_rst_en = true }
+
+[[cases]]
+name = "cr_cw_32x1024_lat2_rst"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw"
+description = "Dual-clock simple dual port, 32 x 1024, latency 2, read-output reset enabled and driven."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 2, g_ram_rst_en = true }
+
+[[cases]]
+name = "r_w_ratio_32to8_rst"
+kind = "entity"
+entity = "lm_mem_ram_r_w_ratio"
+description = "Common-clock, write 32 x 1024, read 8 x 4096, read-output reset enabled and driven."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 8, g_ram_b_rst_en = true }
+
+[[cases]]
+name = "r_w_ratio_32to8_lat2_rst"
+kind = "entity"
+entity = "lm_mem_ram_r_w_ratio"
+description = "Common-clock, write 32 x 1024, read 8 x 4096, latency 2, read-output reset enabled and driven."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 8, g_ram_b_latency = 2, g_ram_b_rst_en = true }
+
+[[cases]]
+name = "cr_cw_ratio_32to8_rst"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw_ratio"
+description = "Dual-clock, write 32 x 1024, read 8 x 4096, read-output reset enabled and driven."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 8, g_ram_b_rst_en = true }
+
+[[cases]]
+name = "cr_cw_ratio_32to8_lat2_rst"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw_ratio"
+description = "Dual-clock, write 32 x 1024, read 8 x 4096, latency 2, read-output reset enabled and driven."
+generics = { g_ram_a_data_w = 32, g_ram_a_depth = 1024, g_ram_b_data_w = 8, g_ram_b_latency = 2, g_ram_b_rst_en = true }
+
+[[cases]]
+name = "crw_cr_32x1024_rst"
+kind = "entity"
+entity = "lm_mem_ram_crw_cr"
+description = "Port A read/write, port B read-only, two clocks, latency 1, both read-output resets enabled and driven."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1, g_ram_a_rst_en = true, g_ram_b_rst_en = true }
+
+[[cases]]
+name = "crw_cr_32x1024_lat2_rst"
+kind = "entity"
+entity = "lm_mem_ram_crw_cr"
+description = "Port A read/write, port B read-only, two clocks, latency 2, both read-output resets enabled and driven."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 2, g_ram_a_rst_en = true, g_ram_b_rst_en = true }
+
+# Binding of a v0.2.0 component declaration (issue #7): without the reset
+# generics and ports, the instance keeps the results of v0.2.0.
+
+[[cases]]
+name = "r_w_32x1024_v020_component"
+kind = "component_default"
+entity = "lm_mem_ram_r_w"
+omit_generics = ["g_ram_rst_en"]
+omit_ports = ["rd_rst_n_i"]
+description = "lm_mem_ram_r_w 32 x 1024 through a component declaration of v0.2.0 (default binding)."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+[[cases]]
+name = "crw_cr_32x1024_v020_component"
+kind = "component_default"
+entity = "lm_mem_ram_crw_cr"
+omit_generics = ["g_ram_a_rst_en", "g_ram_b_rst_en"]
+omit_ports = ["rst_a_n_i", "rst_b_n_i"]
+description = "lm_mem_ram_crw_cr 32 x 1024 through a component declaration of v0.2.0 (default binding)."
+generics = { g_ram_data_w = 32, g_ram_depth = 1024, g_ram_latency = 1 }
+
+# Read port wider than the write port, latency 1 and 2 (issue #7): Vivado
+# infers the asymmetric block RAM only without reset logic on the wide read
+# port; these cases catch a change that breaks it again.
+
+[[cases]]
+name = "r_w_ratio_8to32_lat2"
+kind = "entity"
+entity = "lm_mem_ram_r_w_ratio"
+description = "Common-clock, write 8 x 4096, read 32 x 1024, latency 2."
+generics = { g_ram_a_data_w = 8, g_ram_a_depth = 4096, g_ram_b_data_w = 32, g_ram_b_latency = 2 }
+
+[[cases]]
+name = "cr_cw_ratio_8to32_lat2"
+kind = "entity"
+entity = "lm_mem_ram_cr_cw_ratio"
+description = "Dual-clock, write 8 x 4096, read 32 x 1024, latency 2."
+generics = { g_ram_a_data_w = 8, g_ram_a_depth = 4096, g_ram_b_data_w = 32, g_ram_b_latency = 2 }
+
+[[cases]]
+name = "fifo_8to32"
+kind = "entity"
+entity = "lm_mem_fifo"
+description = "Dual-clock FIFO, write 8 x 4096, read 32 bits, latency 1."
+generics = { g_dual_clock = true, g_wr_depth = 4096, g_wr_data_w = 8, g_rd_data_w = 32, g_rd_latency = 1 }
+
+[[cases]]
+name = "fifo_8to32_lat2"
+kind = "entity"
+entity = "lm_mem_fifo"
+description = "Dual-clock FIFO, write 8 x 4096, read 32 bits, latency 2."
+generics = { g_dual_clock = true, g_wr_depth = 4096, g_wr_data_w = 8, g_rd_data_w = 32, g_rd_latency = 2 }
+
+# The read-output reset with a read port wider than the write port must stop
+# synthesis at its static check.
+
+[[cases]]
+name = "bad_r_w_ratio_8to32_rst"
+kind = "entity"
+entity = "lm_mem_ram_r_w_ratio"
+description = "Wrong generics: read-output reset enabled with a read port wider than the write port."
+generics = { g_ram_a_data_w = 8, g_ram_a_depth = 4096, g_ram_b_data_w = 32, g_ram_b_rst_en = true }

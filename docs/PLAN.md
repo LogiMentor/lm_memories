@@ -1074,7 +1074,7 @@ the summary in `<campaign root>/summary.md`.
 
 ### 3.16 Read-output reset (issue #7, v0.3.0)
 
-Requested by lm_stack. Decisions approved on 2026-11-06:
+Requested by a downstream project. Decisions approved on 2026-11-06:
 
 - Ports last in the port list, default `'1'`, active low (`_n_i`), named
   after the read port: `rd_rst_n_i` on `lm_mem_ram_sdp` and on the simple
@@ -1082,7 +1082,7 @@ Requested by lm_stack. Decisions approved on 2026-11-06:
   `lm_mem_ram_r_w_ratio`, `lm_mem_ram_cr_cw_ratio`); `rst_a_n_i` and
   `rst_b_n_i` on `lm_mem_ram_tdp1w` and `lm_mem_ram_crw_cr`. Not on the
   two-writer RAMs (`lm_mem_ram_crw_crw`, `lm_mem_ram_rw_rw`,
-  `lm_mem_ram_crw_cw`), which lm_stack does not need, nor on the FIFOs.
+  `lm_mem_ram_crw_cw`), which the request does not need, nor on the FIFOs.
 - Synchronous, effective only while the enable of the port is high, as the
   7-series block RAM output reset. Latency 1 clears the output register
   (`RSTRAM`); latency 2 clears both stages (`RSTRAM` and `RSTREG`), so the

@@ -103,14 +103,15 @@ RAM_CONFIGS = [
   ram("r_w.36x4096", "lm_mem_ram_r_w", SDP, a_w=36, depth=4096, hot=16, seed=71),
   ram("crw_cr.1clk.36x4096", "lm_mem_ram_crw_cr", TDP1W, a_w=36, depth=4096, hot=16, seed=72),
   ram("rw_rw.36x4096", "lm_mem_ram_rw_rw", TDP2W, a_w=36, depth=4096, hot=16, seed=73),
-  # Read-output reset (rd_rst_n_i, rst_a_n_i, rst_b_n_i): every entity that
-  # has it, latency 1 and 2, one and two clocks, mixed width.
+  # Read-output reset (rd_rst_n_i, rst_a_n_i, rst_b_n_i, enabled by its
+  # generic): every entity that has it, latency 1 and 2, one and two clocks,
+  # mixed width with the read port narrower (a wider read port is rejected).
   ram("sdp.1clk.32x1024.lat1.rst", "lm_mem_ram_sdp", SDP, seed=81, rst=True),
   ram("sdp.1clk.32x1024.lat2.rst", "lm_mem_ram_sdp", SDP, b_lat=2, seed=82, rst=True),
   ram("sdp.2clk.32x1024.lat2.rst", "lm_mem_ram_sdp", SDP, b_lat=2, same_clock=False, b_per=SLOW, seed=83, rst=True),
   ram("sdp.1clk.32to8.rst", "lm_mem_ram_sdp", SDP, b_w=8, depth=256, seed=84, rst=True),
-  ram("sdp.2clk.8to32.lat2.rst", "lm_mem_ram_sdp", SDP, a_w=8, b_w=32, depth=1024, b_lat=2,
-      same_clock=False, b_per=SLOW, hot=16, seed=85, rst=True),
+  ram("sdp.2clk.32to8.lat2.rst", "lm_mem_ram_sdp", SDP, b_w=8, depth=256, b_lat=2,
+      same_clock=False, b_per=SLOW, seed=85, rst=True),
   ram("tdp1w.1clk.32x1024.lat11.rst", "lm_mem_ram_tdp1w", TDP1W, seed=86, rst=True),
   ram("tdp1w.2clk.32x1024.lat12.rst", "lm_mem_ram_tdp1w", TDP1W, b_lat=2, same_clock=False, b_per=SLOW, seed=87,
       rst=True),
@@ -121,14 +122,17 @@ RAM_CONFIGS = [
   ram("cr_cw.32x1024.lat1.rst", "lm_mem_ram_cr_cw", SDP, same_clock=False, b_per=SLOW, seed=91, rst=True),
   ram("cr_cw.32x1024.lat2.rst", "lm_mem_ram_cr_cw", SDP, b_lat=2, same_clock=False, a_per=SLOW, seed=92, rst=True),
   ram("r_w_ratio.32to8.rst", "lm_mem_ram_r_w_ratio", SDP, b_w=8, depth=256, seed=93, rst=True),
-  ram("r_w_ratio.8to32.lat2.rst", "lm_mem_ram_r_w_ratio", SDP, a_w=8, b_w=32, b_lat=2, hot=16, seed=94, rst=True),
+  ram("r_w_ratio.32to8.lat2.rst", "lm_mem_ram_r_w_ratio", SDP, b_w=8, depth=256, b_lat=2, seed=94, rst=True),
   ram("cr_cw_ratio.32to8.rst", "lm_mem_ram_cr_cw_ratio", SDP, b_w=8, depth=256, same_clock=False, b_per=SLOW,
       seed=95, rst=True),
-  ram("cr_cw_ratio.8to32.lat2.rst", "lm_mem_ram_cr_cw_ratio", SDP, a_w=8, b_w=32, b_lat=2, hot=16,
+  ram("cr_cw_ratio.32to8.lat2.rst", "lm_mem_ram_cr_cw_ratio", SDP, b_w=8, depth=256, b_lat=2,
       same_clock=False, a_per=SLOW, seed=96, rst=True),
   ram("crw_cr.1clk.32x1024.lat1.rst", "lm_mem_ram_crw_cr", TDP1W, seed=97, rst=True),
   ram("crw_cr.2clk.32x1024.lat2.rst", "lm_mem_ram_crw_cr", TDP1W, a_lat=2, b_lat=2, same_clock=False, b_per=SLOW,
       seed=98, rst=True),
+  # Distributed RAM on UltraScale+ (RAMB18 on 7-series), and URAM on UltraScale+.
+  ram("r_w.16x64.rst", "lm_mem_ram_r_w", SDP, a_w=16, depth=64, seed=99, rst=True),
+  ram("r_w.36x4096.rst", "lm_mem_ram_r_w", SDP, a_w=36, depth=4096, hot=16, seed=100, rst=True),
 ]
 
 
@@ -160,6 +164,12 @@ POSTSYNTH_PARTS = {
   "r_w.36x4096": ("xcku3p-ffva676-2-e",),
   "crw_cr.1clk.36x4096": ("xcku3p-ffva676-2-e",),
   "rw_rw.36x4096": ("xcku3p-ffva676-2-e",),
+  # Read-output reset (issue #7): the reset ports reach the netlist.
+  **{name: ("xc7a35tfgg484-2", "xcku3p-ffva676-2-e") for name in (
+    "r_w.32x1024.lat1.rst", "r_w.32x1024.lat2.rst", "cr_cw.32x1024.lat1.rst", "cr_cw.32x1024.lat2.rst",
+    "r_w_ratio.32to8.rst", "r_w_ratio.32to8.lat2.rst", "crw_cr.1clk.32x1024.lat1.rst",
+    "crw_cr.2clk.32x1024.lat2.rst", "r_w.16x64.rst")},
+  "r_w.36x4096.rst": ("xcku3p-ffva676-2-e",),
 }
 # Synthesized with both clock ports on one clock (a URAM has a single clock).
 POSTSYNTH_COMMON_CLOCK = ("crw_cr.1clk.36x4096",)

@@ -417,3 +417,280 @@ case = "bad_xilinx_prim_no_family"
 parts = ["xc7a35tfgg484-2"]
 expect_failure_constant = "C_ERROR_FAMILY_PRIMITIVE_UNSET"
 expect_failure = ["lm_mem_xilinx_ram_r_w_prim: family and primitive must be set"]
+
+# Read-output reset (issue #7), enabled by its generic. Measured with Vivado
+# 2023.1 on both parts:
+# the reset costs exactly one LUT2 per reset port, which computes
+# "enable AND NOT reset" from the two top-level ports and drives the reset
+# pins of the memory (block RAM RSTRAM, and RSTREG with latency 2; URAM
+# RST_A/RST_B; the output flip-flops R of distributed RAM). The enables of
+# the memory stay driven by the enable ports. The UG901 template "Single
+# Port Block RAM with Resettable Data Output" synthesizes the same way (one
+# LUT2 "en AND rst" on RSTRAMARSTRAM). Everything else is the result of the
+# same case without the reset: same block RAM or URAM, no extra flip-flop.
+# Exact fields: luts_logic, registers. reset_ports: {reset port = enable port
+# of the same read port}; reset_pins: pin name prefixes each memory cell must
+# have driven that way; reset_cells: type prefix of the memory cells (RAMB,
+# URAM, FD).
+
+[[expect]]
+case = "r_w_32x1024_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "r_w_32x1024_lat2_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM", "RSTREG"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "r_w_32x1536_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+# Two RAMB36 (storage 2048 words); one LUT2 drives the reset pins of both.
+bram_tiles = 2
+ramb36 = 2
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "r_w_16x64_rst"
+parts = ["xc7a35tfgg484-2"]
+bram_tiles = 0.5
+ramb36 = 0
+ramb18 = 1
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "r_w_16x64_rst"
+parts = ["xcku3p-ffva676-2-e"]
+# UltraScale+: distributed RAM (20 LUTs as memory) and 16 output flip-flops, as without the reset
+# (1 LUT for the write enable); the reset LUT2 drives the R pins of the 16 flip-flops.
+bram_tiles = 0
+ramb36 = 0
+ramb18 = 0
+lutram = 20
+luts_logic = 2
+registers = 16
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["R"]
+reset_cells = "FD"
+
+[[expect]]
+case = "r_w_36x4096_rst"
+parts = ["xcku3p-ffva676-2-e"]
+# Still one URAM288 (Synth 8-6794); the reset LUT2 drives the RST pin of the read port.
+bram_tiles = 0
+ramb36 = 0
+ramb18 = 0
+lutram = 0
+uram = 1
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RST_"]
+reset_cells = "URAM"
+
+[[expect]]
+case = "cr_cw_32x1024_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "cr_cw_32x1024_lat2_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM", "RSTREG"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "r_w_ratio_32to8_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "r_w_ratio_32to8_lat2_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM", "RSTREG"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "cr_cw_ratio_32to8_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "cr_cw_ratio_32to8_lat2_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 1
+registers = 0
+reset_ports = { rd_rst_n_i = "enb_i" }
+reset_pins = ["RSTRAM", "RSTREG"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "crw_cr_32x1024_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+# Two read ports, two reset ports: two LUT2.
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 2
+registers = 0
+reset_ports = { rst_a_n_i = "ena_i", rst_b_n_i = "enb_i" }
+reset_pins = ["RSTRAM"]
+reset_cells = "RAMB"
+
+[[expect]]
+case = "crw_cr_32x1024_lat2_rst"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 2
+registers = 0
+reset_ports = { rst_a_n_i = "ena_i", rst_b_n_i = "enb_i" }
+reset_pins = ["RSTRAM", "RSTREG"]
+reset_cells = "RAMB"
+
+# v0.2.0 component declarations (issue #7): same results as the entity case.
+[[expect]]
+case = "r_w_32x1024_v020_component"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 0
+registers = 0
+
+[[expect]]
+case = "crw_cr_32x1024_v020_component"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 0
+registers = 0
+
+# Read port wider than the write port (issue #7): one asymmetric RAMB36, as
+# measured on v0.2.0 (2026-11-06, both parts); the read-output reset logic of
+# R1 made Vivado replicate the memory into 4 RAMB36.
+[[expect]]
+case = "r_w_ratio_8to32_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 0
+registers = 0
+
+[[expect]]
+case = "cr_cw_ratio_8to32_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+luts_logic = 0
+registers = 0
+
+[[expect]]
+case = "fifo_8to32"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+# Measured on v0.2.0: 96 registers and 98 LUTs (7-series), 95 and 105
+# (UltraScale+); ceilings: largest + 10 % + 2.
+max_registers = 109
+max_luts = 118
+
+[[expect]]
+case = "fifo_8to32_lat2"
+parts = ["xc7a35tfgg484-2", "xcku3p-ffva676-2-e"]
+bram_tiles = 1
+ramb36 = 1
+ramb18 = 0
+lutram = 0
+# Measured on v0.2.0: 97 registers and 98 LUTs (7-series), 96 and 105
+# (UltraScale+).
+max_registers = 109
+max_luts = 118
+
+[[expect]]
+case = "bad_r_w_ratio_8to32_rst"
+parts = ["xc7a35tfgg484-2"]
+expect_failure_constant = "C_ERROR_RD_RST_WITH_WIDE_READ"
+expect_failure = ["lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port"]

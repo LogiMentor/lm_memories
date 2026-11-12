@@ -5,10 +5,14 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import os
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
+from unittest import mock
 
 from tools.campaign import publish
 from tools.campaign.rerun import ROOT_DIR
@@ -219,6 +223,89 @@ class PublishTest(unittest.TestCase):
     vivado = next(line for line in text.splitlines() if line.startswith("| [`vivado_2023.1"))
     self.assertLess(vivado.index("vivado_a.tar.xz"), vivado.index("vivado_rerun_b.tar.xz"))
     self.assertTrue((out / "amd_campaign.json").is_file())
+
+
+
+# The toolset of a Linux machine, with the installations as detect() records them.
+LINUX_TOOLS = {"tools": {
+  "vivado": {"version": "2024.1", "command": ["/opt/eda/amd/Vivado/2024.1/bin/vivado", "-version"]},
+  "quartus": {"version": "25.1std.0 Build 1129", "release": "25.1std", "edition": "Lite",
+              "command": ["/opt/eda/altera/25.1std/quartus/bin/quartus_sh", "--version"]},
+  "questa": {"version": "2025.2", "edition": "starter", "command": ["/opt/eda/altera/25.1std/questa_fse/bin/vsim"]},
+  "ghdl": {"version": "6.0.0", "command": ["/opt/eda/ghdl/6.0.0-llvm/bin/ghdl", "--version"]},
+}}
+
+
+class LinuxPublishTest(unittest.TestCase):
+  def setUp(self):
+    self.tmp = tempfile.TemporaryDirectory()
+    self.base = Path(self.tmp.name)
+
+  def tearDown(self):
+    self.tmp.cleanup()
+
+  def test_linux_paths_are_removed(self):
+    home = Path("/home/someone")
+    scrub = publish.scrubber(home / "lmeda" / "c", LINUX_TOOLS, home / "lm_eda_archive", home=home)
+    cases = {
+      "couldn't read file \"/opt/eda/amd/Vivado/2024.1/scripts/rt/x.tcl\"": "\"<vivado>/scripts/rt/x.tcl\"",
+      "/opt/eda/altera/25.1std/quartus/bin/quartus_sh -t run.tcl": "<quartus>/bin/quartus_sh -t run.tcl",
+      "/opt/eda/altera/25.1std/questa_fse/bin/vsim -c": "<questa>/bin/vsim -c",
+      "/opt/eda/ghdl/6.0.0-llvm/lib/ghdl/vendors": "<ghdl>/lib/ghdl/vendors",
+      "/home/someone/lmeda/c/vs/fake/r_w/run.log": "<campaign>/vs/fake/r_w/run.log",
+      "/home/someone/lm_eda_archive/vivado.tar.xz": "<archive>/vivado.tar.xz",
+      "/home/someone/.venvs/lm/bin/python -m tools.vendor_synth": "~/.venvs/lm/bin/python -m tools.vendor_synth",
+      # Without the toolset: the usual Linux places of each tool.
+      "/tools/Xilinx/Vivado/2023.2/data/vhdl": "<vivado>/data/vhdl",
+      "/srv/intelFPGA_lite/24.1std/quartus/bin/quartus_sh": "<quartus>/bin/quartus_sh",
+    }
+    for raw, clean in cases.items():
+      with self.subTest(raw=raw):
+        self.assertIn(clean, scrub(raw))
+        self.assertEqual(publish.local_paths(scrub(raw)), [])
+    # The home directory alone, not a longer name that starts with it.
+    self.assertEqual(scrub("/home/someone2/x"), "/home/someone2/x")
+
+  def test_paths_under_home_and_opt_stop_the_publication(self):
+    self.assertTrue(publish.local_paths("/home/other/file.vhd"))
+    self.assertTrue(publish.local_paths("/opt/other/tool/bin/x"))
+
+  def test_a_campaign_with_linux_paths_is_published(self):
+    c = make_campaign(self.base, problem="couldn't read file \"/opt/eda/amd/Vivado/2024.1/scripts/x.tcl\"")
+    toolsets.write(c.root, {**toolsets.PCL01, "tools": {**toolsets.PCL01["tools"], **LINUX_TOOLS["tools"]}})
+    files = publish.collect(c.root, c.archives)
+    self.assertIn("<vivado>/scripts/x.tcl", files["vivado_2024.1_amd.json"]["results"][0]["problems"][0])
+    campaign = files["amd_campaign.json"]
+    self.assertEqual(campaign["toolset"]["vivado"], {"version": "2024.1"})
+    self.assertEqual(campaign["campaigns"]["vunit_questa"], "questa_starter_2025.2")
+    self.assertNotIn("command", json.dumps(campaign["toolset"]))
+
+  def test_each_campaign_has_its_own_directory(self):
+    c = make_campaign(self.base)
+    files = publish.collect(c.root, c.archives)
+    out = self.base / "results" / "v0.2.0-pcl01"
+    self.assertIsNone(publish.other_campaign(files, out))
+    publish.write(files, out)
+    self.assertTrue((out / "README.md").read_text(encoding="utf-8").startswith("# Results: campaign v0.2.0-pcl01\n"))
+    # The same campaign again (after a resume): allowed.
+    self.assertIsNone(publish.other_campaign(files, out))
+    # Another campaign: refused.
+    other = {**files, "amd_campaign.json": {**files["amd_campaign.json"], "commit": C2}}
+    self.assertIn("another campaign", publish.other_campaign(other, out))
+    # The laptop campaign in docs/results (no toolset recorded) is never overwritten.
+    self.assertIn("another campaign", publish.other_campaign(files, ROOT_DIR / "docs" / "results"))
+
+  def test_main_needs_the_output_directory(self):
+    c = make_campaign(self.base)
+    with self.assertRaises(SystemExit):
+      publish.main([str(c.root)])
+    out = self.base / "out"
+    out.mkdir()
+    (out / "vivado_2023.1_amd.json").write_text("{}", encoding="utf-8")
+    err = io.StringIO()
+    with mock.patch.dict(os.environ, {"LM_EDA_ARCHIVE_DIR": str(c.archives)}), redirect_stderr(err):
+      self.assertEqual(publish.main([str(c.root), "--out", str(out)]), 1)
+    self.assertIn("results without amd_campaign.json", err.getvalue())
 
 
 if __name__ == "__main__":

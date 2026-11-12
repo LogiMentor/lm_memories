@@ -5,6 +5,7 @@
   python -m tools.campaign.toolset detect              print the toolset (JSON)
   python -m tools.campaign.toolset check <file>        the installed tools must be those of the file
   python -m tools.campaign.toolset name <file> <step>  campaign name of a step
+  python -m tools.campaign.toolset preflight           the tools start in this environment
 
 detect asks each tool of the campaign for its version, from the
 installations in the environment (no default):
@@ -22,6 +23,15 @@ toolset to <campaign root>/logs/toolset.json; every later step (the names of
 the campaigns, rerun.py, summarize.py, publish.py) reads it from there, so
 no tool version is written in the code. A resumed campaign must find the
 same versions installed (check).
+
+preflight starts, before a campaign, the tools whose environment a version
+query does not show: xvhdl (the xsim compiler of the post-synthesis step,
+whose libraries may need the environment script of the installation; its
+version must be that of Vivado) and vsim with a licence checkout (vsim -c,
+quit at once). A failure names the tool and its output: load the
+environment of the installation (library path, licence) first. These
+environment scripts are specific to each machine, so the campaign does not
+load them itself.
 
 Campaign names (step -> name), the version in the name of each result file
 of docs/results:
@@ -46,6 +56,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -193,6 +204,51 @@ def detect(commands: dict[str, list[str]] | None = None, run: Callable[[list[str
   return toolset
 
 
+def preflight_commands() -> dict[str, list[str]]:
+  """The commands of preflight, from the installations in the environment."""
+  windows = os.name == "nt"
+  vivado = _directory("LM_VIVADO_DIR") / "bin"
+  questa = _directory("VUNIT_MODELSIM_PATH")
+  return {
+    "xvhdl": _command(_executable(vivado, ["xvhdl.bat", "xvhdl"] if windows else ["xvhdl"])) + ["--version"],
+    "vsim": _command(_executable(questa, ["vsim.exe", "vsim"] if windows else ["vsim"])) + ["-c", "-do", "quit -f"],
+  }
+
+
+def _run_with_code(command: list[str], cwd: Path) -> tuple[int | None, str]:
+  try:
+    done = subprocess.run(command, capture_output=True, text=True, errors="replace", timeout=300, cwd=cwd)
+  except (OSError, subprocess.SubprocessError) as exc:
+    return None, str(exc)
+  return done.returncode, done.stdout + done.stderr
+
+
+_VIVADO_SIMULATOR_RE = re.compile(r"\bVivado Simulator v(\d{4}\.\d+(?:\.\d+)?)")
+_LICENCE_RE = re.compile(r"licen[cs]e", re.IGNORECASE)
+
+
+def preflight(vivado_version: str, commands: dict[str, list[str]] | None = None,
+              run: Callable[[list[str], Path], tuple[int | None, str]] = _run_with_code) -> list[str]:
+  """Problems that would stop a step of the campaign after it started (empty: the tools start).
+
+  Each command runs in a scratch directory (xvhdl and vsim write logs where they run)."""
+  commands = preflight_commands() if commands is None else commands
+  problems = []
+  with tempfile.TemporaryDirectory(prefix="lm_preflight_") as tmp:
+    for tool, command in commands.items():
+      code, text = run(command, Path(tmp))
+      last = "; ".join(line.strip() for line in text.splitlines() if line.strip())[-300:]
+      if code != 0:
+        hint = "a licence" if _LICENCE_RE.search(text) else "its libraries"
+        problems.append(f"{tool} does not start (exit code {code}: {last}); load the environment of the "
+                        f"installation ({hint}) before the campaign")
+      elif tool == "xvhdl":
+        found = _VIVADO_SIMULATOR_RE.search(text)
+        if not found or found.group(1) != vivado_version:
+          problems.append(f"xvhdl is not of Vivado {vivado_version}: {last}")
+  return problems
+
+
 def versions(toolset: dict) -> dict[str, dict[str, str]]:
   """What identifies the tools of a toolset (no banner, no command)."""
   return {tool: {k: v for k, v in entry.items() if k not in ("banner", "command")}
@@ -227,6 +283,11 @@ def main(argv: list[str] | None = None) -> int:
               f"{json.dumps(versions(recorded))}\n  installed: {json.dumps(versions(installed))}", file=sys.stderr)
         return 1
       return 0
+    if argv[:1] == ["preflight"] and len(argv) == 1:
+      problems = preflight(parse_vivado(_run(tool_commands()["vivado"]))["version"])
+      for problem in problems:
+        print(f"toolset: {problem}", file=sys.stderr)
+      return 1 if problems else 0
     if argv[:1] == ["name"] and len(argv) == 3 and argv[2] in STEPS:
       print(campaign_names(json.loads(Path(argv[1]).read_text(encoding="utf-8")))[argv[2]])
       return 0

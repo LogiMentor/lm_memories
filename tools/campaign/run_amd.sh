@@ -14,6 +14,7 @@
 #                        [$LM_EDA_WORKDIR/c; default C:/lmeda/c on Windows,
 #                        lmeda/c in the system temp elsewhere]
 #   LM_EDA_ARCHIVE_DIR   archives [~/lm_eda_archive]
+#   PYTHON               Python 3.11 or newer with VUnit [python, else python3]
 #   LM_VIVADO_DIR        Vivado installation directory (required; the
 #                        configurations of vendor_synth read it through
 #                        install_dir_env, run_postsynth.py and the pilot too)
@@ -73,7 +74,10 @@ cd "$REPO" || exit 2
 fail() { echo "run_amd.sh: $*" >&2; exit 2; }
 
 # Prerequisites, before anything runs.
-PY=${PYTHON:-python}
+PY=${PYTHON:-}
+if [ -z "$PY" ]; then
+  if command -v python >/dev/null 2>&1; then PY=python; else PY=python3; fi
+fi
 "$PY" -c 'import sys; assert sys.version_info >= (3, 11), sys.version' 2>/dev/null \
   || fail "Python 3.11 or newer is needed as '$PY' (set PYTHON)"
 "$PY" -c 'import vunit' 2>/dev/null || fail "VUnit is not installed for $PY (pip install vunit_hdl)"
@@ -94,6 +98,10 @@ export LM_VIVADO_DIR LM_QUARTUS_DIR VUNIT_MODELSIM_PATH
 [ -d "$LM_VIVADO_DIR/bin" ] || fail "Vivado not found in $LM_VIVADO_DIR"
 [ -d "$LM_QUARTUS_DIR" ] || fail "Quartus not found in $LM_QUARTUS_DIR"
 [ -d "$VUNIT_MODELSIM_PATH" ] || fail "Questa not found in $VUNIT_MODELSIM_PATH"
+# The tools must start in this environment: xvhdl (libraries) and vsim
+# (licence). The environment scripts of an installation are specific to the
+# machine: load them before the campaign (tools/campaign/toolset.py preflight).
+"$PY" -m tools.campaign.toolset preflight || fail "a tool does not start in this environment (above)"
 [ -z "$(git status --porcelain --untracked-files=no)" ] \
   || fail "tracked files differ from HEAD: commit first, the results record the commit"
 

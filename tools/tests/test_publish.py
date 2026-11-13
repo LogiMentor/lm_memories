@@ -8,13 +8,14 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
-from tools.campaign import publish
+from tools.campaign import publish, toolset
 from tools.campaign.rerun import ROOT_DIR
 from tools.tests import toolsets
 from tools.vendor_synth import check
@@ -69,67 +70,85 @@ def _record(tool: str, version: str) -> dict | None:
     return None
 
 
-def _ps(archive: dict, commit: str, parts: dict, configs: list[str]) -> dict:
+def _ps(archive: dict, commit: str, parts: dict, configs: list[str], ghdl: str = "6.0.0") -> dict:
   return {"commit": commit, "manifest_hash": "m", "configs": configs, "archive": archive,
-          "rtl": {"ghdl": {"sim": "GHDL 6.0.0", "results": {c: {"verdict": "PASS", "counts": {"errors": 0}}
-                                                         for c in configs}}},
+          "rtl": {"ghdl": {"sim": f"GHDL {ghdl}", "results": {c: {"verdict": "PASS", "counts": {"errors": 0}}
+                                                           for c in configs}}},
           "parts": parts}
 
 
-def _netlist(ok: bool, key: str, configs: list[str], commit: str) -> dict:
+def _netlist(ok: bool, key: str, configs: list[str], commit: str, vivado: str = "2023.1",
+             ghdl: str = "6.0.0") -> dict:
   synth = {key: {"ok": ok, "tool_error": not ok, "problems": [] if ok else ["Vivado exit code 1"],
                  "netlist": "C:\\lmeda\\c\\ps\\x.vhd", "metrics": {"bram_tiles": 0.5}, "critical_warnings": 0,
-                 "version": "2023.1", "retries": ["attempt 1: x"], "provenance": {"commit": commit, "sources_hash": "h"}}}
-  sims = {"ghdl": {"sim": "GHDL 6.0.0", "results": {} if not ok else {
+                 "version": vivado, "retries": ["attempt 1: x"], "provenance": {"commit": commit, "sources_hash": "h"}}}
+  sims = {"ghdl": {"sim": f"GHDL {ghdl}", "results": {} if not ok else {
     c: {"verdict": "PASS", "counts": {"errors": 0}, "collisions": {"model_collisions": 1, "block_rams": ["b"]}}
     for c in configs}}}
   return {"synth": synth, "sims": sims}
 
 
-def make_campaign(base: Path, rerun_sha: str | None = None, problem: str = "") -> Campaign:
+def _questa_simulator(questa: dict) -> str:
+  """The simulator line of VUnit for a Questa of the toolset (vu/<name>/results.json)."""
+  product = "Questa_Altera_Starter_FPGA_Edition-64" if questa.get("edition") == "starter" else "Questa_Sim-64"
+  return f"modelsim_{product}_vsim_{questa['version']}_Simulator"
+
+
+def make_campaign(base: Path, rerun_sha: str | None = None, problem: str = "", tools: dict = toolsets.LAPTOP) -> Campaign:
+  """A campaign that ran with the tools of this toolset (versions in every result)."""
   c = Campaign(base)
   root = c.root
-  c.synth("vs", "vivado_a.tar.xz", [_result("vivado-artix7", "a", "pass", problems=[problem] if problem else []),
-                                    _result("vivado-artix7", "b", "tool-error",
+  versions = {tool: entry["version"] for tool, entry in tools["tools"].items()}
+  vivado, quartus, ghdl = versions["vivado"], versions["quartus"], versions["ghdl"]
+  names = toolset.campaign_names(tools)
+  c.synth("vs", "vivado_a.tar.xz", [_result("vivado-artix7", "a", "pass", version=vivado,
+                                            problems=[problem] if problem else []),
+                                    _result("vivado-artix7", "b", "tool-error", version=vivado,
                                             problems=[f"couldn't read file \"{root.as_posix()}/vs/x/.Xil/"
                                                       "Vivado-123-pcname/realtime.tcl\""])])
-  c.synth("vs", "vivado_rerun_b.tar.xz", [_result("vivado-artix7", "b", "pass")],
+  c.synth("vs", "vivado_rerun_b.tar.xz", [_result("vivado-artix7", "b", "pass", version=vivado)],
           where=root / "rerun" / "vs" / "vivado-artix7" / "b")
   if rerun_sha:
     _write(root / "rerun" / "vs" / "vivado-artix7" / "b" / "summary_public.json",
-           {"archive": c.archive("vivado_rerun_b.tar.xz", rerun_sha), "results": [_result("vivado-artix7", "b", "pass")]})
+           {"archive": c.archive("vivado_rerun_b.tar.xz", rerun_sha),
+            "results": [_result("vivado-artix7", "b", "pass", version=vivado)]})
   # checks_vivado evaluated again on C2: the commit of the run stays C1.
-  checks = [_result("vivado-artix7-checks", "x", "pass", commit=C2,
+  checks = [_result("vivado-artix7-checks", "x", "pass", commit=C2, version=vivado,
                     problems=[f"[{REPO}/src/common/lm_mem_pkg.vhd:101]"])]
-  c.synth("fc", "checks_v.tar.xz", checks, before=[_result("vivado-artix7-checks", "x", "fail", commit=C1)])
+  c.synth("fc", "checks_v.tar.xz", checks,
+          before=[_result("vivado-artix7-checks", "x", "fail", commit=C1, version=vivado)])
   c.synth("qc", "checks_q.tar.xz", [_result("quartus-cyclonev", "q", "pass", tool="quartus", version="",
                                             part="5CEBA4F23C7")
-                                    | {"expected": _record("quartus", "23.1std.0 Build 991")}])
+                                    | {"vendor": "intel", "expected": _record("quartus", quartus)}])
   (root / "qc" / "quartus_cyclonev" / "q").mkdir(parents=True)
   (root / "qc" / "quartus_cyclonev" / "q" / "run.log").write_text(
-    "    Info: Version 23.1std.0 Build 991 11/28/2023 SC Lite Edition\n", encoding="utf-8")
+    f"    Info: Version {quartus} 11/28/2023 SC Lite Edition\n", encoding="utf-8")
   configs = ["rw_rw.16x48"]
   _write(root / "ps" / "results.json",
-         _ps(c.archive("ps.tar.xz"), C2, {"xcku3p-ffva676-2-e": _netlist(False, "rw_rw_16x48_16_l11", configs, C2)},
-             configs))
+         _ps(c.archive("ps.tar.xz"), C2, {"xcku3p-ffva676-2-e": _netlist(False, "rw_rw_16x48_16_l11", configs, C2,
+                                                                         vivado, ghdl)}, configs, ghdl))
   _write(root / "rerun" / "ps" / "xcku3p-ffva676-2-e" / "results.json",
-         _ps(c.archive("ps_rerun.tar.xz"), C2, {"xcku3p-ffva676-2-e": _netlist(True, "rw_rw_16x48_16_l11", configs, C2)},
-             configs))
-  _write(root / "ps.before_20261105T000000Z" / "results.json", _ps(c.archive("ps_old.tar.xz"), C1, {}, configs))
-  _write(root / "vu" / "ghdl_6.0.0" / "results.json",
-         {"commit": C1, "passed": 2, "total": 2, "tests": [], "archive": c.archive("vu.tar.xz")})
-  _write(root / "mut" / "ghdl_6.0.0" / "results.json",
-         {"commit": C1, "simulator": "ghdl", "mutations": [{"verdict": "DETECTED"}], "baseline": {"verdict": "PASS"},
-          "archive": c.archive("mut.tar.xz")})
+         _ps(c.archive("ps_rerun.tar.xz"), C2, {"xcku3p-ffva676-2-e": _netlist(True, "rw_rw_16x48_16_l11", configs, C2,
+                                                                               vivado, ghdl)}, configs, ghdl))
+  _write(root / "ps.before_20261105T000000Z" / "results.json", _ps(c.archive("ps_old.tar.xz"), C1, {}, configs, ghdl))
+  _write(root / "vu" / names["vunit_ghdl"] / "results.json",
+         {"commit": C1, "passed": 2, "total": 2, "tests": [], "simulator": f"ghdl_GHDL_{ghdl}_(x)_Dunoon_edition_",
+          "archive": c.archive("vu.tar.xz")})
+  _write(root / "vu" / names["vunit_questa"] / "results.json",
+         {"commit": C1, "passed": 2, "total": 2, "tests": [], "simulator": _questa_simulator(tools["tools"]["questa"]),
+          "archive": c.archive("vu_questa.tar.xz")})
+  _write(root / "mut" / names["mutation"] / "results.json",
+         {"commit": C1, "simulator": f"ghdl_GHDL_{ghdl}_(x)_Dunoon_edition_", "mutations": [{"verdict": "DETECTED"}],
+          "baseline": {"verdict": "PASS"}, "archive": c.archive("mut.tar.xz")})
   _write(root / "rerun" / "rerun.json", {"ok": True, "items": [
     {"step": "vivado", "job": "vivado-artix7", "part": "xc7a35tfgg484-2", "case": "b", "rerun_status": "pass"},
     {"step": "postsynth", "job": "postsynth", "part": "xcku3p-ffva676-2-e", "case": "rw_rw.16x48",
      "rerun_status": "pass"}]})
   _write(root / "summary.json", {"commit": C1, "ok": True, "resumes": [{"commit": C2, "steps": ["checks_vivado"]}],
-                                 "pilot": {"ok": True, "cases": []},
+                                 "toolset": toolset.versions(tools), "pilot": {"ok": True, "cases": []},
                                  "steps": {"postsynth": {"ok": True, "runs": 1, "reruns": 1}},
                                  "driver_archive": c.archive("driver.tar.xz")})
-  toolsets.write(root)
+  toolsets.write(root, tools)
   return c
 
 
@@ -179,6 +198,106 @@ class ExpectedRecordTest(unittest.TestCase):
       c = make_campaign(Path(tmp))
       first = publish.collect(c.root, c.archives)["vivado_2023.1_amd.json"]["results"][0]
       self.assertEqual(first["expected"], {**check.load_expected("amd", "2023.1")["record"], "basis": None})
+
+
+class ToolsetConsistencyTest(unittest.TestCase):
+  """Review of PR #9: the file names came from the toolset, but nothing
+  checked that the results were of those tool versions."""
+
+  def setUp(self):
+    self.tmp = tempfile.TemporaryDirectory()
+    self.base = Path(self.tmp.name)
+
+  def tearDown(self):
+    self.tmp.cleanup()
+
+  def _refused(self, c: Campaign, message: str) -> None:
+    with self.assertRaises(publish.PublishError) as raised:
+      publish.collect(c.root, c.archives)
+    self.assertIn(message, str(raised.exception))
+
+  def _edit(self, path: Path, change) -> None:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    change(data)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+  def test_a_campaign_of_its_own_tools_is_published(self):
+    for tools in (toolsets.LAPTOP, toolsets.PCL01):
+      with self.subTest(vivado=tools["tools"]["vivado"]["version"]), tempfile.TemporaryDirectory() as tmp:
+        c = make_campaign(Path(tmp), tools=tools)
+        names = toolset.campaign_names(tools)
+        self.assertEqual(sorted(publish.collect(c.root, c.archives)),
+                         sorted([f"{names[s]}.json" for s in ("vivado", "checks_vivado", "checks_quartus", "postsynth")]
+                                + [f"vunit_{names['vunit_ghdl']}.json", f"vunit_{names['vunit_questa']}.json",
+                                   f"mutation_{names['mutation']}.json", "amd_campaign.json"]))
+
+  def test_results_of_other_tools_under_the_names_of_the_toolset_are_refused(self):
+    # The reproduction of the review: laptop results, PCL01 toolset.
+    c = make_campaign(self.base)
+    toolsets.write(c.root, toolsets.PCL01)
+    self._edit(c.root / "summary.json", lambda d: d.update(toolset=toolset.versions(toolsets.PCL01)))
+    self._refused(c, "vivado vivado-artix7 a: tool version 2023.1, the campaign toolset has 2024.1")
+
+  def test_the_summary_must_have_the_toolset_of_the_campaign(self):
+    c = make_campaign(self.base, tools=toolsets.PCL01)
+    self._edit(c.root / "summary.json", lambda d: d.update(toolset=toolset.versions(toolsets.LAPTOP)))
+    self._refused(c, "summary.json was written with other tool versions than logs/toolset.json")
+
+  def test_expected_results_of_another_version_are_refused(self):
+    c = make_campaign(self.base, tools=toolsets.PCL01)
+    old = check.load_expected("amd", "2023.1")["record"]
+    self._edit(c.root / "fc" / "summary_public.json", lambda d: d["results"][0].update(expected=old))
+    self._refused(c, "checks_vivado vivado-artix7-checks x: compared with tools/vendor_synth/expected/amd/2023.1.toml, "
+                     "the campaign toolset needs tools/vendor_synth/expected/amd/2024.1.toml")
+
+  def test_a_rerun_of_another_version_is_refused(self):
+    c = make_campaign(self.base, tools=toolsets.PCL01)
+    path = c.root / "rerun" / "vs" / "vivado-artix7" / "b" / "summary_public.json"
+    self._edit(path, lambda d: d["results"][0].update(tool_version="2023.1",
+                                                      expected=check.load_expected("amd", "2023.1")["record"]))
+    self._refused(c, "vivado vivado-artix7 b: tool version 2023.1, the campaign toolset has 2024.1")
+
+  def test_a_quartus_log_of_another_version_is_refused(self):
+    c = make_campaign(self.base, tools=toolsets.PCL01)
+    (c.root / "qc" / "quartus_cyclonev" / "q" / "run.log").write_text(
+      "    Info: Version 23.1std.0 Build 991 11/28/2023 SC Lite Edition\n", encoding="utf-8")
+    self._refused(c, "checks_quartus quartus-cyclonev q: tool version 23.1std.0 Build 991, the campaign toolset has "
+                     "25.1std.0 Build 1129")
+
+  def test_postsynth_of_another_version_is_refused(self):
+    part = "xcku3p-ffva676-2-e"
+    for change, message in (
+        (lambda d: d["parts"][part]["synth"]["rw_rw_16x48_16_l11"].update(version="2023.1"),
+         "postsynth xcku3p-ffva676-2-e rw_rw.16x48: synthesis with vivado 2023.1, the campaign toolset has 2024.1"),
+        (lambda d: d["parts"][part]["sims"]["ghdl"].update(sim="GHDL 5.0.1"),
+         "postsynth xcku3p-ffva676-2-e rw_rw.16x48: simulator GHDL 5.0.1, the campaign toolset has ghdl 6.0.0")):
+      with self.subTest(message=message), tempfile.TemporaryDirectory() as tmp:
+        c = make_campaign(Path(tmp), tools=toolsets.PCL01)
+        self._edit(c.root / "rerun" / "ps" / part / "results.json", change)
+        self._refused(c, message)
+
+  def test_simulation_results_are_those_of_the_toolset(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      # Missing: the Questa results of the toolset are not there.
+      c = make_campaign(Path(tmp), tools=toolsets.PCL01)
+      (c.root / "vu" / "questa_starter_2025.2").rename(c.root / "vu" / "questa_2021.1")
+      self._refused(c, "vunit_questa: no results.json in")
+    with tempfile.TemporaryDirectory() as tmp:
+      # Another directory is not published, whatever its name.
+      c = make_campaign(Path(tmp), tools=toolsets.PCL01)
+      shutil.copytree(c.root / "vu" / "ghdl_6.0.0", c.root / "vu" / "ghdl_5.0.1")
+      self.assertNotIn("vunit_ghdl_5.0.1.json", publish.collect(c.root, c.archives))
+    for sub, simulator, message in (
+        ("vu/ghdl_6.0.0", "ghdl_GHDL_5.0.1_(x)", "vunit_ghdl: simulator ghdl_GHDL_5.0.1_(x), the campaign toolset "
+                                                 "has ghdl 6.0.0"),
+        ("vu/questa_starter_2025.2", "modelsim_Questa_Sim-64_vsim_2025.2_Simulator",
+         "vunit_questa: simulator modelsim_Questa_Sim-64_vsim_2025.2_Simulator, the campaign toolset has questa "
+         "starter 2025.2"),
+        ("mut/ghdl_6.0.0", "ghdl", "mutation: simulator ghdl, the campaign toolset has ghdl 6.0.0")):
+      with self.subTest(sub=sub), tempfile.TemporaryDirectory() as tmp:
+        c = make_campaign(Path(tmp), tools=toolsets.PCL01)
+        self._edit(c.root / sub / "results.json", lambda d: d.update(simulator=simulator))
+        self._refused(c, message)
 
 
 class PublishTest(unittest.TestCase):
@@ -330,8 +449,12 @@ class LinuxPublishTest(unittest.TestCase):
     self.assertTrue(publish.local_paths("/opt/other/tool/bin/x"))
 
   def test_a_campaign_with_linux_paths_is_published(self):
-    c = make_campaign(self.base, problem="couldn't read file \"/opt/eda/amd/Vivado/2024.1/scripts/x.tcl\"")
-    toolsets.write(c.root, {**toolsets.PCL01, "tools": {**toolsets.PCL01["tools"], **LINUX_TOOLS["tools"]}})
+    # A campaign that ran with the tools of this toolset (review of PR #9: the
+    # test wrote a Linux toolset over results of the laptop tools).
+    tools = {**toolsets.PCL01, "tools": {tool: {**toolsets.PCL01["tools"][tool], **entry}
+                                         for tool, entry in LINUX_TOOLS["tools"].items()}}
+    c = make_campaign(self.base, problem="couldn't read file \"/opt/eda/amd/Vivado/2024.1/scripts/x.tcl\"",
+                      tools=tools)
     files = publish.collect(c.root, c.archives)
     self.assertIn("<vivado>/scripts/x.tcl", files["vivado_2024.1_amd.json"]["results"][0]["problems"][0])
     campaign = files["amd_campaign.json"]

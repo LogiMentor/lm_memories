@@ -21,6 +21,16 @@ changed after its evaluation, is refused: the measured values go in that
 file, the basis is removed, the archived logs are evaluated again
 (tools/campaign/resume.py, no tool runs), then the campaign is published.
 
+The tool versions come from the toolset of the campaign
+(logs/toolset.json), and every result must be of them: summary.json must
+record the same toolset; each vendor_synth result, reruns included, must
+have the version of its tool and be compared with the expected results of
+that version; each post-synthesis result must have the Vivado of the
+toolset (synthesis, xsim) and its GHDL; the VUnit and mutation results are
+read only from the directories named after the toolset (vu/<campaign>,
+mut/<campaign>), and their simulator must be that of the toolset. Anything
+else stops the script.
+
 Every result records the commit it ran on, the tool and its version, the
 device, and the archive of its complete logs with the SHA-256. Each archive
 is checked first: the file must be in the archive directory
@@ -51,6 +61,7 @@ from tools.campaign import toolset
 from tools.campaign.rerun import ROOT_DIR, SYNTH_STEPS, _safe
 from tools.eda_archive import archive_dir, sha256_file
 from tools.harness_counts import campaign_parts
+from tools.vendor_synth import check
 from tools.vendor_synth.check import expected_record_problem
 
 CAMPAIGN_FILE = "amd_campaign.json"
@@ -193,8 +204,35 @@ def _synth_entry(job: str, public: dict, archive: dict, evaluated_on: str | None
   return entry
 
 
-def synth_step(root: Path, step: str, reruns: list[dict], directory: Path) -> dict:
-  """Published results of one vendor_synth step, the passed reruns in place of the tool-errors."""
+def _has_version(text: str | None, version: str) -> bool:
+  """The version, as a whole number, in a version line ("GHDL 6.0.0 (...)", "ghdl_GHDL_6.0.0_...")."""
+  return bool(text) and re.search(r"(?<![\d.])" + re.escape(version) + r"(?![\d.])", text) is not None
+
+
+def _expected_file(vendor: str, version: str) -> str:
+  """The file of expected results of a tool version, as vendor_synth records it."""
+  return f"{check.EXPECTED_FILES}/{check.VENDOR_FILES.get(vendor.lower(), vendor)}/{check.expected_key(vendor, version)}.toml"
+
+
+def _synth_problem(step: str, entry: dict, version: str) -> str | None:
+  """Why a vendor_synth result (a rerun included) is not of the tool version of the toolset, or None."""
+  what = f"{step} {entry['job']} {entry['case']}"
+  if entry.get("tool_version") != version:
+    return f"{what}: tool version {entry.get('tool_version') or 'unknown'}, the campaign toolset has {version}"
+  if entry["status"] != "unchecked":
+    wanted = _expected_file(entry.get("vendor", ""), version)
+    found = (entry.get("expected") or {}).get("file")
+    if found != wanted:
+      return f"{what}: compared with {found or 'no expected results'}, the campaign toolset needs {wanted}"
+  return None
+
+
+def synth_step(root: Path, step: str, reruns: list[dict], directory: Path, tool_version: str) -> dict:
+  """Published results of one vendor_synth step, the passed reruns in place of the tool-errors.
+
+  tool_version: the version of the step's tool in the campaign toolset; every
+  published result, reruns included, must be of it and compared with its
+  expected results."""
   sub, _ = SYNTH_STEPS[step]
   work = root / sub
   full = _load(work / "summary.json")
@@ -223,6 +261,9 @@ def synth_step(root: Path, step: str, reruns: list[dict], directory: Path) -> di
     problem = expected_record_problem(entry.get("expected")) if entry["status"] != "unchecked" else None
     if problem:
       raise PublishError(f"{step} {r['job']} {r['case']}: {problem}")
+    problem = _synth_problem(step, entry, tool_version)
+    if problem:
+      raise PublishError(problem)
     results.append(entry)
   counts: dict[str, int] = {}
   for e in results:
@@ -278,7 +319,25 @@ def _ps_runs(data: dict, archive: dict, configs_only: set[str] | None = None, pa
   return out
 
 
-def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: str) -> dict:
+def _postsynth_problem(entry: dict, versions: dict[str, str]) -> str | None:
+  """Why a post-synthesis result is not of the tools of the toolset, or None:
+  the synthesis of Vivado, GHDL and xsim (the xsim of that Vivado)."""
+  what = f"postsynth {entry.get('part') or 'RTL'} {entry.get('config', '')}".rstrip()
+  synthesis = entry.get("synthesis")
+  if synthesis is not None and synthesis.get("tool_version") != versions["vivado"]:
+    return (f"{what}: synthesis with vivado {synthesis.get('tool_version') or 'unknown'}, the campaign toolset has "
+            f"{versions['vivado']}")
+  simulator = entry.get("simulator")
+  wanted = {"ghdl": ("ghdl", versions["ghdl"]), "xsim": ("vivado", versions["vivado"])}.get(simulator)
+  if simulator and "simulator_version" in entry and (wanted is None
+                                                     or not _has_version(entry["simulator_version"], wanted[1])):
+    tool = f"{wanted[0]} {wanted[1]}" if wanted else "no such simulator"
+    return f"{what}: simulator {entry['simulator_version'] or 'unknown'}, the campaign toolset has {tool}"
+  return None
+
+
+def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: str,
+                   versions: dict[str, str] | None = None) -> dict:
   data = _load(root / "ps" / "results.json")
   if not data:
     raise PublishError(f"postsynth: no results.json in {root / 'ps'}")
@@ -307,6 +366,10 @@ def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: st
         e["first_run"] = first
         results.append(e)
       first_runs.append(first)
+  for e in results:
+    problem = _postsynth_problem(e, versions) if versions else None
+    if problem:
+      raise PublishError(problem)
   verdicts: dict[str, int] = {}
   for e in results:
     verdicts[e["verdict"]] = verdicts.get(e["verdict"], 0) + 1
@@ -314,21 +377,35 @@ def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: st
           "verdicts": verdicts, "total": len(results), "results": results}
 
 
-def sim_step(root: Path, step: str, work: Path, directory: Path) -> dict:
-  """VUnit or mutation results: one simulator, no device."""
+def sim_step(root: Path, step: str, work: Path, directory: Path, tool_entry: dict | None = None) -> dict:
+  """VUnit or mutation results: one simulator, no device.
+
+  tool_entry: the simulator in the campaign toolset (version, edition); the
+  simulator recorded by the run must be that one."""
   data = _load(work / "results.json")
   if not data:
     raise PublishError(f"{step}: no results.json in {work}")
   tool, edition, version = campaign_parts(work.name)
+  if tool_entry is not None:
+    simulator = data.get("simulator") or ""
+    wanted_edition = tool_entry.get("edition") if tool == "questa" else ""
+    same_edition = (wanted_edition == "starter") == ("starter" in simulator.lower()) if tool == "questa" else True
+    if not _has_version(simulator, tool_entry["version"]) or not same_edition:
+      named = " ".join(filter(None, (tool, wanted_edition, tool_entry["version"])))
+      raise PublishError(f"{step}: simulator {simulator or 'not recorded'}, the campaign toolset has {named}")
   return {"step": step, "tool": tool, **({"edition": edition} if edition else {}), "tool_version": version,
           "part": None, **data,
           "archive": verify_archive(data.get("archive"), directory)}
 
 
-def _sim_dirs(root: Path) -> list[tuple[str, Path, str]]:
-  out = [(f"vunit_{d.name.split('_')[0]}", d, f"vunit_{d.name}.json") for d in sorted((root / "vu").glob("*_*"))]
-  out += [("mutation", d, f"mutation_{d.name}.json") for d in sorted((root / "mut").glob("*_*"))]
-  return out
+def _sim_dirs(root: Path, names: dict[str, str]) -> list[tuple[str, Path, str, str]]:
+  """The simulation steps of the campaign: (step, directory, published file, tool of the toolset).
+
+  Only the directories named after the toolset (tools/campaign/toolset.py);
+  any other directory under vu/ or mut/ is not part of the campaign."""
+  return [("vunit_ghdl", root / "vu" / names["vunit_ghdl"], f"vunit_{names['vunit_ghdl']}.json", "ghdl"),
+          ("vunit_questa", root / "vu" / names["vunit_questa"], f"vunit_{names['vunit_questa']}.json", "questa"),
+          ("mutation", root / "mut" / names["mutation"], f"mutation_{names['mutation']}.json", "ghdl")]
 
 
 def _postsynth_counts(step: dict, published: dict, name: str) -> dict:
@@ -363,11 +440,19 @@ def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
     names = toolset.campaign_names(tools)
   except toolset.ToolsetError as exc:
     raise PublishError(str(exc)) from exc
-  files = {f"{names[step]}.json": synth_step(root, step, reruns, directory) for step in SYNTH_STEPS}
+  # The summary was written for this toolset, and every result must be of it.
+  if summary.get("toolset") != toolset.versions(tools):
+    raise PublishError(f"summary.json was written with other tool versions than logs/toolset.json "
+                       f"({summary.get('toolset')!r}, toolset {toolset.versions(tools)!r}): run "
+                       "tools/campaign/summarize.py again")
+  versions = {tool: entry["version"] for tool, entry in tools["tools"].items()}
+  step_tool = {"vivado": "vivado", "checks_vivado": "vivado", "checks_quartus": "quartus"}
+  files = {f"{names[step]}.json": synth_step(root, step, reruns, directory, versions[step_tool[step]])
+           for step in SYNTH_STEPS}
   postsynth_file = f"{names['postsynth']}.json"
-  files[postsynth_file] = postsynth_step(root, reruns, directory, names["postsynth"])
-  for step, work, name in _sim_dirs(root):
-    files[name] = sim_step(root, step, work, directory)
+  files[postsynth_file] = postsynth_step(root, reruns, directory, names["postsynth"], versions)
+  for step, work, name, tool in _sim_dirs(root, names):
+    files[name] = sim_step(root, step, work, directory, tools["tools"][tool])
   driver = verify_archive(summary.get("driver_archive"), directory)
   archives = {}
   for name, content in files.items():

@@ -151,9 +151,9 @@ class CampaignStepsTest(unittest.TestCase):
 
   def test_publish_names_the_files_after_the_toolset(self) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-      c = make_campaign(Path(tmp))
-      toolsets.write(c.root, toolsets.PCL01)
-      (c.root / "vu" / "ghdl_6.0.0").rename(c.root / "vu" / "questa_starter_2025.2")
+      # A campaign that ran with the PCL01 tools (review of PR #9: the test
+      # wrote the PCL01 toolset over results of the laptop tools).
+      c = make_campaign(Path(tmp), tools=toolsets.PCL01)
       files = publish.collect(c.root, c.archives)
       self.assertIn("vivado_2024.1_amd.json", files)
       self.assertIn("static_checks_quartus_25.1.json", files)

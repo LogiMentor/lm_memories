@@ -8,14 +8,16 @@
 # run is compared with the file of the Vivado version in its log, and
 # [meta] tool_version must name that version.
 #
-# NOT YET MEASURED WITH 2024.1: this file starts as a copy of 2023.1.toml
-# ([meta] basis), so that the first Vivado 2024.1 campaign, on the code of
-# v0.2.0, is compared with the 2023.1 values. Each difference it finds is an
-# effect of the tool and is written here with the archive of its run; the
-# "Measured" notes below are those of 2023.1 until then.
-# While [meta] basis is set, tools/campaign/publish.py refuses the results
-# compared with this file: remove it once the values are measured, then
-# evaluate the archived logs again (tools/campaign/resume.py).
+# Measured with Vivado 2024.1 on PCL01 (Linux), campaign v0.2.0-pcl01 of
+# 2026-11-13 on commit 2e95d7a0f6839785e0a7e6a41dcce546a170f603 (sources of
+# v0.2.0): synthesis archive vivado_2024.1_amd_20261113T085838Z.tar.xz
+# (SHA-256 9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189),
+# static checks static_checks_vivado_2024.1_20261113T091054Z.tar.xz
+# (SHA-256 ff104982f6c473e34428e9b5ba06e6e12a586bc0b1775039031dfb0b15c82ae4).
+# Every case gave the same metrics as Vivado 2023.1 (55 synthesis runs:
+# block RAM tiles, RAMB36/RAMB18, LUTs as memory, URAM, registers, LUTs as
+# logic; 28 static checks: same errors at the same lines), so the values
+# and the "Measured" notes below hold for both versions.
 #
 # Fields:
 #   bram_tiles     exact number of block RAM tiles (RAMB18 = 0.5)
@@ -41,7 +43,6 @@
 
 [meta]
 tool_version = "2024.1"
-basis = "copy of 2023.1.toml, not yet measured with Vivado 2024.1"
 
 [defaults]
 max_critical_warnings = 0

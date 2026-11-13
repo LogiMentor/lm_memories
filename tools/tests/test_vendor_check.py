@@ -268,27 +268,29 @@ class VendorRunTest(unittest.TestCase):
     self.assertEqual((result["status"], result["tool_version"]), ("pass", "2024.1"), result["problems"])
 
   def test_measured_values_replace_the_provisional_ones_without_running_again(self) -> None:
-    # A first campaign is compared with the provisional copy, which says so.
-    first = self._run(self._good_spec(version="2024.1"))
-    self.assertEqual(first["status"], "pass", first["problems"])
-    self.assertIn("not yet measured", first["expected"]["basis"])
-    self.assertIn("not yet measured", check.expected_record_problem(first["expected"]))
-    # The measured values are written and the basis removed; the logs are evaluated again.
+    # A copy of the expected results where amd/2024.1 is not yet measured.
     copy = self.root / "expected"
     for path in check.EXPECTED_DIR.rglob("*.toml"):
       (copy / path.parent.name).mkdir(parents=True, exist_ok=True)
       (copy / path.parent.name / path.name).write_bytes(path.read_bytes())
-    measured = copy / "amd" / "2024.1.toml"
-    text = measured.read_text(encoding="utf-8")
-    measured.write_text("\n".join(l for l in text.splitlines() if not l.startswith("basis =")) + "\n",
-                        encoding="utf-8")
-    calls_before = (self.root / "calls.txt").read_text()
+    provisional = copy / "amd" / "2024.1.toml"
+    provisional.write_text(provisional.read_text(encoding="utf-8").replace(
+      'tool_version = "2024.1"\n', 'tool_version = "2024.1"\nbasis = "copy of 2023.1.toml, not yet measured"\n'),
+      encoding="utf-8")
+    # A first campaign is compared with the provisional copy, which says so.
     with mock.patch.object(check, "EXPECTED_DIR", copy):
-      code = main(["--config", str(self.root / "config.json"), "--evaluate-only"])
-      again = json.loads((self.root / "work" / "summary.json").read_text(encoding="utf-8"))["results"][0]
-      self.assertEqual((code, again["status"]), (0, "pass"), again["problems"])
-      self.assertIsNone(again["expected"]["basis"])
-      self.assertIsNone(check.expected_record_problem(again["expected"]))
+      first = self._run(self._good_spec(version="2024.1"))
+      self.assertEqual(first["status"], "pass", first["problems"])
+      self.assertIn("not yet measured", first["expected"]["basis"])
+      self.assertIn("not yet measured", check.expected_record_problem(first["expected"]))
+    # The measured values are written and the basis removed (the file of the
+    # repository); the logs are evaluated again.
+    calls_before = (self.root / "calls.txt").read_text()
+    code = main(["--config", str(self.root / "config.json"), "--evaluate-only"])
+    again = json.loads((self.root / "work" / "summary.json").read_text(encoding="utf-8"))["results"][0]
+    self.assertEqual((code, again["status"]), (0, "pass"), again["problems"])
+    self.assertIsNone(again["expected"]["basis"])
+    self.assertIsNone(check.expected_record_problem(again["expected"]))
     self.assertEqual((self.root / "calls.txt").read_text(), calls_before, "the tool must not run")
     public = json.loads((self.root / "work" / "summary_public.json").read_text(encoding="utf-8"))["results"][0]
     self.assertEqual(public["expected"], again["expected"])

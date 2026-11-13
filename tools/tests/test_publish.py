@@ -149,10 +149,21 @@ class ExpectedRecordTest(unittest.TestCase):
       return str(raised.exception)
 
   def test_provisional_expected_values_are_refused(self):
-    record = check.load_expected("amd", "2024.1")["record"]
-    self.assertEqual(record["file"], "tools/vendor_synth/expected/amd/2024.1.toml")
-    self.assertIn("not yet measured", record["basis"])
-    message = self._collect_with(record)
+    with tempfile.TemporaryDirectory() as tmp:
+      # A copy of the expected results where amd/2024.1 is not yet measured.
+      copy = Path(tmp)
+      for path in check.EXPECTED_DIR.rglob("*.toml"):
+        (copy / path.parent.name).mkdir(parents=True, exist_ok=True)
+        (copy / path.parent.name / path.name).write_bytes(path.read_bytes())
+      provisional = copy / "amd" / "2024.1.toml"
+      provisional.write_text(provisional.read_text(encoding="utf-8").replace(
+        'tool_version = "2024.1"\n', 'tool_version = "2024.1"\nbasis = "copy of 2023.1.toml, not yet measured"\n'),
+        encoding="utf-8")
+      with mock.patch.object(check, "EXPECTED_DIR", copy):
+        record = check.load_expected("amd", "2024.1")["record"]
+        self.assertEqual(record["file"], "tools/vendor_synth/expected/amd/2024.1.toml")
+        self.assertIn("not yet measured", record["basis"])
+        message = self._collect_with(record)
     self.assertIn("vivado vivado-artix7 a: compared with expected results not yet measured", message)
     self.assertIn("remove [meta] basis and evaluate the logs again", message)
 

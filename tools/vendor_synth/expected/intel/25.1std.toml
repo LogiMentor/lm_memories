@@ -3,13 +3,13 @@
 #
 # Expected Quartus 25.1std results for the cases in ../../cases.toml.
 #
-# NOT YET MEASURED WITH 25.1std: this file starts as a copy of 23.1std.toml
-# ([meta] basis), so that the first Quartus 25.1std campaign, on the code of
-# v0.2.0, is compared with the 23.1std results. Each difference it finds is
-# an effect of the tool and is written here with the archive of its run.
-# While [meta] basis is set, tools/campaign/publish.py refuses the results
-# compared with this file: remove it once the values are measured, then
-# evaluate the archived logs again (tools/campaign/resume.py).
+# Measured with Quartus Prime Lite 25.1std.0 Build 1129 on PCL01 (Linux),
+# campaign v0.2.0-pcl01 of 2026-11-13 on commit
+# 2e95d7a0f6839785e0a7e6a41dcce546a170f603 (sources of v0.2.0): archive
+# static_checks_quartus_25.1_20261113T091218Z.tar.xz (SHA-256
+# 0b2dce2a2d36abca5143cd3a41657b618985c2673cb1365d56b3e6d01309e3e4).
+# Every case gave the same result as Quartus 23.1std (11 static checks: the
+# same errors at the same lines, exit code 3).
 #
 # One file per Quartus release (tools/vendor_synth/check.py load_expected):
 # a run is compared with the file of the release in its log ("Info: Version
@@ -29,7 +29,6 @@
 
 [meta]
 tool_version = "25.1std"
-basis = "copy of 23.1std.toml, not yet measured with Quartus 25.1std"
 
 [[expect]]
 case = "crw_crw_32x1024"

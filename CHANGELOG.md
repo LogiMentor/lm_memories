@@ -19,8 +19,14 @@ All notable changes to this project are documented here.
 - **Expected synthesis results per tool version**
   (`tools/vendor_synth/expected/<vendor>/<version>.toml`): Vivado 2023.1
   and 2024.1, Quartus 23.1std and 25.1std. A tool version without its own
-  file is a fail, and `publish.py` refuses results compared with a file not
-  yet measured (`[meta] basis`).
+  file is a fail, and so is a log with more than one tool version. A run
+  compared with a file not yet measured (`[meta] basis`) is
+  `pass-provisional`: a measurement, not a pass, and the campaign summary
+  says so at the top; `publish.py` refuses it.
+- **`publish.py` checks the tool versions of every result** against the
+  toolset of the campaign: vendor_synth results and their reruns (tool
+  version and file of expected results), post-synthesis (Vivado, xsim,
+  GHDL), VUnit and mutation (simulator), and the toolset of `summary.json`.
 
 ### Changed
 

@@ -92,7 +92,7 @@ if "stop" in spec:
         sys.exit(3)
     status("failed", "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
     print("lm_vendor_synth: synth_design failed: Vivado Synthesis failed")
-    sys.exit(1)
+    sys.exit(spec.get("stop_exit_code", 1))
 os.makedirs(".Xil", exist_ok=True)  # tool scratch, removed after a passing run
 open(os.path.join(".Xil", "junk.tcl"), "w").write("x")
 top = re.search(r"-top (\S+)", script).group(1)
@@ -411,6 +411,17 @@ class VendorRunTest(unittest.TestCase):
     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [C:/r/src/fifo/lm_mem_fifo.vhd:53]",
   ]]
 
+  def test_a_stop_with_exit_code_zero_fails(self) -> None:
+    # The exit code is required on Windows and Linux (pilot of 2026-11-13 on
+    # PCL01): a stop that comes back with 0 is a fail, whatever the log says.
+    result = self._run(self._good_spec(stop=self.FIFO_STOP), case="bad_fifo_almost_full_0",
+                       job_extra={"assert": True})
+    self.assertEqual((result["status"], result["return_code"]), ("pass", 1), result["problems"])
+    result = self._run(self._good_spec(stop=self.FIFO_STOP, stop_exit_code=0), case="bad_fifo_almost_full_0",
+                       job_extra={"assert": True})
+    self.assertEqual(result["status"], "fail", result["problems"])
+    self.assertIn("tool exit code 0, but synthesis was expected to stop", result["problems"])
+
   def test_a_stop_where_vivado_died_runs_again(self) -> None:
     # The check stopped, then Vivado died before synth_design returned: the
     # status file stays at "started". Not a fail: a tool-error, run again.
@@ -693,7 +704,9 @@ class ExpectedFailureTest(unittest.TestCase):
     self.assertEqual(problems, [])
     self.assertEqual((facts["exit_code"], facts["exit_code_required"]), (0, False))
     self.assertTrue(check.vivado_exit_code_reliable("nt"))
-    self.assertFalse(check.vivado_exit_code_reliable("posix"))
+    # Measured on Linux with Vivado 2024.1 (pilot of 2026-11-13): required there too.
+    self.assertTrue(check.vivado_exit_code_reliable("posix"))
+    self.assertFalse(check.vivado_exit_code_reliable("java"))
 
   def test_a_stop_needs_failed_in_the_status_file(self) -> None:
     # Campaign of 2026-11-04: the exit code was lost on the way; the status

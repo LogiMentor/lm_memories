@@ -129,10 +129,11 @@ def vivado_exit_code_reliable(os_name: str = os.name) -> bool:
 
   Measured with Vivado 2023.1 on Windows (PLAN 3.15): through launch_tool.bat
   the exit code of Vivado arrives; through the former launch_tool.cmd it was
-  always 0. Not measured on Linux (bash launcher with exec), so there it is
-  recorded but not required.
+  always 0. Measured with Vivado 2024.1 on Linux (PCL01, pilot of
+  2026-11-13, launch_tool.sh with exec): 0 for the runs that completed
+  synthesis, 1 for each of the six expected stops, with and without -assert.
   """
-  return os_name == "nt"
+  return os_name in ("nt", "posix")
 
 
 

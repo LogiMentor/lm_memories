@@ -12,7 +12,8 @@ expected results of that version.
 Writes <pilot directory>/pilot.json and exits with 1 if any check fails:
 
 1. launcher: tools/campaign/pilot.toml with vendor_synth, one case at a
-   time. r_w_32x1024 passes with exit code 0 through the Windows launcher;
+   time. r_w_32x1024 passes with exit code 0 through the launcher
+   (launch_tool.bat on Windows, launch_tool.sh on Linux);
    every wrong generic stops with a non-zero exit code, with and without
    synth_design -assert; the empty vendor string reaches Vivado as an empty
    string (bad_r_w_infer_no_vendor stops at its check).

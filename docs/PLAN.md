@@ -1033,8 +1033,9 @@ the summary in `<campaign root>/summary.md`.
   expected stop passes only with "failed" for this attempt in the status
   file, the error of the check in the log (file and line without
   `-assert`, the message with it), and a non-zero exit code where it is
-  reliable (`vivado_exit_code_reliable`: Windows; elsewhere it is recorded,
-  not required). A pass needs "ok" there as well as exit code 0. Quartus has
+  reliable (`vivado_exit_code_reliable`: Windows, measured with Vivado
+  2023.1, and Linux, measured with Vivado 2024.1 by the pilot of 2026-11-13
+  on PCL01; elsewhere it is recorded, not required). A pass needs "ok" there as well as exit code 0. Quartus has
   no status file and keeps the exit-code requirement.
 - **Two writers on `vivado.log`.** Without `-log`, Vivado writes
   `vivado.log` in its working directory. `run_postsynth.py` captured the

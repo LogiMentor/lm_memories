@@ -7,7 +7,32 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Campaign on Linux with other tool versions (issue #8).** The v0.2.0
+  code was verified on PCL01 (Linux) with Vivado 2024.1 and xsim 2024.1,
+  Quartus Prime Lite 25.1std, Questa Altera Starter FPGA Edition 2025.2 and
+  GHDL 6.0.0: every step passes with the same results as the laptop
+  campaign (Vivado 2023.1, Quartus 23.1std, Questa 2021.1), and no run
+  ended as tool-error. Results in `docs/results/v0.2.0-pcl01/`;
+  `docs/results/README.md` is now the index of the campaigns.
+- **Expected synthesis results per tool version**
+  (`tools/vendor_synth/expected/<vendor>/<version>.toml`): Vivado 2023.1
+  and 2024.1, Quartus 23.1std and 25.1std. A tool version without its own
+  file is a fail, and `publish.py` refuses results compared with a file not
+  yet measured (`[meta] basis`).
+
 ### Changed
+
+- **Campaigns are named after the tool versions they ran with (issue #8).**
+  The versions are detected once at the start of a campaign
+  (`logs/toolset.json`); result files are named after them
+  (`vivado_<version>_amd`, `static_checks_quartus_<x.y>`,
+  `questa_starter_<version>`, ...), a resume requires the same versions,
+  and `publish.py` writes each campaign to its own directory
+  (`--out docs/results/<campaign>`). The campaign runs on Linux (bash,
+  `python3`); Vivado's exit code is required there as on Windows, as
+  measured by the pilot.
 
 - **Campaign tools come from the environment (issue #8).** `run_amd.sh`
   no longer falls back to `C:/msys64/ucrt64/bin/ghdl` on Windows: set

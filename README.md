@@ -62,15 +62,15 @@ Support and validation status is tracked in
   outcome of each `synth_design`, error message, time, run id of the
   attempt); a pass needs "ok" there, an expected stop needs "failed", the
   error of the check in the log, and a non-zero exit code where the exit
-  code is measured to be reliable (Windows; `docs/PLAN.md` 3.15).
+  code is measured to be reliable (Windows and Linux; `docs/PLAN.md` 3.15).
 - The runs that feed `docs/results/` are campaigns (`--campaign NAME`):
   nothing is pruned, the logs of every attempt are archived, compressed,
   outside the repository (`LM_EDA_ARCHIVE_DIR`, default `lm_eda_archive` in
   the home directory), and the result JSON records the archive name and
   SHA-256. `python -m tools.campaign.publish <campaign root>` writes
-  `docs/results/` from a campaign that passed, with the commit, tool,
-  version, device and archive of every result
-  ([`docs/results/README.md`](docs/results/README.md)).
+  `docs/results/<campaign>` from a campaign that passed, with the commit,
+  tool, version, device and archive of every result; one directory per
+  campaign ([`docs/results/README.md`](docs/results/README.md), the index).
 
 ## Simulation Quick Start
 
@@ -189,8 +189,9 @@ and checks the newer cases with GHDL; `tools/vendor_synth` checks wrong
 generics with Vivado and Quartus (`fallback_check.toml`,
 `quartus_check.toml`).
 
-**Vivado users: add `-assert` to `synth_design`.** By default Vivado 2023.1
-ignores VHDL assertions. Measured on `xc7a35tfgg484-2`, all of these are
+**Vivado users: add `-assert` to `synth_design`.** By default Vivado ignores
+VHDL assertions (2023.1 and 2024.1: the static checks of the library stop
+the same way on both). Measured with 2023.1 on `xc7a35tfgg484-2`, all of these are
 ignored without `-assert` and stop synthesis with their text with it,
 for severity error and failure: assertions in the architecture, in the
 entity statement part, in a process, in a function used for a constant, in

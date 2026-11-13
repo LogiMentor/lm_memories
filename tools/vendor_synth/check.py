@@ -197,22 +197,24 @@ def load_expected(vendor: str, version: str | None) -> dict[str, Any]:
   if not path.is_file():
     raise ExpectedError(f"no expected results for {name} {key} (tool version {version}): "
                         f"tools/vendor_synth/expected/{name}/{key}.toml does not exist")
-  with path.open("rb") as handle:
-    data = tomllib.load(handle)
+  # One read: the values compared and the record (SHA-256, basis) come from
+  # the same bytes, even if the file changes while the run is evaluated.
+  raw = path.read_bytes()
+  data = tomllib.loads(raw.decode("utf-8"))
   declared = data.get("meta", {}).get("tool_version")
   if declared != key:
     raise ExpectedError(f"tools/vendor_synth/expected/{name}/{key}.toml: [meta] tool_version is {declared!r}, "
                         f"not {key!r}")
   return {"defaults": data.get("defaults", {}), "expect": data.get("expect", []), "tool_version": key,
-          "record": expected_record(path, data)}
+          "record": expected_record(path, data, raw)}
 
 
-def expected_record(path: Path, data: dict[str, Any]) -> dict[str, Any]:
-  """What a run was compared with: the file of expected results, its SHA-256,
-  and its [meta] basis (set while the file is not yet measured with its
-  version, None once it is)."""
+def expected_record(path: Path, data: dict[str, Any], raw: bytes) -> dict[str, Any]:
+  """What a run was compared with: the file of expected results, the SHA-256
+  of the bytes that were parsed into data (raw), and its [meta] basis (set
+  while the file is not yet measured with its version, None once it is)."""
   return {"file": f"{EXPECTED_FILES}/{path.relative_to(EXPECTED_DIR).as_posix()}",
-          "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+          "sha256": hashlib.sha256(raw).hexdigest(),
           "basis": data.get("meta", {}).get("basis")}
 
 

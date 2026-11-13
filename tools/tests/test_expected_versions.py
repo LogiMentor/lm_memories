@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import tomllib
 import unittest
@@ -51,6 +52,37 @@ class LoaderTest(unittest.TestCase):
       with mock.patch.object(check, "EXPECTED_DIR", Path(tmp)), \
            self.assertRaisesRegex(check.ExpectedError, r"\[meta\] tool_version is '2024.1', not '2024.2'"):
         check.load_expected("amd", "2024.2")
+
+  def test_the_record_is_of_the_bytes_that_were_compared(self) -> None:
+    # Review of PR #9: the file was parsed, then read again for its SHA-256;
+    # a change between the two reads gave values of one content and the
+    # record of another, which publish.py then accepted.
+    with tempfile.TemporaryDirectory() as tmp:
+      copy = Path(tmp) / "expected"
+      for path in check.EXPECTED_DIR.rglob("*.toml"):
+        (copy / path.parent.name).mkdir(parents=True, exist_ok=True)
+        (copy / path.parent.name / path.name).write_bytes(path.read_bytes())
+      target = copy / "amd" / "2024.1.toml"
+      first = target.read_bytes()
+      second = first.replace(b"bram_tiles = 1\n", b"bram_tiles = 9\n", 1)
+      real_load, real_loads = tomllib.load, tomllib.loads
+
+      def then_change(parse):
+        def wrapped(source):
+          data = parse(source)
+          target.write_bytes(second)  # the file changes after it was parsed
+          return data
+        return wrapped
+      with mock.patch.object(check, "EXPECTED_DIR", copy), \
+           mock.patch.object(check.tomllib, "load", then_change(real_load)), \
+           mock.patch.object(check.tomllib, "loads", then_change(real_loads)):
+        expected = check.load_expected("amd", "2024.1")
+      with mock.patch.object(check, "EXPECTED_DIR", copy):
+        problem = check.expected_record_problem(expected["record"])
+    case = next(e for e in expected["expect"] if e["case"] == "r_w_32x1024")
+    self.assertEqual(case["bram_tiles"], 1)
+    self.assertEqual(expected["record"]["sha256"], hashlib.sha256(first).hexdigest())
+    self.assertIn("changed after the evaluation", problem or "")
 
   def test_a_vendor_without_expected_results_has_none(self) -> None:
     self.assertEqual(check.load_expected("lattice", None), {"defaults": {}, "expect": []})

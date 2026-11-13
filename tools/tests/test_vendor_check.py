@@ -310,10 +310,16 @@ class VendorRunTest(unittest.TestCase):
     provisional.write_text(provisional.read_text(encoding="utf-8").replace(
       'tool_version = "2024.1"\n', 'tool_version = "2024.1"\nbasis = "copy of 2023.1.toml, not yet measured"\n'),
       encoding="utf-8")
-    # A first campaign is compared with the provisional copy, which says so.
+    # A first campaign is compared with the provisional copy: its result is
+    # a measurement, not a pass (review of PR #9), and vendor_synth exits 1.
     with mock.patch.object(check, "EXPECTED_DIR", copy):
       first = self._run(self._good_spec(version="2024.1"))
-      self.assertEqual(first["status"], "pass", first["problems"])
+      self.assertEqual(first["status"], "pass-provisional", first["problems"])
+      self.assertEqual(first["exit_code"], 1)
+      self.assertEqual(first["problems"], [])
+      self.assertIn("compared with expected results not yet measured", first["provisional"])
+      self.assertIn("not yet measured", first["message"])
+      self.assertTrue(first["metrics"]["bram_tiles"] is not None)  # the measurements are kept
       self.assertIn("not yet measured", first["expected"]["basis"])
       self.assertIn("not yet measured", check.expected_record_problem(first["expected"]))
     # The measured values are written and the basis removed (the file of the

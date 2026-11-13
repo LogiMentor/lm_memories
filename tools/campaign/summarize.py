@@ -11,6 +11,11 @@ tools/campaign/rerun.py), archives the driver logs and the pilot
 (tools/eda_archive.py), and writes <campaign root>/summary.json and
 summary.md. Exit code 0 only if the pilot and every step passed.
 
+A vendor_synth result compared with expected results not yet measured
+([meta] basis) is "pass-provisional": it does not fail its step, but the
+campaign is not a pass (summary "ok" false, exit code 1); the summary says
+so at the top ("# AMD campaign: PROVISIONAL" when nothing else failed).
+
 A step whose only non-passing cases were tool-errors passes when the rerun
 of each of them passed; the summary lists every rerun with its first and
 second result. The memory thresholds of the EDA lock in effect for the
@@ -31,6 +36,11 @@ from pathlib import Path
 from tools.campaign import toolset
 from tools.campaign.rerun import _safe
 from tools.eda_archive import archive_campaign
+
+
+# Status of a vendor_synth result compared with expected results not yet
+# measured ([meta] basis, tools/vendor_synth/cli.py _evaluate).
+PROVISIONAL = "pass-provisional"
 
 
 def _load(path: Path) -> dict | None:
@@ -58,6 +68,7 @@ def _synthesis(root: Path, name: str, reruns: list[dict], version: str) -> dict:
   rerun_of = {(i["job"], i["case"]): i for i in reruns}
   counts: dict[str, int] = {}
   bad = []
+  provisional_files: set[str] = set()
   for r in data["results"]:
     status, result = r["status"], r
     # Only a tool-error is run again; its rerun gives the result, read from
@@ -71,7 +82,11 @@ def _synthesis(root: Path, name: str, reruns: list[dict], version: str) -> dict:
       if result is None:
         bad.append(f"{r['part']} {r['case']}: no result of the rerun in {path}")
     counts[status] = counts.get(status, 0) + 1
-    if status != "pass":
+    if status == PROVISIONAL:
+      # Compared with expected results not yet measured: a measurement, not a
+      # failure of the step and not a pass of the campaign (main).
+      provisional_files.add(((result or {}).get("expected") or {}).get("file") or "?")
+    elif status != "pass":
       problems = (result or {}).get("problems", []) if item is None or result else item.get("rerun_problems", [])
       note = " (rerun of a tool-error)" if item else ""
       bad.append(f"{r['part']} {r['case']}: {status}{note} {'; '.join(problems)[:200]}")
@@ -79,12 +94,13 @@ def _synthesis(root: Path, name: str, reruns: list[dict], version: str) -> dict:
       found = "" if result.get("tool_version") in (None, "", "unknown") else result["tool_version"]
       what = f"{r['part']} {r['case']}" + (" (rerun)" if item else "")
       wrong = _version_problem(found, version, what)
-      if wrong is None and status == "pass" and not found:
+      if wrong is None and status in ("pass", PROVISIONAL) and not found:
         wrong = f"{what}: pass without a tool version"
       if wrong:
         bad.append(wrong)
   return {"ok": not bad and bool(data["results"]), "counts": counts, "total": len(data["results"]),
-          "reruns": len(reruns), "failures": bad, "archive": archive}
+          "reruns": len(reruns), "provisional": counts.get(PROVISIONAL, 0),
+          "provisional_files": sorted(provisional_files), "failures": bad, "archive": archive}
 
 
 def _postsynth(root: Path, reruns: list[dict], vivado: str) -> dict:
@@ -227,17 +243,32 @@ def main(argv: list[str] | None = None) -> int:
   summary["driver_archive"] = archive_campaign("amd_campaign_driver", root / "logs", root / "pilot")
   def step_ok(name: str, s: dict) -> bool:
     # A step that exited non-zero for tool-errors passes only if they were
-    # run again and passed (s["ok"] already counts the rerun results).
+    # run again and passed (s["ok"] already counts the rerun results). A
+    # step with provisional results exits non-zero for them alone.
     if not s["ok"]:
       return False
-    return exit_codes.get(name) == 0 or (s.get("reruns", 0) > 0 and exit_codes.get("rerun_tool_errors") == 0)
+    return (exit_codes.get(name) == 0 or s.get("provisional", 0) > 0
+            or (s.get("reruns", 0) > 0 and exit_codes.get("rerun_tool_errors") == 0))
 
-  summary["ok"] = bool(pilot.get("ok")) and bool(summary["steps"]) and all(
+  provisional = {name: s["provisional"] for name, s in summary["steps"].items() if s.get("provisional")}
+  provisional_files = sorted({f for s in summary["steps"].values() for f in s.get("provisional_files", [])})
+  summary["provisional"] = provisional
+  passed = bool(pilot.get("ok")) and bool(summary["steps"]) and all(
     step_ok(name, s) for name, s in summary["steps"].items())
+  # Provisional results never make a pass of the campaign.
+  summary["ok"] = passed and not provisional
+  verdict = "PASS" if summary["ok"] else "PROVISIONAL" if passed else "FAIL"
   (root / "summary.json").write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
 
-  lines = [f"# AMD campaign: {'PASS' if summary['ok'] else 'FAIL'}", "",
-           f"Commit: `{summary['commit']}`", ""]
+  lines = [f"# AMD campaign: {verdict}", ""]
+  if provisional:
+    count = sum(provisional.values())
+    lines += [f"**Not a pass:** {count} result{'s' if count != 1 else ''} "
+              f"({', '.join(f'{name} {n}' for name, n in provisional.items())}) "
+              "compared with expected results not yet measured ([meta] basis of "
+              f"{', '.join(f'`{f}`' for f in provisional_files)}). They are measurements: write the measured values "
+              "in that file, remove [meta] basis and evaluate the logs again (LM_CAMPAIGN_RESUME).", ""]
+  lines += [f"Commit: `{summary['commit']}`", ""]
   for r in resumes:
     lines += [f"Resumed on commit `{r['commit']}`: {', '.join(r['steps'])} (results evaluated again or run "
               "again; the other steps are those of the first commit).", ""]
@@ -254,7 +285,8 @@ def main(argv: list[str] | None = None) -> int:
   for name, s in summary["steps"].items():
     detail = {k: s[k] for k in ("counts", "total", "runs", "reruns", "passed", "detected", "baseline") if k in s}
     archive = s.get("archive") or {}
-    lines.append(f"| {name} | {exit_codes.get(name, '-')} | {'ok' if s['ok'] else 'FAILED'} {json.dumps(detail)} | "
+    state = "FAILED" if not s["ok"] else "provisional" if s.get("provisional") else "ok"
+    lines.append(f"| {name} | {exit_codes.get(name, '-')} | {state} {json.dumps(detail)} | "
                  f"{archive.get('archive', '-')} ({archive.get('sha256', '-')}) |")
   for name, s in summary["steps"].items():
     if s.get("failures"):

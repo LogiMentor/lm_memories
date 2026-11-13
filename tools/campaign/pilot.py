@@ -189,7 +189,10 @@ def launcher_attempt(job: str, case: str, toolset: Path | None = None) -> Callab
     record = json.loads((Path(r["work_dir"]) / "run.json").read_text(encoding="utf-8"))
     rc = record.get("return_code")
     problems = list(r.get("problems", []))
-    status = r["status"] if r["status"] in ("pass", "tool-error") else "fail"
+    # The launcher check is about exit codes: a run compared with expected
+    # results not yet measured (pass-provisional) checks the launcher as well.
+    status = "pass" if r["status"] == "pass-provisional" else r["status"]
+    status = status if status in ("pass", "tool-error") else "fail"
     if status == "pass":
       if case == "r_w_32x1024" and rc != 0:
         status, problems = "fail", [f"exit code {rc}, expected 0"]

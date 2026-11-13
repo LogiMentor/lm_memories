@@ -172,6 +172,13 @@ class VendorSynthRecordTest(unittest.TestCase):
     self.assertEqual((bad["status"], bad["problems"]), ("fail", ["exit code 0, expected non-zero"]))
     self.assertEqual(self._launcher("bad_ccd_resync_levels1", "pass", 1, ["attempt 1: s"])["tool_runs"], 2)
 
+  def test_launcher_accepts_provisional_expected_results(self) -> None:
+    # The launcher check is about exit codes: a run compared with expected
+    # results not yet measured (pass-provisional) still checks the launcher.
+    self.assertEqual(self._launcher("r_w_32x1024", "pass-provisional", 0, [])["status"], "pass")
+    bad = self._launcher("bad_ccd_resync_levels1", "pass-provisional", 0, [])
+    self.assertEqual((bad["status"], bad["problems"]), ("fail", ["exit code 0, expected non-zero"]))
+
   def test_launcher_tool_error(self) -> None:
     retries = ["attempt 1: a", "attempt 2: b", "attempt 3: c"]
     a = self._launcher("bad_ccd_resync_levels1", "tool-error", 1, retries)

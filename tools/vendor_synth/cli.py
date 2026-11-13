@@ -1124,7 +1124,8 @@ def _evaluate(
   fail, compared with nothing. tool_version: the version of the
   job's tool in the campaign toolset (--toolset); a log of another version
   is a fail. A version without expected results is a fail, never compared
-  with another version.
+  with another version. A run that matches expected results not yet
+  measured ([meta] basis) is "pass-provisional", not "pass".
   """
   tool = _tool(job)
   vivado = tool in ("vivado", "xilinx")
@@ -1155,6 +1156,14 @@ def _evaluate(
     result["problems"] = problems + result["problems"]
     if result["status"] in ("pass", "unchecked"):
       result["status"] = "fail"
+  record = result["expected"] or {}
+  if result["status"] == "pass" and record.get("basis"):
+    # Compared with expected results not yet measured with this version: a
+    # measurement (kept, with its metrics and logs), not a pass. It becomes
+    # a pass only when the logs are evaluated again with the measured file.
+    result["status"] = "pass-provisional"
+    result["provisional"] = (f"compared with expected results not yet measured ({record['file']}: "
+                             f"{record['basis']}); not a pass")
   return result
 
 
@@ -1408,7 +1417,8 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     result.update(
       status=evaluation["status"], problems=evaluation["problems"], metrics=evaluation["metrics"],
       tool_version=log.get("version", ""), critical_warnings=log.get("critical_warnings"),
-      expected=evaluation.get("expected"), completed_at=record.get("completed_at", result["started_at"]), message="; ".join(evaluation["problems"])[:400],
+      expected=evaluation.get("expected"), completed_at=record.get("completed_at", result["started_at"]),
+      message=_message(evaluation), **_provisional(evaluation),
     )
     return result
 
@@ -1485,9 +1495,18 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     tool_version=log.get("version", ""),
     critical_warnings=log.get("critical_warnings"),
     expected=evaluation.get("expected"),
-    message="; ".join(evaluation["problems"])[:400],
+    message=_message(evaluation),
+    **_provisional(evaluation),
   )
   return result
+
+
+def _message(evaluation: dict[str, Any]) -> str:
+  return "; ".join(evaluation["problems"] or [evaluation.get("provisional", "")])[:400]
+
+
+def _provisional(evaluation: dict[str, Any]) -> dict[str, str]:
+  return {"provisional": evaluation["provisional"]} if evaluation.get("provisional") else {}
 
 
 def _fmt(value: Any) -> str:
@@ -1540,7 +1559,8 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]], archive: dict
         "message": r.get("message", ""),
       })
 
-  status_text = {"pass": "pass", "fail": "FAIL", "tool-error": "TOOL ERROR (synthesis did not complete)",
+  status_text = {"pass": "pass", "pass-provisional": "PASS-PROVISIONAL (expected results not yet measured: not a pass)",
+                 "fail": "FAIL", "tool-error": "TOOL ERROR (synthesis did not complete)",
                  "unchecked": "UNCHECKED (no expected results)",
                  "not-run": "NOT RUN", "timeout": "TIMEOUT", "dry-run": "dry run"}
   lines = [
@@ -1674,9 +1694,10 @@ def main(argv: list[str] | None = None) -> int:
       prune(Path(result["work_dir"]), KEEP_AFTER_PASS)
     results.append(result)
     print(f"{result['status']:9} {result['job']} {result['case']} {result.get('message', '')}", flush=True)
-    if result["status"] in ("fail", "tool-error", "timeout", "unchecked", "not-run"):
+    if result["status"] in ("fail", "tool-error", "timeout", "unchecked", "not-run", "pass-provisional"):
       exit_code = 1
-      if not args.keep_going and result["status"] != "not-run":
+      # A provisional result is a measurement: the next cases are measured too.
+      if not args.keep_going and result["status"] not in ("not-run", "pass-provisional"):
         break
 
   _write_summary(work_root, results)

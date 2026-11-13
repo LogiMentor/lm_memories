@@ -212,6 +212,27 @@ class RerunTest(unittest.TestCase):
       self.assertIn("xc7a35tfgg484-2 synthesis crw_crw_16x64_16_l11 (rerun): tool version 2024.1, the campaign "
                     "toolset has 2023.1", summary["steps"]["postsynth"]["failures"])
 
+  def test_provisional_results_are_not_a_pass(self) -> None:
+    # Review of PR #9: results compared with expected results not yet
+    # measured ([meta] basis) passed the campaign; only publish.py refused them.
+    record = {"file": "tools/vendor_synth/expected/amd/2024.1.toml", "sha256": "0" * 64, "basis": "copy"}
+    for statuses, header in ((["pass-provisional", "pass-provisional"], "# AMD campaign: PROVISIONAL"),
+                             (["pass-provisional", "fail"], "# AMD campaign: FAIL")):
+      with self.subTest(statuses=statuses), tempfile.TemporaryDirectory() as tmp:
+        root = _campaign(tmp, statuses, rerun_items=[], rc={"vivado": 1})
+        data = json.loads((root / "vs" / "summary.json").read_text())
+        for r in data["results"]:
+          r["expected"] = record
+        (root / "vs" / "summary.json").write_text(json.dumps(data))
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 1, text)
+        self.assertFalse(summary["ok"])
+        self.assertEqual(summary["provisional"], {"vivado": 1 if "fail" in statuses else 2})
+        self.assertTrue(text.startswith(header + "\n"), text[:200])
+        self.assertIn("compared with expected results not yet measured", text.split("## Pilot")[0])
+        self.assertIn("tools/vendor_synth/expected/amd/2024.1.toml", text.split("## Pilot")[0])
+        self.assertEqual(summary["steps"]["vivado"]["counts"]["pass-provisional"], 1 if "fail" in statuses else 2)
+
   def test_a_fail_stays_a_fail(self) -> None:
     with tempfile.TemporaryDirectory() as tmp:
       code, summary, _ = self._summary(_campaign(tmp, ["pass", "fail"], rerun_items=[], rc={"vivado": 1}))

@@ -21,8 +21,10 @@ Writes <pilot directory>/pilot.json and exits with 1 if any check fails:
    is changed to g_ram_depth=1000 while the case still asks for 1024, and run
    again; --evaluate-only must fail on the generic although the block RAM
    count is the same (1 tile).
-3. old_code: the RTL of 5a5761a (before the corrections), with its own
-   vendor_synth and without -assert: lm_mem_ccd_resync with one level, a FIFO
+3. old_code: the RTL of 5a5761a (before the corrections; a clone of main
+   does not have it, so the pilot fetches refs/pull/4/head from origin
+   before any tool runs, and stops with exit code 2 and the command to run
+   if the fetch fails), with its own vendor_synth and without -assert: lm_mem_ccd_resync with one level, a FIFO
    with almost-full limit 0 and lm_mem_ram_r_w_infer with latency 3 must
    complete synthesis, showing what the new static checks stop.
 
@@ -73,6 +75,10 @@ LAUNCHER_CASES = [  # (job, case) of pilot.toml, in this order
   ("pilot-artix7-assert", "bad_fifo_almost_empty_15"),
 ]
 OLD_COMMIT = "5a5761a"
+# OLD_COMMIT is in the history of PR #4, merged with a squash: not in the
+# history of main, kept on GitHub under this ref.
+OLD_COMMIT_REF = "refs/pull/4/head"
+OLD_COMMIT_FETCH = ["git", "fetch", "origin", f"{OLD_COMMIT_REF}:refs/remotes/origin/pr/4"]
 OLD_JOB = "old-artix7"
 OLD_CASES = [
   {"name": "bad_ccd_resync_levels1", "kind": "entity", "entity": "lm_mem_ccd_resync",
@@ -261,6 +267,34 @@ def old_code_status(log_text: str) -> tuple[str, str | None]:
   return ("tool-error", reason) if reason else ("fail", None)
 
 
+class OldCommitError(Exception):
+  """OLD_COMMIT is not in the clone and could not be fetched."""
+
+
+def ensure_old_commit(cwd: Path = ROOT_DIR, run=None) -> bool:
+  """Make OLD_COMMIT available; True if it had to be fetched.
+
+  A clone of main does not have it: fetch OLD_COMMIT_REF from origin. If the
+  fetch fails, or the commit is still missing, raise OldCommitError with the
+  command to run.
+  """
+  run = run or subprocess.run
+
+  def present() -> bool:
+    return run(["git", "cat-file", "-e", f"{OLD_COMMIT}^{{commit}}"], cwd=cwd, capture_output=True).returncode == 0
+  if present():
+    return False
+  fetch = run(OLD_COMMIT_FETCH, cwd=cwd, capture_output=True, text=True)
+  if fetch.returncode == 0 and present():
+    return True
+  lines = (getattr(fetch, "stderr", "") or "").strip().splitlines()
+  detail = [line for line in lines if line.startswith(("fatal:", "error:"))][:1] or lines[:1]
+  why = f"the fetch failed ({detail[0].rstrip('.')})" if fetch.returncode != 0 and detail else (
+    "the fetch failed" if fetch.returncode != 0 else f"{OLD_COMMIT_REF} does not contain it")
+  raise OldCommitError(f"commit {OLD_COMMIT} of the old_code check is not in this clone and {why}. "
+                       f"Run in the repository: {' '.join(OLD_COMMIT_FETCH)}")
+
+
 def prepare_old_code(base: Path) -> tuple[Path, Path]:
   """The source tree of OLD_COMMIT and a vendor_synth configuration of OLD_CASES."""
   old_tree = base / "old_src"
@@ -377,6 +411,13 @@ def main(argv: list[str] | None = None) -> int:
   parser.add_argument("--toolset", type=Path, help="toolset of the campaign (logs/toolset.json)")
   args = parser.parse_args(argv)
   base, toolset = args.base, (args.toolset.resolve() if args.toolset else None)
+  # Before any tool runs: the old_code check needs OLD_COMMIT.
+  try:
+    if ensure_old_commit():
+      print(f"pilot: fetched {OLD_COMMIT_REF} for commit {OLD_COMMIT} (old_code)", flush=True)
+  except OldCommitError as error:
+    print(f"pilot: {error}", file=sys.stderr)
+    return 2
   base.mkdir(parents=True, exist_ok=True)
   report = run_pilot(base, default_plan(base, toolset))
   report["commit_of_old_code"] = OLD_COMMIT

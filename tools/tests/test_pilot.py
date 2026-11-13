@@ -195,5 +195,58 @@ class PilotSummaryTest(unittest.TestCase):
     self.assertEqual(lines[:2], ["- launcher: FAILED", "  - exit code 0"])
 
 
+
+class OldCommitTest(unittest.TestCase):
+  """The old_code check needs 5a5761a, which a clone of main does not have."""
+
+  def _git(self, present_after_fetch: bool, fetch_code: int = 0):
+    calls = []
+    state = {"present": False}
+
+    def run(cmd, cwd=None, **kwargs):
+      calls.append(cmd)
+      if cmd[:2] == ["git", "fetch"]:
+        state["present"] = present_after_fetch
+        return mock.Mock(returncode=fetch_code, stderr="fatal: could not read from remote repository\n")
+      return mock.Mock(returncode=0 if state["present"] else 128)
+    return run, calls, state
+
+  def test_present_commit_is_not_fetched(self) -> None:
+    run, calls, state = self._git(True)
+    state["present"] = True
+    self.assertFalse(pilot.ensure_old_commit(run=run))
+    self.assertEqual([c[:2] for c in calls], [["git", "cat-file"]])
+
+  def test_missing_commit_is_fetched_from_pull_request_4(self) -> None:
+    run, calls, _ = self._git(True)
+    self.assertTrue(pilot.ensure_old_commit(run=run))
+    self.assertEqual(calls[1], ["git", "fetch", "origin", "refs/pull/4/head:refs/remotes/origin/pr/4"])
+    self.assertEqual(calls[2][:2], ["git", "cat-file"])
+
+  def test_failed_fetch_stops_with_the_command(self) -> None:
+    run, _, _ = self._git(False, fetch_code=128)
+    with self.assertRaises(pilot.OldCommitError) as raised:
+      pilot.ensure_old_commit(run=run)
+    message = str(raised.exception)
+    self.assertIn("could not read from remote repository", message)
+    self.assertIn("Run in the repository: git fetch origin refs/pull/4/head:refs/remotes/origin/pr/4", message)
+
+  def test_failed_fetch_in_a_real_clone_without_origin(self) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+      import subprocess
+      subprocess.run(["git", "init", "-q", tmp], check=True)
+      with self.assertRaisesRegex(pilot.OldCommitError, "is not in this clone and the fetch failed"):
+        pilot.ensure_old_commit(Path(tmp))
+
+  def test_pilot_stops_before_any_tool_runs(self) -> None:
+    run, _, _ = self._git(False, fetch_code=1)
+    with tempfile.TemporaryDirectory() as tmp, \
+         mock.patch.object(pilot.subprocess, "run", side_effect=run), \
+         mock.patch.object(pilot, "run_pilot", side_effect=AssertionError("a tool ran")), \
+         contextlib.redirect_stderr(io.StringIO()) as err:
+      self.assertEqual(pilot.main([str(Path(tmp) / "p")]), 2)
+    self.assertIn("git fetch origin refs/pull/4/head", err.getvalue())
+
+
 if __name__ == "__main__":
   unittest.main()

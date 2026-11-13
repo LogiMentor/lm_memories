@@ -1035,7 +1035,11 @@ the summary in `<campaign root>/summary.md`.
   `-assert`, the message with it), and a non-zero exit code where it is
   reliable (`vivado_exit_code_reliable`: Windows, measured with Vivado
   2023.1, and Linux, measured with Vivado 2024.1 by the pilot of 2026-11-13
-  on PCL01; elsewhere it is recorded, not required). A pass needs "ok" there as well as exit code 0. Quartus has
+  on PCL01; elsewhere it is recorded, not required). The rule is per
+  operating system, not per Vivado version: the pilot of every campaign
+  measures it again (launcher check: exit code 0 for the passing case,
+  non-zero for every expected stop), and a campaign does not start if it
+  fails. A pass needs "ok" there as well as exit code 0. Quartus has
   no status file and keeps the exit-code requirement.
 - **Two writers on `vivado.log`.** Without `-log`, Vivado writes
   `vivado.log` in its working directory. `run_postsynth.py` captured the

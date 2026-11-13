@@ -14,7 +14,12 @@ archive) and the generated table of its README.md (between the markers
 <!-- publish:begin --> and <!-- publish:end -->; a new README.md gets a
 title). A directory that holds another campaign (amd_campaign.json of
 another start commit or other tool versions) is refused: a campaign is
-published again only over itself.
+published again only over itself. A vendor_synth result compared with
+expected results not yet measured with its tool version ([meta] basis of
+tools/vendor_synth/expected/<vendor>/<version>.toml), or with a file that
+changed after its evaluation, is refused: the measured values go in that
+file, the basis is removed, the archived logs are evaluated again
+(tools/campaign/resume.py, no tool runs), then the campaign is published.
 
 Every result records the commit it ran on, the tool and its version, the
 device, and the archive of its complete logs with the SHA-256. Each archive
@@ -46,6 +51,7 @@ from tools.campaign import toolset
 from tools.campaign.rerun import ROOT_DIR, SYNTH_STEPS, _safe
 from tools.eda_archive import archive_dir, sha256_file
 from tools.harness_counts import campaign_parts
+from tools.vendor_synth.check import expected_record_problem
 
 CAMPAIGN_FILE = "amd_campaign.json"
 BEGIN, END = "<!-- publish:begin -->", "<!-- publish:end -->"
@@ -214,6 +220,9 @@ def synth_step(root: Path, step: str, reruns: list[dict], directory: Path) -> di
       entry = _synth_entry(r["job"], rerun_public["results"][0],
                            verify_archive(rerun_public.get("archive"), directory), None, None, version)
       entry["first_run"] = first
+    problem = expected_record_problem(entry.get("expected")) if entry["status"] != "unchecked" else None
+    if problem:
+      raise PublishError(f"{step} {r['job']} {r['case']}: {problem}")
     results.append(entry)
   counts: dict[str, int] = {}
   for e in results:

@@ -17,6 +17,7 @@ from unittest import mock
 from tools.campaign import publish
 from tools.campaign.rerun import ROOT_DIR
 from tools.tests import toolsets
+from tools.vendor_synth import check
 
 C1, C2 = "1" * 40, "2" * 40
 REPO = ROOT_DIR.as_posix()
@@ -56,7 +57,16 @@ class Campaign:
 def _result(job, case, status, commit=C1, part="xc7a35tfgg484-2", tool="vivado", version="2023.1", problems=()):
   return {"job": job, "tool": tool, "tool_version": version, "vendor": "amd", "family": "artix7", "part": part,
           "case": case, "top": "t", "generics": {}, "status": status, "metrics": {}, "critical_warnings": 0,
-          "retries": 0, "problems": list(problems), "commit": commit}
+          "retries": 0, "problems": list(problems), "commit": commit,
+          "expected": _record(tool, version)}
+
+
+def _record(tool: str, version: str) -> dict | None:
+  """The record of the measured expected results of a tool version, as vendor_synth writes it."""
+  try:
+    return check.load_expected("intel" if tool == "quartus" else "amd", version)["record"]
+  except check.ExpectedError:
+    return None
 
 
 def _ps(archive: dict, commit: str, parts: dict, configs: list[str]) -> dict:
@@ -93,7 +103,8 @@ def make_campaign(base: Path, rerun_sha: str | None = None, problem: str = "") -
                     problems=[f"[{REPO}/src/common/lm_mem_pkg.vhd:101]"])]
   c.synth("fc", "checks_v.tar.xz", checks, before=[_result("vivado-artix7-checks", "x", "fail", commit=C1)])
   c.synth("qc", "checks_q.tar.xz", [_result("quartus-cyclonev", "q", "pass", tool="quartus", version="",
-                                            part="5CEBA4F23C7")])
+                                            part="5CEBA4F23C7")
+                                    | {"expected": _record("quartus", "23.1std.0 Build 991")}])
   (root / "qc" / "quartus_cyclonev" / "q").mkdir(parents=True)
   (root / "qc" / "quartus_cyclonev" / "q" / "run.log").write_text(
     "    Info: Version 23.1std.0 Build 991 11/28/2023 SC Lite Edition\n", encoding="utf-8")
@@ -120,6 +131,43 @@ def make_campaign(base: Path, rerun_sha: str | None = None, problem: str = "") -
                                  "driver_archive": c.archive("driver.tar.xz")})
   toolsets.write(root)
   return c
+
+
+class ExpectedRecordTest(unittest.TestCase):
+  """A result compared with expected values not yet measured, or with a file
+  that changed since, is not published."""
+
+  def _collect_with(self, record):
+    with tempfile.TemporaryDirectory() as tmp:
+      c = make_campaign(Path(tmp))
+      path = c.root / "vs" / "summary_public.json"
+      data = json.loads(path.read_text(encoding="utf-8"))
+      data["results"][0]["expected"] = record
+      path.write_text(json.dumps(data), encoding="utf-8")
+      with self.assertRaises(publish.PublishError) as raised:
+        publish.collect(c.root, c.archives)
+      return str(raised.exception)
+
+  def test_provisional_expected_values_are_refused(self):
+    record = check.load_expected("amd", "2024.1")["record"]
+    self.assertEqual(record["file"], "tools/vendor_synth/expected/amd/2024.1.toml")
+    self.assertIn("not yet measured", record["basis"])
+    message = self._collect_with(record)
+    self.assertIn("vivado vivado-artix7 a: compared with expected results not yet measured", message)
+    self.assertIn("remove [meta] basis and evaluate the logs again", message)
+
+  def test_expected_values_changed_after_the_evaluation_are_refused(self):
+    record = {**check.load_expected("amd", "2023.1")["record"], "sha256": "0" * 64}
+    self.assertIn("expected/amd/2023.1.toml changed after the evaluation", self._collect_with(record))
+
+  def test_a_result_without_record_is_refused(self):
+    self.assertIn("no record of the expected results", self._collect_with(None))
+
+  def test_measured_expected_values_are_published(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      c = make_campaign(Path(tmp))
+      first = publish.collect(c.root, c.archives)["vivado_2023.1_amd.json"]["results"][0]
+      self.assertEqual(first["expected"], {**check.load_expected("amd", "2023.1")["record"], "basis": None})
 
 
 class PublishTest(unittest.TestCase):

@@ -8,6 +8,7 @@ results for that case and part; the tool exit code alone never makes a pass.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -18,6 +19,7 @@ from typing import Any
 from tools.eda_retry import project_error
 
 EXPECTED_DIR = Path(__file__).resolve().parent / "expected"
+EXPECTED_FILES = "tools/vendor_synth/expected"  # EXPECTED_DIR in the repository
 CASES_FILE = Path(__file__).resolve().parent / "cases.toml"
 
 VENDOR_FILES = {
@@ -200,7 +202,33 @@ def load_expected(vendor: str, version: str | None) -> dict[str, Any]:
   if declared != key:
     raise ExpectedError(f"tools/vendor_synth/expected/{name}/{key}.toml: [meta] tool_version is {declared!r}, "
                         f"not {key!r}")
-  return {"defaults": data.get("defaults", {}), "expect": data.get("expect", []), "tool_version": key}
+  return {"defaults": data.get("defaults", {}), "expect": data.get("expect", []), "tool_version": key,
+          "record": expected_record(path, data)}
+
+
+def expected_record(path: Path, data: dict[str, Any]) -> dict[str, Any]:
+  """What a run was compared with: the file of expected results, its SHA-256,
+  and its [meta] basis (set while the file is not yet measured with its
+  version, None once it is)."""
+  return {"file": f"{EXPECTED_FILES}/{path.relative_to(EXPECTED_DIR).as_posix()}",
+          "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+          "basis": data.get("meta", {}).get("basis")}
+
+
+def expected_record_problem(record: dict[str, Any] | None) -> str | None:
+  """Why the results evaluated with this record of expected results cannot be
+  published, or None: compared with a file not yet measured ([meta] basis), or
+  with a file that changed since (evaluate the archived logs again,
+  tools/campaign/resume.py)."""
+  if not record:
+    return "no record of the expected results it was compared with"
+  if record.get("basis"):
+    return (f"compared with expected results not yet measured ({record['file']}: {record['basis']}); "
+            "write the measured values there, remove [meta] basis and evaluate the logs again")
+  path = EXPECTED_DIR / record["file"].removeprefix(EXPECTED_FILES + "/")
+  if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != record.get("sha256"):
+    return f"{record['file']} changed after the evaluation; evaluate the logs again"
+  return None
 
 
 def find_expectation(expected: dict[str, Any], case: str, part: str) -> dict[str, Any] | None:

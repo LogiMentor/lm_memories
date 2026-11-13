@@ -13,6 +13,9 @@
 # v0.2.0, is compared with the 2023.1 values. Each difference it finds is an
 # effect of the tool and is written here with the archive of its run; the
 # "Measured" notes below are those of 2023.1 until then.
+# While [meta] basis is set, tools/campaign/publish.py refuses the results
+# compared with this file: remove it once the values are measured, then
+# evaluate the archived logs again (tools/campaign/resume.py).
 #
 # Fields:
 #   bram_tiles     exact number of block RAM tiles (RAMB18 = 0.5)

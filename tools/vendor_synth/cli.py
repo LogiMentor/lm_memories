@@ -1142,6 +1142,7 @@ def _evaluate(
   part = str(job.get("part") or job.get("device") or "")
   expectation = check.find_expectation(expected, case["name"], part) if expected is not None else None
   result = _evaluate_run(job, case, top, log_text, reports, expectation, sources, run)
+  result["expected"] = expected.get("record") if expected is not None else None
   if problems:
     result["problems"] = problems + result["problems"]
     if result["status"] in ("pass", "unchecked"):
@@ -1352,6 +1353,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     "metrics": {},
     "tool_version": "",
     "critical_warnings": None,
+    "expected": None,
     "provenance": inputs,
     "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
   }
@@ -1398,7 +1400,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     result.update(
       status=evaluation["status"], problems=evaluation["problems"], metrics=evaluation["metrics"],
       tool_version=log.get("version", ""), critical_warnings=log.get("critical_warnings"),
-      completed_at=record.get("completed_at", result["started_at"]), message="; ".join(evaluation["problems"])[:400],
+      expected=evaluation.get("expected"), completed_at=record.get("completed_at", result["started_at"]), message="; ".join(evaluation["problems"])[:400],
     )
     return result
 
@@ -1474,6 +1476,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     metrics=evaluation["metrics"],
     tool_version=log.get("version", ""),
     critical_warnings=log.get("critical_warnings"),
+    expected=evaluation.get("expected"),
     message="; ".join(evaluation["problems"])[:400],
   )
   return result
@@ -1502,7 +1505,7 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]], archive: dict
       "family": r["family"], "part": r.get("part", ""), "case": r["case"], "top": r["top"],
       "generics": r.get("generics", {}), "status": r["status"], "metrics": r.get("metrics", {}),
       "critical_warnings": r.get("critical_warnings"), "retries": len(r.get("retries", [])),
-      "problems": r.get("problems", []),
+      "problems": r.get("problems", []), "expected": r.get("expected"),
       "commit": r.get("provenance", {}).get("commit", ""),
       "sources_hash": r.get("provenance", {}).get("sources_hash", ""),
     }

@@ -7,6 +7,9 @@
 # ([meta] basis), so that the first Quartus 25.1std campaign, on the code of
 # v0.2.0, is compared with the 23.1std results. Each difference it finds is
 # an effect of the tool and is written here with the archive of its run.
+# While [meta] basis is set, tools/campaign/publish.py refuses the results
+# compared with this file: remove it once the values are measured, then
+# evaluate the archived logs again (tools/campaign/resume.py).
 #
 # One file per Quartus release (tools/vendor_synth/check.py load_expected):
 # a run is compared with the file of the release in its log ("Info: Version

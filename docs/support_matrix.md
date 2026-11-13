@@ -4,15 +4,23 @@
 # Support Matrix
 
 What is verified, per entity and per tool. The numbers behind each entry are
-in [`docs/results/`](results/README.md); the plan and the open items are in
-[`docs/PLAN.md`](PLAN.md).
+in [`docs/results/`](results/README.md), one directory per campaign; the plan
+and the open items are in [`docs/PLAN.md`](PLAN.md).
+
+Campaigns of the v0.2.0 code, with the same results on both:
+
+- Windows laptop: Vivado 2023.1, Quartus Prime Lite 23.1std, Questa Sim-64
+  2021.1, GHDL 6.0.0 ([`docs/results/`](results/README.md)).
+- PCL01 (Linux): Vivado 2024.1, Quartus Prime Lite 25.1std, Questa Altera
+  Starter FPGA Edition 2025.2, GHDL 6.0.0
+  ([`docs/results/v0.2.0-pcl01/`](results/v0.2.0-pcl01/README.md)).
 
 Status values:
 
 - **simulated**: the VUnit harness (scoreboard, frozen reference model,
   coverage thresholds) passes on GHDL and Questa; the legacy GHDL tests pass.
 - **synthesis checked**: `tools/vendor_synth` passes with the expected
-  results of `tools/vendor_synth/expected/<vendor>.toml` (memory primitives,
+  results of `tools/vendor_synth/expected/<vendor>/<version>.toml` (memory primitives,
   register and LUT ceilings, 0 CRITICAL WARNINGs, generics read back).
 - **netlist checked**: the same harness passes on the synthesized netlist
   (`sim/scripts/run_postsynth.py`, GHDL with UNISIM and xsim).
@@ -24,7 +32,7 @@ Status values:
 
 ## RTL
 
-| Entity | Simulation | AMD Vivado 2023.1 (`xc7a35tfgg484-2`, `xcku3p-ffva676-2-e`) | Intel Quartus 23.1 (Cyclone V) | Lattice | Microchip |
+| Entity | Simulation | AMD Vivado 2023.1, 2024.1 (`xc7a35tfgg484-2`, `xcku3p-ffva676-2-e`) | Intel Quartus 23.1std, 25.1std (Cyclone V) | Lattice | Microchip |
 | --- | --- | --- | --- | --- | --- |
 | `lm_mem_ram_r_w` | simulated | synthesis checked; 36 x 4096 on UltraScale+ (URAM) netlist checked | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_cr_cw` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
@@ -40,8 +48,8 @@ Status values:
 | ROM | planned | - | - | - | - |
 
 Wrong generics stop synthesis for every entity (static checks,
-`f_static_check`): checked with Vivado with and without `synth_design
--assert`, with Quartus, and with GHDL (`tools/tests/test_static_checks.py`).
+`f_static_check`): checked with Vivado 2023.1 and 2024.1 with and without
+`synth_design -assert`, with Quartus 23.1std and 25.1std, and with GHDL (`tools/tests/test_static_checks.py`).
 
 ## Behaviour that depends on the vendor
 

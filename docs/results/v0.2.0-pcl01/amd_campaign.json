@@ -1,0 +1,434 @@
+{
+ "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+ "resumes": [
+  {
+   "commit": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "steps": [
+    "vivado",
+    "checks_vivado",
+    "checks_quartus"
+   ]
+  }
+ ],
+ "ok": true,
+ "toolset": {
+  "vivado": {
+   "version": "2024.1"
+  },
+  "quartus": {
+   "version": "25.1std.0 Build 1129",
+   "release": "25.1std",
+   "edition": "Lite"
+  },
+  "questa": {
+   "version": "2025.2",
+   "edition": "starter"
+  },
+  "ghdl": {
+   "version": "6.0.0"
+  }
+ },
+ "campaigns": {
+  "vivado": "vivado_2024.1_amd",
+  "checks_vivado": "static_checks_vivado_2024.1",
+  "checks_quartus": "static_checks_quartus_25.1",
+  "postsynth": "postsynth_vivado_2024.1_amd",
+  "vunit_ghdl": "ghdl_6.0.0",
+  "vunit_questa": "questa_starter_2025.2",
+  "mutation": "ghdl_6.0.0"
+ },
+ "memory_thresholds": "synthesis 4096 MB (LM_EDA_MIN_FREE_MB_SYNTH); simulation 2048 MB (LM_EDA_MIN_FREE_MB_SIM)",
+ "retry_waits": "30, 60 s (LM_EDA_RETRY_DELAYS)",
+ "pilot": {
+  "ok": true,
+  "commit_of_old_code": "5a5761a",
+  "cases": [
+   {
+    "check": "launcher",
+    "case": "pilot-artix7/r_w_32x1024",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "launcher",
+    "case": "pilot-artix7/bad_ccd_resync_levels1",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "launcher",
+    "case": "pilot-artix7/bad_r_w_infer_no_vendor",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "launcher",
+    "case": "pilot-artix7/bad_fifo_almost_empty_15",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "launcher",
+    "case": "pilot-artix7-assert/bad_ccd_resync_levels1",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "launcher",
+    "case": "pilot-artix7-assert/bad_r_w_infer_no_vendor",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "launcher",
+    "case": "pilot-artix7-assert/bad_fifo_almost_empty_15",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "generic_1000_for_1024",
+    "case": "pilot-artix7/r_w_32x1024 g_ram_depth=1000",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "old_code",
+    "case": "old-artix7/bad_ccd_resync_levels1",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "old_code",
+    "case": "old-artix7/bad_fifo_almost_full_0",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   },
+   {
+    "check": "old_code",
+    "case": "old-artix7/bad_r_w_infer_latency3",
+    "status": "pass",
+    "attempts": 1,
+    "tool_runs": 1,
+    "signatures": []
+   }
+  ]
+ },
+ "exit_codes": {
+  "pilot": 0,
+  "vivado": 0,
+  "checks_vivado": 0,
+  "checks_quartus": 0,
+  "postsynth": 0,
+  "vunit_ghdl": 0,
+  "vunit_questa": 0,
+  "mutation": 0,
+  "rerun_tool_errors": 0,
+  "reevaluate_vivado": 0,
+  "reevaluate_checks_vivado": 0,
+  "reevaluate_checks_quartus": 0
+ },
+ "steps": {
+  "vivado": {
+   "ok": true,
+   "counts": {
+    "pass": 55
+   },
+   "total": 55,
+   "reruns": 0
+  },
+  "checks_vivado": {
+   "ok": true,
+   "counts": {
+    "pass": 28
+   },
+   "total": 28,
+   "reruns": 0
+  },
+  "checks_quartus": {
+   "ok": true,
+   "counts": {
+    "pass": 11
+   },
+   "total": 11,
+   "reruns": 0
+  },
+  "postsynth": {
+   "ok": true,
+   "main_step_runs": 78,
+   "reruns": 0,
+   "rerun_netlist_runs": 0,
+   "consolidated_results": 78,
+   "meaning": "main_step_runs: simulation runs of the post-synthesis step itself, RTL and netlist, on both simulators (a synthesis that ended as tool-error has no netlist run there); reruns: syntheses that ended as tool-error and ran again (tools/campaign/rerun.py); rerun_netlist_runs: the netlist runs of those reruns; consolidated_results: the results published in postsynth_vivado_2024.1_amd.json = main_step_runs + rerun_netlist_runs"
+  },
+  "vunit_ghdl": {
+   "ok": true,
+   "passed": 54,
+   "total": 54,
+   "simulator": "ghdl_GHDL_6.0.0_(6.0.0.r0.ge589c698c)_Dunoon_edition_"
+  },
+  "vunit_questa": {
+   "ok": true,
+   "passed": 54,
+   "total": 54,
+   "simulator": "modelsim_Questa_Altera_Starter_FPGA_Edition-64_vsim_2025.2_Simulator_2025.05_May_31_2025"
+  },
+  "mutation": {
+   "ok": true,
+   "baseline": "PASS",
+   "detected": 14,
+   "total": 14
+  }
+ },
+ "archives": [
+  {
+   "archive": "mutation_ghdl_6.0.0_20261113T093632Z.tar.xz",
+   "sha256": "2466a2d08dc7e3d9662e5dc5a25ec3bf430c221d913a935d8c4287e20188338b",
+   "files": 30,
+   "files_published": [
+    "mutation_ghdl_6.0.0.json"
+   ]
+  },
+  {
+   "archive": "postsynth_vivado_2024.1_amd_20261113T093320Z.tar.xz",
+   "sha256": "5f7ec64cfa76c686ba73609ebe2d8403b293313120d6693574cadd03e852dee1",
+   "files": 390,
+   "files_published": [
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json",
+    "postsynth_vivado_2024.1_amd.json"
+   ]
+  },
+  {
+   "archive": "static_checks_quartus_25.1_20261113T091218Z.tar.xz",
+   "sha256": "0b2dce2a2d36abca5143cd3a41657b618985c2673cb1365d56b3e6d01309e3e4",
+   "files": 207,
+   "files_published": [
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json",
+    "static_checks_quartus_25.1.json"
+   ]
+  },
+  {
+   "archive": "static_checks_vivado_2024.1_20261113T091054Z.tar.xz",
+   "sha256": "ff104982f6c473e34428e9b5ba06e6e12a586bc0b1775039031dfb0b15c82ae4",
+   "files": 144,
+   "files_published": [
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json",
+    "static_checks_vivado_2024.1.json"
+   ]
+  },
+  {
+   "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+   "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+   "files": 390,
+   "files_published": [
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json",
+    "vivado_2024.1_amd.json"
+   ]
+  },
+  {
+   "archive": "vunit_ghdl_6.0.0_20261113T093409Z.tar.xz",
+   "sha256": "042f5c35ed4d5d0c7ee7e81d3b6f544721e204a8cbb2300e0c890f1bf7b2a09d",
+   "files": 403,
+   "files_published": [
+    "vunit_ghdl_6.0.0.json"
+   ]
+  },
+  {
+   "archive": "vunit_questa_starter_2025.2_20261113T093604Z.tar.xz",
+   "sha256": "d5104ec3ab7046b91f7a93c83ee3fa89c3de353df4365169c3fc41cde74eccc4",
+   "files": 513,
+   "files_published": [
+    "vunit_questa_starter_2025.2.json"
+   ]
+  }
+ ],
+ "superseded_archives": [],
+ "driver_archive": {
+  "archive": "amd_campaign_driver_20261113T101203Z.tar.xz",
+  "sha256": "0ec2875462221cbd0a518b4ee45aa5e6c1a02014999f764eb36f38138222cc3f",
+  "files": 216
+ }
+}

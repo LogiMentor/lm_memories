@@ -20,6 +20,12 @@ from pathlib import Path
 from unittest import mock
 
 from tools.eda_archive import sha256_file
+from tools.tests import toolsets
+
+
+def expected_versions(vendor: str) -> list[str]:
+  """Every tool version with expected results of a vendor (expected/<vendor>/<version>.toml)."""
+  return sorted(p.stem for p in (check.EXPECTED_DIR / vendor).glob("*.toml"))
 from tools.vendor_synth import check
 from tools.vendor_synth.cli import main
 
@@ -58,7 +64,7 @@ def status(outcome, message=""):
         handle.write(json.dumps({"run_id": run_id, "step": "synth_design", "outcome": outcome if outcome != "other-run"
                                  else "ok", "time": "2026-11-04T00:00:00Z", "message": message}) + "\n")
 
-print("****** Vivado v2023.1 (64-bit)")
+print("****** Vivado v%s (64-bit)" % spec.get("version", "2023.1"))
 if spec.get("status_outcome") != "missing":
     status("started")
 if calls < spec.get("fail_reads", 0):
@@ -86,7 +92,7 @@ if "stop" in spec:
         sys.exit(3)
     status("failed", "ERROR: [Common 17-69] Command failed: Vivado Synthesis failed")
     print("lm_vendor_synth: synth_design failed: Vivado Synthesis failed")
-    sys.exit(1)
+    sys.exit(spec.get("stop_exit_code", 1))
 os.makedirs(".Xil", exist_ok=True)  # tool scratch, removed after a passing run
 open(os.path.join(".Xil", "junk.tcl"), "w").write("x")
 top = re.search(r"-top (\S+)", script).group(1)
@@ -147,16 +153,18 @@ class CheckParsingTest(unittest.TestCase):
   def test_fifo_logic_regression_fails(self) -> None:
     # Review of PR #4: the FIFO cases had no LUT ceiling, so 1000000 LUTs passed.
     log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}
-    fifo = [e for e in check.load_expected("amd")["expect"] if e["case"].startswith("fifo_")]
-    self.assertEqual(len(fifo), 6)
-    for entry in fifo:
-      for part in entry["parts"]:
-        expectation = check.find_expectation(check.load_expected("amd"), entry["case"], part)
-        metrics = {"luts": 1e6, "luts_logic": 1e6, "lutram": float(entry["lutram"]), "registers": 0.0,
-                   "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0}
-        problems = check.compare(metrics, log, expectation, part)
-        self.assertEqual(len(problems), 1, (entry["case"], part, problems))
-        self.assertIn("luts_logic", problems[0])
+    for version in expected_versions("amd"):
+      expected = check.load_expected("amd", version)
+      fifo = [e for e in expected["expect"] if e["case"].startswith("fifo_")]
+      self.assertEqual(len(fifo), 6, version)
+      for entry in fifo:
+        for part in entry["parts"]:
+          expectation = check.find_expectation(expected, entry["case"], part)
+          metrics = {"luts": 1e6, "luts_logic": 1e6, "lutram": float(entry["lutram"]), "registers": 0.0,
+                     "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0}
+          problems = check.compare(metrics, log, expectation, part)
+          self.assertEqual(len(problems), 1, (version, entry["case"], part, problems))
+          self.assertIn("luts_logic", problems[0])
 
   def test_uram_absent_only_on_families_without_uram(self) -> None:
     log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}
@@ -253,6 +261,54 @@ class VendorRunTest(unittest.TestCase):
     self.assertNotIn(".Xil", kept)
     self.assertIn("run.log", kept)
     self.assertTrue((Path(result["work_dir"]) / "reports" / "utilization.rpt").is_file())
+
+  def test_another_tool_version_has_its_own_expected_results(self) -> None:
+    # Vivado 2024.1 is compared with expected/amd/2024.1.toml.
+    result = self._run(self._good_spec(version="2024.1"))
+    self.assertEqual((result["status"], result["tool_version"]), ("pass", "2024.1"), result["problems"])
+
+  def test_measured_values_replace_the_provisional_ones_without_running_again(self) -> None:
+    # A copy of the expected results where amd/2024.1 is not yet measured.
+    copy = self.root / "expected"
+    for path in check.EXPECTED_DIR.rglob("*.toml"):
+      (copy / path.parent.name).mkdir(parents=True, exist_ok=True)
+      (copy / path.parent.name / path.name).write_bytes(path.read_bytes())
+    provisional = copy / "amd" / "2024.1.toml"
+    provisional.write_text(provisional.read_text(encoding="utf-8").replace(
+      'tool_version = "2024.1"\n', 'tool_version = "2024.1"\nbasis = "copy of 2023.1.toml, not yet measured"\n'),
+      encoding="utf-8")
+    # A first campaign is compared with the provisional copy, which says so.
+    with mock.patch.object(check, "EXPECTED_DIR", copy):
+      first = self._run(self._good_spec(version="2024.1"))
+      self.assertEqual(first["status"], "pass", first["problems"])
+      self.assertIn("not yet measured", first["expected"]["basis"])
+      self.assertIn("not yet measured", check.expected_record_problem(first["expected"]))
+    # The measured values are written and the basis removed (the file of the
+    # repository); the logs are evaluated again.
+    calls_before = (self.root / "calls.txt").read_text()
+    code = main(["--config", str(self.root / "config.json"), "--evaluate-only"])
+    again = json.loads((self.root / "work" / "summary.json").read_text(encoding="utf-8"))["results"][0]
+    self.assertEqual((code, again["status"]), (0, "pass"), again["problems"])
+    self.assertIsNone(again["expected"]["basis"])
+    self.assertIsNone(check.expected_record_problem(again["expected"]))
+    self.assertEqual((self.root / "calls.txt").read_text(), calls_before, "the tool must not run")
+    public = json.loads((self.root / "work" / "summary_public.json").read_text(encoding="utf-8"))["results"][0]
+    self.assertEqual(public["expected"], again["expected"])
+
+  def test_a_version_without_expected_results_fails(self) -> None:
+    result = self._run(self._good_spec(version="2025.2"))
+    self.assertEqual(result["status"], "fail")
+    self.assertIn("no expected results for amd 2025.2", result["problems"][0])
+    self.assertIn("expected/amd/2025.2.toml does not exist", result["problems"][0])
+
+  def test_the_log_must_be_of_the_campaign_toolset(self) -> None:
+    toolset = self.root / "toolset.json"
+    toolset.write_text(json.dumps(toolsets.PCL01), encoding="utf-8")
+    result = self._run(self._good_spec(), extra_args=("--toolset", str(toolset)))
+    self.assertEqual(result["status"], "fail")
+    self.assertIn("the log is of vivado 2023.1, the campaign toolset has 2024.1", result["problems"][0])
+    result = self._run(self._good_spec(version="2024.1"), extra_args=("--toolset", str(toolset)))
+    self.assertEqual(result["status"], "pass", result["problems"])
 
   def test_flip_flop_ram_fails(self) -> None:
     result = self._run(self._good_spec(util=UTIL_TEMPLATE.format(luts=338, lutram=0, regs=1040, bram=0)))
@@ -357,6 +413,17 @@ class VendorRunTest(unittest.TestCase):
     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [C:/r/src/fifo/lm_mem_fifo.vhd:53]",
   ]]
 
+  def test_a_stop_with_exit_code_zero_fails(self) -> None:
+    # The exit code is required on Windows and Linux (pilot of 2026-11-13 on
+    # PCL01): a stop that comes back with 0 is a fail, whatever the log says.
+    result = self._run(self._good_spec(stop=self.FIFO_STOP), case="bad_fifo_almost_full_0",
+                       job_extra={"assert": True})
+    self.assertEqual((result["status"], result["return_code"]), ("pass", 1), result["problems"])
+    result = self._run(self._good_spec(stop=self.FIFO_STOP, stop_exit_code=0), case="bad_fifo_almost_full_0",
+                       job_extra={"assert": True})
+    self.assertEqual(result["status"], "fail", result["problems"])
+    self.assertIn("tool exit code 0, but synthesis was expected to stop", result["problems"])
+
   def test_a_stop_where_vivado_died_runs_again(self) -> None:
     # The check stopped, then Vivado died before synth_design returned: the
     # status file stays at "started". Not a fail: a tool-error, run again.
@@ -398,6 +465,7 @@ class VendorRunTest(unittest.TestCase):
     root = self.root / "campaign"
     root.mkdir(exist_ok=True)
     (self.root / "work").rename(root / sub)
+    toolsets.write(root)
     return root
 
   def test_project_error_is_a_fail_from_classification_to_summary(self) -> None:
@@ -408,7 +476,7 @@ class VendorRunTest(unittest.TestCase):
     self.assertIn("Synth 8-1031", "; ".join(result["problems"]))
     root = self._campaign_step()
     self.assertEqual(rerun.tool_errors(root), [])  # a fail is never selected for a rerun
-    step = summarize._synthesis(root, "vs", [])
+    step = summarize._synthesis(root, "vs", [], "2023.1")
     self.assertFalse(step["ok"])
     self.assertEqual(step["counts"], {"fail": 1})
     self.assertIn("r_w_16x64: fail", step["failures"][0])
@@ -428,7 +496,7 @@ class VendorRunTest(unittest.TestCase):
     self.assertTrue(all("tool-died" in r for r in result["retries"]), result["retries"])
     root = self._campaign_step()
     self.assertEqual([(i["step"], i["case"]) for i in rerun.tool_errors(root)], [("vivado", "r_w_16x64")])
-    step = summarize._synthesis(root, "vs", [{"job": "fake", "case": "r_w_16x64", "rerun_status": "pass"}])
+    step = summarize._synthesis(root, "vs", [{"job": "fake", "case": "r_w_16x64", "rerun_status": "pass"}], "2023.1")
     self.assertTrue(step["ok"], step)
 
   def test_a_stop_that_returned_is_not_run_again(self) -> None:
@@ -638,7 +706,9 @@ class ExpectedFailureTest(unittest.TestCase):
     self.assertEqual(problems, [])
     self.assertEqual((facts["exit_code"], facts["exit_code_required"]), (0, False))
     self.assertTrue(check.vivado_exit_code_reliable("nt"))
-    self.assertFalse(check.vivado_exit_code_reliable("posix"))
+    # Measured on Linux with Vivado 2024.1 (pilot of 2026-11-13): required there too.
+    self.assertTrue(check.vivado_exit_code_reliable("posix"))
+    self.assertFalse(check.vivado_exit_code_reliable("java"))
 
   def test_a_stop_needs_failed_in_the_status_file(self) -> None:
     # Campaign of 2026-11-04: the exit code was lost on the way; the status
@@ -717,7 +787,8 @@ class ExpectedFailureTest(unittest.TestCase):
     expectation_log = self._range_error(self.src, 4).replace(
       "ERROR: [Synth 8-11323]", "\tParameter g_ram_latency bound to: 7 - type: integer \nERROR: [Synth 8-11323]", 1)
     with mock.patch.object(check, "find_expectation", lambda *a: self.EXPECT):
-      result = cli._evaluate(job, case, "e", expectation_log, Path(self.tmp.name), [self.src], {"return_code": 1})
+      result = cli._evaluate(job, case, "e", expectation_log, Path(self.tmp.name), [self.src], {"return_code": 1},
+                             tool_version="2023.1")
     self.assertEqual(result["status"], "fail")
     self.assertTrue(any("requested 3, synthesized with 7" in p for p in result["problems"]), result["problems"])
 
@@ -766,11 +837,12 @@ class ExpectedFailureTest(unittest.TestCase):
     from tools.manifest import load
     sources = {flow: [s.path for s in load().files(flow)] for flow in ("synth-amd", "synth-intel", "synth-unsupported")}
     for vendor, flows in (("amd", ("synth-amd", "synth-unsupported")), ("intel", ("synth-intel",))):
-      for entry in check.load_expected(vendor)["expect"]:
-        name = entry.get("expect_failure_constant")
-        if name:
-          found = [p for flow in flows for p in check.locate_constant(name, sources[flow])]
-          self.assertTrue(found, f"{vendor} {entry['case']}: {name} not declared in {flows}")
+      for version in expected_versions(vendor):
+        for entry in check.load_expected(vendor, version)["expect"]:
+          name = entry.get("expect_failure_constant")
+          if name:
+            found = [p for flow in flows for p in check.locate_constant(name, sources[flow])]
+            self.assertTrue(found, f"{vendor} {version} {entry['case']}: {name} not declared in {flows}")
 
 
 if __name__ == "__main__":

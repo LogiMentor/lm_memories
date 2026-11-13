@@ -3,7 +3,8 @@
 """Run local vendor synthesis checks for lm_memories.
 
 Sources come from the manifest flow of the job's vendor (synth-amd, ...).
-A case passes only when its results match tools/vendor_synth/expected/;
+A case passes only when its results match the expected results of its tool
+version (tools/vendor_synth/expected/<vendor>/<version>.toml);
 the tool exit code alone never makes a pass. Runs are sequential and hold
 the machine-wide EDA lock. Artefacts go outside the repository by default.
 """
@@ -168,6 +169,8 @@ BUILTIN_CASES: tuple[dict[str, Any], ...] = (
 class RunItem:
   job: dict[str, Any]
   case: dict[str, Any]
+  # Version of the job's tool in the campaign toolset (--toolset), or None.
+  tool_version: str | None = None
 
 
 def _load_config(path: Path) -> dict[str, Any]:
@@ -283,6 +286,23 @@ def _job_path(job: dict[str, Any], key: str) -> Path | None:
   return ROOT_DIR / path
 
 
+def _install_dir(job: dict[str, Any]) -> Path | None:
+  """Installation directory of the job's tool: install_dir, or the directory
+  held by the environment variable that install_dir_env names (the checked
+  configurations use LM_VIVADO_DIR and LM_QUARTUS_DIR). An unset variable
+  stops the run: there is no default installation."""
+  variable = job.get("install_dir_env")
+  if not variable:
+    return _job_path(job, "install_dir")
+  if job.get("install_dir"):
+    raise SystemExit(f"{_job_name(job)}: set install_dir or install_dir_env, not both")
+  value = os.environ.get(str(variable), "").strip()
+  if not value:
+    raise SystemExit(f"{_job_name(job)}: {variable} is not set; set it to the installation directory of "
+                     f"{_tool(job) or 'the tool'} (install_dir_env)")
+  return _job_path({"install_dir": value}, "install_dir")
+
+
 def _existing_or_first(candidates: list[Path]) -> Path:
   for candidate in candidates:
     if candidate.exists():
@@ -297,7 +317,7 @@ def _platform_candidates(windows: list[Path], posix: list[Path]) -> list[Path]:
 
 
 def _install_command(job: dict[str, Any], default: str) -> list[str] | None:
-  install_dir = _job_path(job, "install_dir")
+  install_dir = _install_dir(job)
   if install_dir is None:
     return None
 
@@ -351,7 +371,7 @@ def _configured_command(job: dict[str, Any], default: str) -> list[str]:
 
 
 def _auto_setup_script(job: dict[str, Any]) -> Path | None:
-  install_dir = _job_path(job, "install_dir")
+  install_dir = _install_dir(job)
   if install_dir is None:
     return None
 
@@ -1051,7 +1071,7 @@ def _generics_module(case: dict[str, Any], top: str) -> str | None:
 
 def _tool_roots(job: dict[str, Any]) -> list[Path]:
   """Installation directories of the job's tool (for the retry signatures)."""
-  install_dir = _job_path(job, "install_dir")
+  install_dir = _install_dir(job)
   return [install_dir] if install_dir is not None else []
 
 
@@ -1094,8 +1114,53 @@ def _evaluate(
   reports: Path,
   sources: list[Path] | None = None,
   run: dict[str, Any] | None = None,
+  tool_version: str | None = None,
 ) -> dict[str, Any]:
-  """Compare the results of one run with the expected results.
+  """Compare the results of one run with the expected results of its tool version.
+
+  The expected results are those of the tool version in the log
+  (expected/<vendor>/<version>.toml, check.load_expected); when the log has
+  no version, those of tool_version. tool_version: the version of the
+  job's tool in the campaign toolset (--toolset); a log of another version
+  is a fail. A version without expected results is a fail, never compared
+  with another version.
+  """
+  tool = _tool(job)
+  vivado = tool in ("vivado", "xilinx")
+  quartus = tool in ("quartus", "intel", "altera")
+  logged = (check.parse_vivado_log(log_text, top)["version"] if vivado
+            else check.quartus_version(log_text) if quartus else "")
+  known = logged not in ("", "unknown") and not logged.startswith("mixed")
+  problems: list[str] = []
+  if tool_version and known and logged != tool_version:
+    problems.append(f"the log is of {tool} {logged}, the campaign toolset has {tool_version}")
+  try:
+    expected = check.load_expected(_vendor(job), logged if known else (tool_version or logged))
+  except check.ExpectedError as exc:
+    expected = None
+    problems.append(str(exc))
+  part = str(job.get("part") or job.get("device") or "")
+  expectation = check.find_expectation(expected, case["name"], part) if expected is not None else None
+  result = _evaluate_run(job, case, top, log_text, reports, expectation, sources, run)
+  result["expected"] = expected.get("record") if expected is not None else None
+  if problems:
+    result["problems"] = problems + result["problems"]
+    if result["status"] in ("pass", "unchecked"):
+      result["status"] = "fail"
+  return result
+
+
+def _evaluate_run(
+  job: dict[str, Any],
+  case: dict[str, Any],
+  top: str,
+  log_text: str,
+  reports: Path,
+  expectation: dict[str, Any] | None,
+  sources: list[Path] | None = None,
+  run: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+  """Compare the results of one run with its expectation (None: no expected results).
 
   run: the record of the run (run.json): return code, start time, retries.
   A pass needs positive evidence of a complete run of this case: the tool's
@@ -1110,7 +1175,6 @@ def _evaluate(
   return_code = run.get("return_code")
   # Outcome of synth_design recorded by the script for this attempt.
   status = check.read_synth_status(reports / check.STATUS_FILE, run.get("run_id")) if vivado else None
-  expectation = check.find_expectation(check.load_expected(_vendor(job)), case["name"], part)
   if expectation is not None and ("expect_failure" in expectation or "expect_failure_constant" in expectation):
     problems, facts = check.check_expected_failure(
       tool, log_text, expectation, sources, assert_mode=bool(job.get("assert")), return_code=return_code,
@@ -1289,6 +1353,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     "metrics": {},
     "tool_version": "",
     "critical_warnings": None,
+    "expected": None,
     "provenance": inputs,
     "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
   }
@@ -1316,7 +1381,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     text = log_file.read_text(encoding="utf-8", errors="ignore")
     result.update(return_code=record.get("return_code"), retries=record.get("retries", []),
                   started_at=record.get("started_at"))
-    evaluation = _evaluate(job, case, top, text, reports, sources, record)
+    evaluation = _evaluate(job, case, top, text, reports, sources, record, item.tool_version)
     if record.get("timed_out"):
       evaluation.update(status="timeout", problems=["timeout"])
     elif record.get("persisted"):
@@ -1335,7 +1400,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     result.update(
       status=evaluation["status"], problems=evaluation["problems"], metrics=evaluation["metrics"],
       tool_version=log.get("version", ""), critical_warnings=log.get("critical_warnings"),
-      completed_at=record.get("completed_at", result["started_at"]), message="; ".join(evaluation["problems"])[:400],
+      expected=evaluation.get("expected"), completed_at=record.get("completed_at", result["started_at"]), message="; ".join(evaluation["problems"])[:400],
     )
     return result
 
@@ -1399,7 +1464,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     result.update(status="timeout", message=f"timeout after {timeout} seconds", problems=["timeout"])
     return result
 
-  evaluation = _evaluate(job, case, top, text, reports, sources, record)
+  evaluation = _evaluate(job, case, top, text, reports, sources, record, item.tool_version)
   if persisted:
     evaluation["status"] = "tool-error"
     evaluation["problems"].insert(0, f"transient tool failure in all {len(result['retries'])} attempts: "
@@ -1411,6 +1476,7 @@ def _run_item(item: RunItem, work_root: Path, dry_run: bool, clean: bool, evalua
     metrics=evaluation["metrics"],
     tool_version=log.get("version", ""),
     critical_warnings=log.get("critical_warnings"),
+    expected=evaluation.get("expected"),
     message="; ".join(evaluation["problems"])[:400],
   )
   return result
@@ -1439,7 +1505,7 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]], archive: dict
       "family": r["family"], "part": r.get("part", ""), "case": r["case"], "top": r["top"],
       "generics": r.get("generics", {}), "status": r["status"], "metrics": r.get("metrics", {}),
       "critical_warnings": r.get("critical_warnings"), "retries": len(r.get("retries", [])),
-      "problems": r.get("problems", []),
+      "problems": r.get("problems", []), "expected": r.get("expected"),
       "commit": r.get("provenance", {}).get("commit", ""),
       "sources_hash": r.get("provenance", {}).get("sources_hash", ""),
     }
@@ -1491,7 +1557,18 @@ def _write_summary(work_root: Path, results: list[dict[str, Any]], archive: dict
   summary_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _build_run_items(jobs: list[dict[str, Any]], cases: list[dict[str, Any]]) -> list[RunItem]:
+def _toolset_versions(path: Path) -> dict[str, str]:
+  """Tool -> version of a campaign toolset (tools/campaign/toolset.py, logs/toolset.json)."""
+  try:
+    tools = json.loads(path.read_text(encoding="utf-8"))["tools"]
+    versions = {"vivado": tools["vivado"]["version"], "quartus": tools["quartus"]["version"]}
+  except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+    raise SystemExit(f"--toolset {path}: not a toolset ({exc})") from exc
+  return {**versions, "xilinx": versions["vivado"], "intel": versions["quartus"], "altera": versions["quartus"]}
+
+
+def _build_run_items(jobs: list[dict[str, Any]], cases: list[dict[str, Any]],
+                     versions: dict[str, str] | None = None) -> list[RunItem]:
   items: list[RunItem] = []
   for job in jobs:
     job_cases = set(str(name) for name in job.get("cases", []))
@@ -1499,7 +1576,7 @@ def _build_run_items(jobs: list[dict[str, Any]], cases: list[dict[str, Any]]) ->
       if job_cases and case["name"] not in job_cases:
         continue
       if _is_case_supported(job, case):
-        items.append(RunItem(job=job, case=case))
+        items.append(RunItem(job=job, case=case, tool_version=(versions or {}).get(_tool(job))))
   return items
 
 
@@ -1540,6 +1617,9 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--keep-going", action="store_true", help="continue after a failed case")
   parser.add_argument("--evaluate-only", action="store_true",
                       help="do not run tools; check the existing results in the work root against the expected results")
+  parser.add_argument("--toolset", type=Path, metavar="FILE",
+                      help="toolset of the campaign (logs/toolset.json, tools/campaign/toolset.py): the log of every "
+                           "run must be of its tool version")
   parser.add_argument("--campaign", metavar="NAME",
                       help="campaign run for docs/results: the work root must be new or empty, nothing is pruned, "
                            "and the work root is archived in $LM_EDA_ARCHIVE_DIR (tools/eda_archive.py)")
@@ -1567,7 +1647,7 @@ def main(argv: list[str] | None = None) -> int:
   if not work_root.is_absolute():
     work_root = ROOT_DIR / work_root
 
-  items = _build_run_items(jobs, selected_cases)
+  items = _build_run_items(jobs, selected_cases, _toolset_versions(args.toolset) if args.toolset else None)
   if not items:
     raise SystemExit("no job/case combinations selected")
   if args.campaign:

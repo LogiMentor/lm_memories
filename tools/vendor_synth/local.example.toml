@@ -1,6 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 
+# The campaign (tools/campaign/run_amd.sh) has no default tool paths: it
+# reads them from the environment and stops when one is missing. On PCL01
+# /etc/fpga/lm-eda-env.sh sets them; on Windows (Git Bash), for example:
+#
+#   export LM_VIVADO_DIR=C:/Xilinx/Vivado/2023.1
+#   export LM_QUARTUS_DIR=C:/intelFPGA_lite/23.1std/quartus
+#   export VUNIT_MODELSIM_PATH=C:/questasim64_2021.1/win64
+#   export GHDL=/c/msys64/ucrt64/bin/ghdl   # or VUNIT_GHDL_PATH, or ghdl on PATH
+#
 # Results go to $LM_EDA_WORKDIR/vs (default: lmeda/vs in the system temporary
 # directory); set [run] work_root to override.
 

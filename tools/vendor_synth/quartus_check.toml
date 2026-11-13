@@ -4,10 +4,12 @@
 # Quartus check on Cyclone V (issue #3). Until an Intel two-writer
 # architecture is validated, the expected result for the two-writer RAMs is
 # that Analysis & Synthesis stops with the fallback message
-# (expected/intel.toml). The bad_* cases check that a wrong generic stops
+# (expected/intel/<Quartus release>.toml). The bad_* cases check that a wrong generic stops
 # Analysis & Synthesis.
 #
 #   python -m tools.vendor_synth --config tools/vendor_synth/quartus_check.toml --keep-going
+#
+# Quartus: the installation in $LM_QUARTUS_DIR (install_dir_env).
 
 [[jobs]]
 name = "quartus-cyclonev"
@@ -16,7 +18,7 @@ tool = "quartus"
 vendor = "intel"
 family = "Cyclone V"
 device = "5CEBA4F23C7"
-install_dir = "C:/intelFPGA_lite/23.1std/quartus"
+install_dir_env = "LM_QUARTUS_DIR"
 quartus_flow = "map"
 timeout_seconds = 1800
 cases = [

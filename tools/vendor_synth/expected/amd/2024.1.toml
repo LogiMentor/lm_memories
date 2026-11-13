@@ -1,8 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 #
-# Expected Vivado synthesis results (out-of-context) for the cases in
-# ../cases.toml. A case passes only if every listed field matches.
+# Expected Vivado 2024.1 synthesis results (out-of-context) for the cases in
+# ../../cases.toml. A case passes only if every listed field matches.
+#
+# One file per tool version (tools/vendor_synth/check.py load_expected): a
+# run is compared with the file of the Vivado version in its log, and
+# [meta] tool_version must name that version.
+#
+# Measured with Vivado 2024.1 on PCL01 (Linux), campaign v0.2.0-pcl01 of
+# 2026-11-13 on commit 2e95d7a0f6839785e0a7e6a41dcce546a170f603 (sources of
+# v0.2.0): synthesis archive vivado_2024.1_amd_20261113T085838Z.tar.xz
+# (SHA-256 9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189),
+# static checks static_checks_vivado_2024.1_20261113T091054Z.tar.xz
+# (SHA-256 ff104982f6c473e34428e9b5ba06e6e12a586bc0b1775039031dfb0b15c82ae4).
+# Every case gave the same metrics as Vivado 2023.1 (55 synthesis runs:
+# block RAM tiles, RAMB36/RAMB18, LUTs as memory, URAM, registers, LUTs as
+# logic; 28 static checks: same errors at the same lines), so the values
+# and the "Measured" notes below hold for both versions.
 #
 # Fields:
 #   bram_tiles     exact number of block RAM tiles (RAMB18 = 0.5)
@@ -25,6 +40,9 @@
 # "synth_design completed successfully", exit code 0, no error of the
 # project, a utilization report written by this run with every row, and the
 # generics read back from the log.
+
+[meta]
+tool_version = "2024.1"
 
 [defaults]
 max_critical_warnings = 0

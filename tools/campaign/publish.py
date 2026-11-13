@@ -1,14 +1,25 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
-"""Write docs/results/ from a finished AMD campaign (tools/campaign/run_amd.sh).
+"""Write the results of a finished AMD campaign (tools/campaign/run_amd.sh) to docs/results.
 
-  python -m tools.campaign.publish <campaign root> [--out docs/results]
+  python -m tools.campaign.publish <campaign root> --out docs/results/<campaign>
 
-Reads the result files of every step of the campaign root and of the rerun
-of tool-errors, and writes one JSON file per step to the output directory,
-plus amd_campaign.json (the campaign: commits, steps, every archive) and
-the generated table of docs/results/README.md (between the markers
-<!-- publish:begin --> and <!-- publish:end -->).
+Each campaign has its own directory under docs/results, named by the code
+and the machine (v0.2.0-pcl01). Reads the result files of every step of the
+campaign root and of the rerun of tool-errors, and writes one JSON file per
+step to that directory, named after the campaign of the step (the tool
+versions of logs/toolset.json, tools/campaign/toolset.py), plus
+amd_campaign.json (the campaign: commits, tool versions, steps, every
+archive) and the generated table of its README.md (between the markers
+<!-- publish:begin --> and <!-- publish:end -->; a new README.md gets a
+title). A directory that holds another campaign (amd_campaign.json of
+another start commit or other tool versions) is refused: a campaign is
+published again only over itself. A vendor_synth result compared with
+expected results not yet measured with its tool version ([meta] basis of
+tools/vendor_synth/expected/<vendor>/<version>.toml), or with a file that
+changed after its evaluation, is refused: the measured values go in that
+file, the basis is removed, the archived logs are evaluated again
+(tools/campaign/resume.py, no tool runs), then the campaign is published.
 
 Every result records the commit it ran on, the tool and its version, the
 device, and the archive of its complete logs with the SHA-256. Each archive
@@ -21,9 +32,11 @@ on a later commit (LM_CAMPAIGN_RESUME, tools/campaign/resume.py) records
 both commits: "commit" (the tool run) and "evaluated_on".
 
 Local paths are removed: the repository (paths become relative), the
-campaign root (<campaign>), the tool installations (<vivado>, <quartus>) and
-the host name in Vivado's .Xil directories. A path that is still there stops
-the script.
+campaign root (<campaign>), the archive directory (<archive>), the tool
+installations (<vivado>, <quartus>, <questa>, <ghdl>: those of the toolset,
+and the usual Windows and Linux places of each tool), the home directory
+(~) and the host name in Vivado's .Xil directories. A path that is still
+there (a drive letter, /Users/, /home/, /opt/) stops the script.
 """
 
 from __future__ import annotations
@@ -34,20 +47,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from tools.campaign.rerun import POSTSYNTH_CAMPAIGN, ROOT_DIR, SYNTH_STEPS, _safe
+from tools.campaign import toolset
+from tools.campaign.rerun import ROOT_DIR, SYNTH_STEPS, _safe
 from tools.eda_archive import archive_dir, sha256_file
+from tools.harness_counts import campaign_parts
+from tools.vendor_synth.check import expected_record_problem
 
-# Output file of each vendor_synth step; device column of the README.
-SYNTH_FILES = {
-  "vivado": "vivado_2023.1_amd.json",
-  "checks_vivado": "static_checks_vivado_2023.1.json",
-  "checks_quartus": "static_checks_quartus_23.1.json",
-}
-POSTSYNTH_FILE = "postsynth_vivado_2023.1_amd.json"
 CAMPAIGN_FILE = "amd_campaign.json"
 BEGIN, END = "<!-- publish:begin -->", "<!-- publish:end -->"
 _QUARTUS_VERSION_RE = re.compile(r"Info: Version (\S+ Build \d+) .*Edition")
-_LOCAL_RE = re.compile(r"(?<![A-Za-z])[A-Za-z]:[\\/]|[\\/]Users[\\/]|/home/")
+_LOCAL_RE = re.compile(r"(?<![A-Za-z])[A-Za-z]:[\\/]|[\\/]Users[\\/]|/home/|/opt/")
+# Installation of each tool of the toolset: the directory that holds bin/
+# (Vivado, Quartus, GHDL) or the Questa installation above its bin directory.
+_TOOL_PLACEHOLDERS = {"vivado": "<vivado>", "quartus": "<quartus>", "questa": "<questa>", "ghdl": "<ghdl>"}
 
 
 class PublishError(Exception):
@@ -66,17 +78,48 @@ def _path_re(path: Path | str) -> str:
   return r"[\\/]+".join(re.escape(p) for p in parts)
 
 
-def scrubber(campaign_root: Path):
-  """Function that removes the local paths of this machine from a string."""
+def tool_dirs(tools: dict | None) -> dict[str, Path]:
+  """Installation directory of each tool of a toolset, from its version command."""
+  out = {}
+  for tool, entry in ((tools or {}).get("tools") or {}).items():
+    command = [c for c in entry.get("command", []) if c not in ("cmd", "/c")]
+    directory = Path(command[0]).parent.parent if command else None
+    # Only a real installation path: never a bare name or a root ("/", "C:/").
+    if tool in _TOOL_PLACEHOLDERS and directory is not None and directory.is_absolute() and len(directory.parts) > 2:
+      out[tool] = directory
+  return out
+
+
+def scrubber(campaign_root: Path, tools: dict | None = None, archives: Path | None = None,
+             home: Path | None = None):
+  """Function that removes the local paths of this machine from a string.
+
+  tools: the toolset of the campaign (its installations); archives: the
+  archive directory; home: the home directory (default: this user's)."""
+  home = Path.home() if home is None else home
   rules = [
     (re.compile(_path_re(ROOT_DIR) + r"[\\/]+", re.IGNORECASE), ""),
     (re.compile(_path_re(ROOT_DIR), re.IGNORECASE), "."),
     (re.compile(_path_re(campaign_root.resolve()), re.IGNORECASE), "<campaign>"),
     (re.compile(_path_re(campaign_root), re.IGNORECASE), "<campaign>"),
+  ]
+  if archives is not None:
+    rules += [(re.compile(_path_re(p), re.IGNORECASE), "<archive>") for p in {archives.resolve(), archives}]
+  for tool, directory in tool_dirs(tools).items():
+    rules += [(re.compile(_path_re(p), re.IGNORECASE), _TOOL_PLACEHOLDERS[tool]) for p in {directory.resolve(), directory}]
+  rules += [
     (re.compile(r"[A-Za-z]:[\\/]+Xilinx[\\/]+Vivado[\\/]+[\d.]+", re.IGNORECASE), "<vivado>"),
+    (re.compile(r"[A-Za-z]:[\\/]+intelFPGA[^\\/\s\"']*[\\/]+[\d.]+[^\\/\s\"']*[\\/]+quartus", re.IGNORECASE),
+     "<quartus>"),
     (re.compile(r"[A-Za-z]:[\\/]+intelFPGA[^\\/\s\"']*[\\/]+[\d.]+", re.IGNORECASE), "<quartus>"),
+    # Linux installations: <prefix>/Vivado/<version>, <prefix>/<release>/quartus, .../questa_fse.
+    (re.compile(r"(?:/[^/\s\"':]+)*/Vivado/\d{4}\.\d+"), "<vivado>"),
+    (re.compile(r"(?:/[^/\s\"':]+)*/\d+\.\d+(?:std|pro)?/quartus"), "<quartus>"),
+    (re.compile(r"(?:/[^/\s\"':]+)*/questa_fs?e"), "<questa>"),
     (re.compile(r"\bVivado-\d+-[^\\/\s\"']+"), "Vivado-<pid>-<host>"),
   ]
+  # Last: what is left under the home directory.
+  rules += [(re.compile(_path_re(p) + r"(?=[\\/]|$|[\s\"'])", re.IGNORECASE), "~") for p in {home.resolve(), home}]
 
   def scrub(value: Any) -> Any:
     if isinstance(value, str):
@@ -152,7 +195,7 @@ def _synth_entry(job: str, public: dict, archive: dict, evaluated_on: str | None
 
 def synth_step(root: Path, step: str, reruns: list[dict], directory: Path) -> dict:
   """Published results of one vendor_synth step, the passed reruns in place of the tool-errors."""
-  sub, _, _ = SYNTH_STEPS[step]
+  sub, _ = SYNTH_STEPS[step]
   work = root / sub
   full = _load(work / "summary.json")
   public = _load(work / "summary_public.json")
@@ -177,6 +220,9 @@ def synth_step(root: Path, step: str, reruns: list[dict], directory: Path) -> di
       entry = _synth_entry(r["job"], rerun_public["results"][0],
                            verify_archive(rerun_public.get("archive"), directory), None, None, version)
       entry["first_run"] = first
+    problem = expected_record_problem(entry.get("expected")) if entry["status"] != "unchecked" else None
+    if problem:
+      raise PublishError(f"{step} {r['job']} {r['case']}: {problem}")
     results.append(entry)
   counts: dict[str, int] = {}
   for e in results:
@@ -232,7 +278,7 @@ def _ps_runs(data: dict, archive: dict, configs_only: set[str] | None = None, pa
   return out
 
 
-def postsynth_step(root: Path, reruns: list[dict], directory: Path) -> dict:
+def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: str) -> dict:
   data = _load(root / "ps" / "results.json")
   if not data:
     raise PublishError(f"postsynth: no results.json in {root / 'ps'}")
@@ -264,7 +310,7 @@ def postsynth_step(root: Path, reruns: list[dict], directory: Path) -> dict:
   verdicts: dict[str, int] = {}
   for e in results:
     verdicts[e["verdict"]] = verdicts.get(e["verdict"], 0) + 1
-  return {"step": "postsynth", "campaign": POSTSYNTH_CAMPAIGN, "configs": data["configs"],
+  return {"step": "postsynth", "campaign": campaign, "configs": data["configs"],
           "verdicts": verdicts, "total": len(results), "results": results}
 
 
@@ -273,8 +319,9 @@ def sim_step(root: Path, step: str, work: Path, directory: Path) -> dict:
   data = _load(work / "results.json")
   if not data:
     raise PublishError(f"{step}: no results.json in {work}")
-  tool, _, version = work.name.partition("_")
-  return {"step": step, "tool": tool, "tool_version": version, "part": None, **data,
+  tool, edition, version = campaign_parts(work.name)
+  return {"step": step, "tool": tool, **({"edition": edition} if edition else {}), "tool_version": version,
+          "part": None, **data,
           "archive": verify_archive(data.get("archive"), directory)}
 
 
@@ -284,7 +331,7 @@ def _sim_dirs(root: Path) -> list[tuple[str, Path, str]]:
   return out
 
 
-def _postsynth_counts(step: dict, published: dict) -> dict:
+def _postsynth_counts(step: dict, published: dict, name: str) -> dict:
   """The counts of the post-synthesis step, each with its meaning (summary.json says only "runs" and "reruns")."""
   rerun_runs = sum(1 for r in published["results"] if r.get("first_run"))
   out = {k: v for k, v in step.items() if k not in ("runs", "reruns")}
@@ -294,7 +341,7 @@ def _postsynth_counts(step: dict, published: dict) -> dict:
                     "simulators (a synthesis that ended as tool-error has no netlist run there); reruns: syntheses "
                     "that ended as tool-error and ran again (tools/campaign/rerun.py); rerun_netlist_runs: the "
                     "netlist runs of those reruns; consolidated_results: the results published in "
-                    f"{POSTSYNTH_FILE} = main_step_runs + rerun_netlist_runs")
+                    f"{name} = main_step_runs + rerun_netlist_runs")
   if step.get("runs") is not None and step["runs"] + rerun_runs != published["total"]:
     raise PublishError(f"postsynth: {step['runs']} runs of the step + {rerun_runs} of its reruns are not the "
                        f"{published['total']} published results")
@@ -310,8 +357,15 @@ def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
   if not summary.get("ok"):
     raise PublishError(f"the campaign in {root} did not pass (summary.json)")
   reruns = (_load(root / "rerun" / "rerun.json") or {}).get("items", [])
-  files = {name: synth_step(root, step, reruns, directory) for step, name in SYNTH_FILES.items()}
-  files[POSTSYNTH_FILE] = postsynth_step(root, reruns, directory)
+  try:
+    # The file of each step is named after its campaign (tools/campaign/toolset.py).
+    tools = toolset.load(root)
+    names = toolset.campaign_names(tools)
+  except toolset.ToolsetError as exc:
+    raise PublishError(str(exc)) from exc
+  files = {f"{names[step]}.json": synth_step(root, step, reruns, directory) for step in SYNTH_STEPS}
+  postsynth_file = f"{names['postsynth']}.json"
+  files[postsynth_file] = postsynth_step(root, reruns, directory, names["postsynth"])
   for step, work, name in _sim_dirs(root):
     files[name] = sim_step(root, step, work, directory)
   driver = verify_archive(summary.get("driver_archive"), directory)
@@ -328,6 +382,7 @@ def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
   pilot = summary.get("pilot") or {}
   files[CAMPAIGN_FILE] = {
     "commit": summary["commit"], "resumes": summary.get("resumes", []), "ok": summary["ok"],
+    "toolset": toolset.versions(tools), "campaigns": names,
     "memory_thresholds": summary.get("memory_thresholds"), "retry_waits": summary.get("retry_waits"),
     "pilot": {"ok": pilot.get("ok"), "commit_of_old_code": pilot.get("commit_of_old_code"),
               "cases": [{k: c.get(k) for k in ("check", "case", "status", "attempts", "tool_runs", "signatures")}
@@ -340,8 +395,8 @@ def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
   }
   steps = files[CAMPAIGN_FILE]["steps"]
   if "postsynth" in steps:
-    steps["postsynth"] = _postsynth_counts(steps["postsynth"], files[POSTSYNTH_FILE])
-  scrub = scrubber(root)
+    steps["postsynth"] = _postsynth_counts(steps["postsynth"], files[postsynth_file], postsynth_file)
+  scrub = scrubber(root, tools, directory)
   files = {name: scrub(content) for name, content in files.items()}
   leftover = [p for name, content in files.items() for p in local_paths(content, name)]
   if leftover:
@@ -389,16 +444,20 @@ def table(files: dict[str, dict]) -> str:
         commit += "; evaluated on " + ", ".join(_short(c) for c in evaluated)
     elif "tests" in content:
       result = f"{content['passed']} of {content['total']} pass"
-      tools, parts, commit = [f"{content['tool']} {content['tool_version']}"], ["- (simulation)"], _short(content["commit"])
+      tools, parts, commit = [_sim_tool(content)], ["- (simulation)"], _short(content["commit"])
     else:
       baseline = (content.get("baseline") or {}).get("verdict")
       muts = content.get("mutations", [])
       detected = sum(1 for m in muts if m.get("verdict") == "DETECTED")
       result = f"{detected} of {len(muts)} mutations detected, baseline {baseline}"
-      tools, parts, commit = [f"{content['tool']} {content['tool_version']}"], ["- (simulation)"], _short(content["commit"])
+      tools, parts, commit = [_sim_tool(content)], ["- (simulation)"], _short(content["commit"])
     archives = "<br>".join(f"`{a['archive']}` (`{a['sha256']}`)" for a in _unique(_archives(content)))
     rows.append(f"| [`{name}`]({name}) | {result} | {commit} | {', '.join(tools)} | {', '.join(f'`{p}`' if p[0] != '-' and ' ' not in p else p for p in parts)} | {archives} |")
   return "\n".join(rows)
+
+
+def _sim_tool(content: dict) -> str:
+  return " ".join(filter(None, (content["tool"], content.get("edition"), content["tool_version"])))
 
 
 def _unique(records: list[dict]) -> list[dict]:
@@ -407,12 +466,26 @@ def _unique(records: list[dict]) -> list[dict]:
   return [by_name[n] for n in sorted(by_name, key=lambda n: ("_rerun_" in n, n))]
 
 
+def other_campaign(files: dict[str, dict], out: Path) -> str | None:
+  """Why out holds the results of another campaign, or None (empty, or this campaign again)."""
+  existing = out / CAMPAIGN_FILE
+  if not existing.is_file():
+    others = sorted(p.name for p in out.glob("*.json")) if out.is_dir() else []
+    return f"{out} holds results without {CAMPAIGN_FILE}: {', '.join(others)}" if others else None
+  old = _load(existing) or {}
+  new = files[CAMPAIGN_FILE]
+  for key in ("commit", "toolset"):
+    if old.get(key) != new.get(key):
+      return f"{existing} is of another campaign ({key} {old.get(key)!r}, this campaign {new.get(key)!r})"
+  return None
+
+
 def write(files: dict[str, dict], out: Path) -> None:
   out.mkdir(parents=True, exist_ok=True)
   for name, content in files.items():
     (out / name).write_bytes((json.dumps(content, indent=1) + "\n").encode("utf-8"))
   readme = out / "README.md"
-  text = readme.read_text(encoding="utf-8") if readme.is_file() else ""
+  text = readme.read_text(encoding="utf-8") if readme.is_file() else f"# Results: campaign {out.name}\n"
   generated = f"{BEGIN}\n{table(files)}\n{END}"
   if BEGIN in text and END in text:
     text = text[:text.index(BEGIN)] + generated + text[text.index(END) + len(END):]
@@ -425,10 +498,14 @@ def main(argv: list[str] | None = None) -> int:
   argv = sys.argv[1:] if argv is None else argv
   if not argv:
     raise SystemExit(__doc__)
-  root = Path(argv[0])
-  out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else ROOT_DIR / "docs" / "results"
+  if argv[1:2] != ["--out"] or len(argv) != 3:
+    raise SystemExit(__doc__)
+  root, out = Path(argv[0]), Path(argv[2])
   try:
     files = collect(root)
+    problem = other_campaign(files, out)
+    if problem:
+      raise PublishError(problem + "; publish each campaign to its own directory")
   except PublishError as error:
     print(f"publish: {error}", file=sys.stderr)
     return 1

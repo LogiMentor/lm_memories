@@ -2,12 +2,18 @@
 # Copyright 2026 LogiMentor Srl
 """Pilot of the AMD campaign: corrections that only the real tools can show.
 
-  python -m tools.campaign.pilot <pilot directory>
+  python -m tools.campaign.pilot <pilot directory> [--toolset FILE]
+
+--toolset: the toolset of the campaign (logs/toolset.json,
+tools/campaign/toolset.py), passed to vendor_synth: the log of every run of
+the current code must be of that tool version, and is compared with the
+expected results of that version.
 
 Writes <pilot directory>/pilot.json and exits with 1 if any check fails:
 
 1. launcher: tools/campaign/pilot.toml with vendor_synth, one case at a
-   time. r_w_32x1024 passes with exit code 0 through the Windows launcher;
+   time. r_w_32x1024 passes with exit code 0 through the launcher
+   (launch_tool.bat on Windows, launch_tool.sh on Linux);
    every wrong generic stops with a non-zero exit code, with and without
    synth_design -assert; the empty vendor string reaches Vivado as an empty
    string (bad_r_w_infer_no_vendor stops at its check).
@@ -15,8 +21,10 @@ Writes <pilot directory>/pilot.json and exits with 1 if any check fails:
    is changed to g_ram_depth=1000 while the case still asks for 1024, and run
    again; --evaluate-only must fail on the generic although the block RAM
    count is the same (1 tile).
-3. old_code: the RTL of 5a5761a (before the corrections), with its own
-   vendor_synth and without -assert: lm_mem_ccd_resync with one level, a FIFO
+3. old_code: the RTL of 5a5761a (before the corrections; a clone of main
+   does not have it, so the pilot fetches refs/pull/4/head from origin
+   before any tool runs, and stops with exit code 2 and the command to run
+   if the fetch fails), with its own vendor_synth and without -assert: lm_mem_ccd_resync with one level, a FIFO
    with almost-full limit 0 and lm_mem_ram_r_w_infer with latency 3 must
    complete synthesis, showing what the new static checks stop.
 
@@ -36,6 +44,7 @@ Every tool run holds the machine-wide EDA lock.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import os
@@ -56,7 +65,6 @@ from tools.vendor_synth.check import RUN_ID_ENV
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PILOT_CONFIG = ROOT_DIR / "tools" / "campaign" / "pilot.toml"
-VIVADO_DIR = Path(os.environ.get("LM_VIVADO_DIR", "C:/Xilinx/Vivado/2023.1"))
 LAUNCHER_CASES = [  # (job, case) of pilot.toml, in this order
   ("pilot-artix7", "r_w_32x1024"),
   ("pilot-artix7", "bad_ccd_resync_levels1"),
@@ -67,6 +75,10 @@ LAUNCHER_CASES = [  # (job, case) of pilot.toml, in this order
   ("pilot-artix7-assert", "bad_fifo_almost_empty_15"),
 ]
 OLD_COMMIT = "5a5761a"
+# OLD_COMMIT is in the history of PR #4, merged with a squash: not in the
+# history of main, kept on GitHub under this ref.
+OLD_COMMIT_REF = "refs/pull/4/head"
+OLD_COMMIT_FETCH = ["git", "fetch", "origin", f"{OLD_COMMIT_REF}:refs/remotes/origin/pr/4"]
 OLD_JOB = "old-artix7"
 OLD_CASES = [
   {"name": "bad_ccd_resync_levels1", "kind": "entity", "entity": "lm_mem_ccd_resync",
@@ -78,6 +90,15 @@ OLD_CASES = [
 ]
 COMPLETED = "synth_design completed successfully"
 CHECKS = ("launcher", "generic_1000_for_1024", "old_code")
+
+
+def vivado_dir() -> Path:
+  """The Vivado installation of the pilot: $LM_VIVADO_DIR, the same one as
+  pilot.toml (install_dir_env). There is no default installation."""
+  value = os.environ.get("LM_VIVADO_DIR", "").strip()
+  if not value:
+    raise SystemExit("pilot: set LM_VIVADO_DIR to the Vivado installation directory")
+  return Path(value)
 
 
 class PilotStop(Exception):
@@ -144,7 +165,7 @@ def _signatures(r: dict, log_text: str) -> list[str]:
   """Transient signatures of a vendor_synth result: its retried runs, and its last run if transient."""
   found = [record_reason(entry) for entry in r.get("retries", [])]
   if r["status"] == "tool-error":
-    last = transient_reason(log_text, [VIVADO_DIR])
+    last = transient_reason(log_text, [vivado_dir()])
     if last is not None and last not in found[-1:]:
       found.append(last)
   return found
@@ -156,10 +177,14 @@ def _tool_runs(r: dict) -> int:
   return retried if retried > MAX_RETRIES else retried + 1
 
 
-def launcher_attempt(job: str, case: str) -> Callable[[Path], Attempt]:
+def _toolset_args(toolset: Path | None) -> list[str]:
+  return ["--toolset", str(toolset)] if toolset else []
+
+
+def launcher_attempt(job: str, case: str, toolset: Path | None = None) -> Callable[[Path], Attempt]:
   def attempt(work: Path) -> Attempt:
     vendor_synth(["--config", str(PILOT_CONFIG), "--job", job, "--case", case, "--keep-work",
-                  "--work-root", str(work)])
+                  "--work-root", str(work), *_toolset_args(toolset)])
     r = single_result(work)
     record = json.loads((Path(r["work_dir"]) / "run.json").read_text(encoding="utf-8"))
     rc = record.get("return_code")
@@ -177,7 +202,7 @@ def launcher_attempt(job: str, case: str) -> Callable[[Path], Attempt]:
   return attempt
 
 
-def generic_1000_attempt(source: Path) -> Callable[[Path], Attempt]:
+def generic_1000_attempt(source: Path, toolset: Path | None = None) -> Callable[[Path], Attempt]:
   """source: the case directory of the passing r_w_32x1024 run."""
   def attempt(work: Path) -> Attempt:
     case_dir = work / "pilot_artix7" / "r_w_32x1024"
@@ -200,7 +225,7 @@ def generic_1000_attempt(source: Path) -> Callable[[Path], Attempt]:
     # The script records the outcome of synth_design under this run id.
     record["run_id"] = uuid.uuid4().hex
     env = {**os.environ, RUN_ID_ENV: record["run_id"]}
-    vivado = VIVADO_DIR / "bin" / ("vivado.bat" if sys.platform == "win32" else "vivado")
+    vivado = vivado_dir() / "bin" / ("vivado.bat" if sys.platform == "win32" else "vivado")
     cmd = (["cmd", "/c", str(vivado)] if sys.platform == "win32" else [str(vivado)]) + [
       "-mode", "batch", "-nojournal", "-source", script.resolve().as_posix()]
     with (case_dir / "run.log").open("w", encoding="utf-8") as handle, \
@@ -212,7 +237,7 @@ def generic_1000_attempt(source: Path) -> Callable[[Path], Attempt]:
     record["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
     record_file.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     vendor_synth(["--config", str(PILOT_CONFIG), "--job", "pilot-artix7", "--case", "r_w_32x1024",
-                  "--evaluate-only", "--work-root", str(work)])
+                  "--evaluate-only", "--work-root", str(work), *_toolset_args(toolset)])
     r = single_result(work)
     base = {"exit_code": record["return_code"], "tool_runs": 1, "work_dir": str(case_dir),
             "transient": _signatures(r, _log_text(case_dir / "run.log")),
@@ -238,8 +263,36 @@ def old_code_status(log_text: str) -> tuple[str, str | None]:
   """
   if COMPLETED in log_text:
     return "pass", None
-  reason = retry_reason(log_text, completed=False, roots=[VIVADO_DIR])
+  reason = retry_reason(log_text, completed=False, roots=[vivado_dir()])
   return ("tool-error", reason) if reason else ("fail", None)
+
+
+class OldCommitError(Exception):
+  """OLD_COMMIT is not in the clone and could not be fetched."""
+
+
+def ensure_old_commit(cwd: Path = ROOT_DIR, run=None) -> bool:
+  """Make OLD_COMMIT available; True if it had to be fetched.
+
+  A clone of main does not have it: fetch OLD_COMMIT_REF from origin. If the
+  fetch fails, or the commit is still missing, raise OldCommitError with the
+  command to run.
+  """
+  run = run or subprocess.run
+
+  def present() -> bool:
+    return run(["git", "cat-file", "-e", f"{OLD_COMMIT}^{{commit}}"], cwd=cwd, capture_output=True).returncode == 0
+  if present():
+    return False
+  fetch = run(OLD_COMMIT_FETCH, cwd=cwd, capture_output=True, text=True)
+  if fetch.returncode == 0 and present():
+    return True
+  lines = (getattr(fetch, "stderr", "") or "").strip().splitlines()
+  detail = [line for line in lines if line.startswith(("fatal:", "error:"))][:1] or lines[:1]
+  why = f"the fetch failed ({detail[0].rstrip('.')})" if fetch.returncode != 0 and detail else (
+    "the fetch failed" if fetch.returncode != 0 else f"{OLD_COMMIT_REF} does not contain it")
+  raise OldCommitError(f"commit {OLD_COMMIT} of the old_code check is not in this clone and {why}. "
+                       f"Run in the repository: {' '.join(OLD_COMMIT_FETCH)}")
 
 
 def prepare_old_code(base: Path) -> tuple[Path, Path]:
@@ -255,7 +308,7 @@ def prepare_old_code(base: Path) -> tuple[Path, Path]:
   config = base / "old_static.json"
   config.write_text(json.dumps({"cases": OLD_CASES, "jobs": [{
     "name": OLD_JOB, "enabled": True, "tool": "vivado", "vendor": "amd", "family": "artix7",
-    "part": "xc7a35tfgg484-2", "install_dir": VIVADO_DIR.as_posix(), "manifest_flow": "synth-unsupported",
+    "part": "xc7a35tfgg484-2", "install_dir": vivado_dir().as_posix(), "manifest_flow": "synth-unsupported",
     "threads": 2, "timeout_seconds": 1800, "cases": [c["name"] for c in OLD_CASES]}]}), encoding="utf-8")
   return old_tree, config
 
@@ -325,16 +378,16 @@ def run_pilot(base: Path, plan: list[tuple[str, str, MakeAttempt]], max_retries:
   return report
 
 
-def default_plan(base: Path) -> list[tuple[str, str, MakeAttempt]]:
+def default_plan(base: Path, toolset: Path | None = None) -> list[tuple[str, str, MakeAttempt]]:
   def launcher(job: str, case: str) -> MakeAttempt:
-    return lambda done: launcher_attempt(job, case)
+    return lambda done: launcher_attempt(job, case, toolset)
 
   def generic_1000(done: list[dict]) -> Callable[[Path], Attempt]:
     # The tampered run starts from the passing r_w_32x1024 run of the launcher.
     entry = next((c for c in done if c["case"] == "pilot-artix7/r_w_32x1024"), None)
     if entry is None or entry["status"] != "pass":
       raise PilotStop("launcher pilot-artix7/r_w_32x1024 did not pass")
-    return generic_1000_attempt(Path(entry["history"][-1]["work_dir"]))
+    return generic_1000_attempt(Path(entry["history"][-1]["work_dir"]), toolset)
 
   old: dict[str, Path] = {}
 
@@ -353,9 +406,20 @@ def default_plan(base: Path) -> list[tuple[str, str, MakeAttempt]]:
 
 def main(argv: list[str] | None = None) -> int:
   argv = sys.argv[1:] if argv is None else argv
-  base = Path(argv[0])
+  parser = argparse.ArgumentParser(prog="python -m tools.campaign.pilot", description="Pilot of the AMD campaign.")
+  parser.add_argument("base", type=Path, help="pilot directory")
+  parser.add_argument("--toolset", type=Path, help="toolset of the campaign (logs/toolset.json)")
+  args = parser.parse_args(argv)
+  base, toolset = args.base, (args.toolset.resolve() if args.toolset else None)
+  # Before any tool runs: the old_code check needs OLD_COMMIT.
+  try:
+    if ensure_old_commit():
+      print(f"pilot: fetched {OLD_COMMIT_REF} for commit {OLD_COMMIT} (old_code)", flush=True)
+  except OldCommitError as error:
+    print(f"pilot: {error}", file=sys.stderr)
+    return 2
   base.mkdir(parents=True, exist_ok=True)
-  report = run_pilot(base, default_plan(base))
+  report = run_pilot(base, default_plan(base, toolset))
   report["commit_of_old_code"] = OLD_COMMIT
   (base / "pilot.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
   for check in CHECKS:

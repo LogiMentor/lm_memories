@@ -919,7 +919,8 @@ def main(argv: list[str] | None = None) -> int:
   parser.add_argument("--part", action="append", help=f"default: {', '.join(PARTS)}")
   parser.add_argument("--sim", action="append", choices=("ghdl", "xsim"), help="default: both")
   parser.add_argument("--config", default=".*", help="regular expression on the configuration name")
-  parser.add_argument("--vivado-dir", type=Path, default=Path(os.environ.get("LM_VIVADO_DIR", "C:/Xilinx/Vivado/2023.1")))
+  parser.add_argument("--vivado-dir", type=Path, default=None,
+                      help="Vivado installation directory (default: $LM_VIVADO_DIR, which must then be set)")
   parser.add_argument("--work-root", type=Path, default=work_root("ps"),
                       help="default: $LM_EDA_WORKDIR/ps (tools/eda_workdir.py)")
   parser.add_argument("--keep-work", action="store_true",
@@ -940,6 +941,10 @@ def main(argv: list[str] | None = None) -> int:
           f"'{args.config}' is synthesized for {', '.join(parts)} (sim/vunit/configs.py POSTSYNTH_PARTS)",
           file=sys.stderr)
     return 2
+  if args.vivado_dir is None:
+    if not os.environ.get("LM_VIVADO_DIR", "").strip():
+      parser.error("set LM_VIVADO_DIR to the Vivado installation directory, or pass --vivado-dir")
+    args.vivado_dir = Path(os.environ["LM_VIVADO_DIR"].strip())
   root = args.work_root
   if args.campaign and root.exists() and any(root.iterdir()):
     print(f"--campaign: the work root {root} must be new or empty", file=sys.stderr)

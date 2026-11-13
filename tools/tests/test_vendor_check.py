@@ -195,6 +195,39 @@ class QuartusVersionTest(unittest.TestCase):
       result = cli._evaluate(job, case, "lm_mem_ram_r_w", log, Path(tmp), [], {"return_code": 1})
     self.assertEqual(result["log"].get("version"), "23.1std.0 Build 991")
 
+  def test_a_log_with_two_versions_is_refused(self) -> None:
+    # Review of PR #9: a log with two Quartus banners was compared with the
+    # expected results of the campaign toolset, and the expected stop passed.
+    from tools.vendor_synth import cli
+    root = Path(check.__file__).resolve().parents[2]
+    pkg, sdp = root / "src" / "common" / "lm_mem_pkg.vhd", root / "src" / "core" / "lm_mem_ram_sdp.vhd"
+    banner = "    Info: Version {} SC Lite Edition\n"
+    body = (
+      'Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report '
+      f'"lm_mem_ram_sdp: read latency must be 1 or 2" (FAILURE or ERROR) File: {pkg.as_posix()} Line: 101\n'
+      'Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(81):  failed to elaborate call to subprogram '
+      f'"f_static_check" File: {sdp.as_posix()} Line: 81\n'
+      "Error: Quartus Prime Analysis & Synthesis was unsuccessful. 3 errors, 4 warnings\n")
+    one = banner.format("25.1std.0 Build 1129 10/21/2025") + body
+    two = banner.format("23.1std.0 Build 991 11/28/2023") + one
+    job = {"name": "quartus-cyclonev", "tool": "quartus", "vendor": "intel", "family": "Cyclone V",
+           "device": "5CEBA4F23C7"}
+    case = {"name": "bad_r_w_latency3", "kind": "entity", "generics": {"g_ram_latency": 3}}
+    with tempfile.TemporaryDirectory() as tmp:
+      results = {name: cli._evaluate(job, case, "lm_mem_ram_r_w", log, Path(tmp), [pkg, sdp], {"return_code": 3},
+                                     "25.1std.0 Build 1129")
+                 for name, log in (("one", one), ("two", two))}
+    self.assertEqual(results["one"]["status"], "pass", results["one"]["problems"])
+    self.assertEqual(results["two"]["status"], "fail")
+    self.assertIn("more than one quartus version in the log (23.1std.0 Build 991, 25.1std.0 Build 1129)",
+                  results["two"]["problems"][0])
+    self.assertIsNone(results["two"]["expected"])
+
+  def test_a_vivado_log_with_two_versions_is_mixed(self) -> None:
+    log = "****** Vivado v2023.1 (64-bit)\n****** Vivado v2024.1 (64-bit)\nCommand: synth_design -top t\n"
+    self.assertEqual(check.parse_vivado_log(log, "t")["version"], "mixed: 2023.1, 2024.1")
+    self.assertEqual(check.parse_vivado_log(log.replace("2023.1", "2024.1"), "t")["version"], "2024.1")
+
 
 class VendorRunTest(unittest.TestCase):
   def setUp(self) -> None:
@@ -496,6 +529,12 @@ class VendorRunTest(unittest.TestCase):
     self.assertTrue(all("tool-died" in r for r in result["retries"]), result["retries"])
     root = self._campaign_step()
     self.assertEqual([(i["step"], i["case"]) for i in rerun.tool_errors(root)], [("vivado", "r_w_16x64")])
+    # The rerun passed: its own result file, with its tool version.
+    rerun_work = root / "rerun" / "vs" / "fake" / "r_w_16x64"
+    rerun_work.mkdir(parents=True)
+    (rerun_work / "summary.json").write_text(json.dumps({"results": [
+      {"job": "fake", "part": result["part"], "case": "r_w_16x64", "status": "pass", "tool_version": "2023.1",
+       "problems": []}]}), encoding="utf-8")
     step = summarize._synthesis(root, "vs", [{"job": "fake", "case": "r_w_16x64", "rerun_status": "pass"}], "2023.1")
     self.assertTrue(step["ok"], step)
 

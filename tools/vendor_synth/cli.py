@@ -1120,7 +1120,8 @@ def _evaluate(
 
   The expected results are those of the tool version in the log
   (expected/<vendor>/<version>.toml, check.load_expected); when the log has
-  no version, those of tool_version. tool_version: the version of the
+  no version, those of tool_version. A log with more than one version is a
+  fail, compared with nothing. tool_version: the version of the
   job's tool in the campaign toolset (--toolset); a log of another version
   is a fail. A version without expected results is a fail, never compared
   with another version.
@@ -1130,15 +1131,22 @@ def _evaluate(
   quartus = tool in ("quartus", "intel", "altera")
   logged = (check.parse_vivado_log(log_text, top)["version"] if vivado
             else check.quartus_version(log_text) if quartus else "")
-  known = logged not in ("", "unknown") and not logged.startswith("mixed")
+  mixed = logged.startswith("mixed")
+  known = logged not in ("", "unknown") and not mixed
   problems: list[str] = []
-  if tool_version and known and logged != tool_version:
-    problems.append(f"the log is of {tool} {logged}, the campaign toolset has {tool_version}")
-  try:
-    expected = check.load_expected(_vendor(job), logged if known else (tool_version or logged))
-  except check.ExpectedError as exc:
-    expected = None
-    problems.append(str(exc))
+  expected = None
+  if mixed:
+    # Two versions in one log: which tool ran is not known, so no expected
+    # results are chosen, not even those of the campaign toolset.
+    problems.append(f"more than one {tool} version in the log ({logged.removeprefix('mixed: ')}): "
+                    "no expected results can be chosen")
+  else:
+    if tool_version and known and logged != tool_version:
+      problems.append(f"the log is of {tool} {logged}, the campaign toolset has {tool_version}")
+    try:
+      expected = check.load_expected(_vendor(job), logged if known else (tool_version or logged))
+    except check.ExpectedError as exc:
+      problems.append(str(exc))
   part = str(job.get("part") or job.get("device") or "")
   expectation = check.find_expectation(expected, case["name"], part) if expected is not None else None
   result = _evaluate_run(job, case, top, log_text, reports, expectation, sources, run)

@@ -279,7 +279,10 @@ def parse_vivado_log(text: str, top: str) -> dict[str, Any]:
         params[param.group(1)] = (param.group(2), param.group(3))
       module_generics[match.group(1).lower()] = params
 
-  version = next((m.group(1) for m in map(_VERSION_RE.search, lines) if m), "unknown")
+  # Every version in the log: "unknown" if none, "mixed: ..." if two differ
+  # (as quartus_version; no expected results can be chosen for either).
+  versions = sorted({m.group(1) for m in map(_VERSION_RE.search, lines) if m})
+  version = "unknown" if not versions else versions[0] if len(versions) == 1 else "mixed: " + ", ".join(versions)
   return {
     "version": version,
     "synth_ran": synth_start is not None,

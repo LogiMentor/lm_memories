@@ -84,6 +84,19 @@ def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
   if rerun_items is not None:
     (root / "rerun").mkdir()
     (root / "rerun" / "rerun.json").write_text(json.dumps({"ok": True, "items": rerun_items}))
+    for i in rerun_items:  # the result files of each rerun, as rerun.py leaves them
+      if i["step"] in rerun.SYNTH_STEPS:
+        work = root / "rerun" / rerun.SYNTH_STEPS[i["step"]][0] / rerun._safe(i["job"]) / rerun._safe(i["case"])
+        work.mkdir(parents=True)
+        version = "23.1std.0 Build 991" if i["step"] == "checks_quartus" else "2023.1"
+        (work / "summary.json").write_text(json.dumps({"results": [
+          {"job": i["job"], "part": i["part"], "case": i["case"], "status": i.get("rerun_status", "not-run"),
+           "tool_version": version, "problems": i.get("rerun_problems", [])}]}))
+      else:
+        work = root / "rerun" / "ps" / rerun._safe(i["part"])
+        work.mkdir(parents=True)
+        (work / "results.json").write_text(json.dumps({"parts": {i["part"]: {
+          "synth": {"crw_crw_16x64_16_l11": {"ok": True, "version": "2023.1"}}, "sims": {}}}}))
   toolsets.write(root)
   return root
 
@@ -153,6 +166,51 @@ class RerunTest(unittest.TestCase):
       code, summary, text = self._summary(root)
       self.assertEqual(code, 1)
       self.assertIn("case1: tool-error (rerun of a tool-error) couldn't read file again", text)
+
+  def test_a_rerun_is_judged_by_its_own_result_and_tool_version(self) -> None:
+    # Review of PR #9: the rerun of a tool-error was taken from rerun.json
+    # without its result file, so a rerun with another tool version passed.
+    item = {"step": "vivado", "job": "artix7", "part": "xc7a35tfgg484-2", "case": "case1",
+            "first_status": "tool-error", "first_problems": ["x"], "rerun_status": "pass", "rerun_problems": []}
+    result = root_file = None
+    for change, message in (({"tool_version": "2024.1"}, "tool version 2024.1, the campaign toolset has 2023.1"),
+                            ({"tool_version": "mixed: 2023.1, 2024.1"}, "tool version mixed: 2023.1, 2024.1"),
+                            ({"tool_version": ""}, "pass without a tool version"),
+                            ({"status": "fail", "problems": ["wrong"]}, "fail (rerun of a tool-error) wrong"),
+                            (None, "no result of the rerun")):
+      with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
+        root = _campaign(tmp, ["pass", "tool-error"], rerun_items=[item], rc={"vivado": 1})
+        root_file = root / "rerun" / "vs" / "artix7" / "case1" / "summary.json"
+        if change is None:
+          root_file.unlink()
+        else:
+          result = json.loads(root_file.read_text())["results"][0]
+          root_file.write_text(json.dumps({"results": [{**result, **change}]}))
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 1, text)
+        self.assertFalse(summary["steps"]["vivado"]["ok"])
+        self.assertTrue(any(message in f for f in summary["steps"]["vivado"]["failures"]),
+                        summary["steps"]["vivado"]["failures"])
+
+  def test_a_postsynth_rerun_of_another_vivado_fails(self) -> None:
+    item = {"step": "postsynth", "job": "postsynth", "part": "xc7a35tfgg484-2", "case": "crw_crw.1clk.16x64",
+            "first_status": "tool-error", "first_problems": ["transient"], "rerun_status": "pass",
+            "rerun_problems": []}
+    with tempfile.TemporaryDirectory() as tmp:
+      root = _campaign(tmp, ["pass"], ps_tool_error=True, rerun_items=[item], rc={"postsynth": 1})
+      ps = json.loads((root / "ps" / "results.json").read_text())
+      ps["rtl"] = {"ghdl": {"results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
+      (root / "ps" / "results.json").write_text(json.dumps(ps))
+      code, summary, text = self._summary(root)
+      self.assertEqual(code, 0, text)
+      path = root / "rerun" / "ps" / "xc7a35tfgg484-2" / "results.json"
+      data = json.loads(path.read_text())
+      data["parts"]["xc7a35tfgg484-2"]["synth"]["crw_crw_16x64_16_l11"]["version"] = "2024.1"
+      path.write_text(json.dumps(data))
+      code, summary, text = self._summary(root)
+      self.assertEqual(code, 1, text)
+      self.assertIn("xc7a35tfgg484-2 synthesis crw_crw_16x64_16_l11 (rerun): tool version 2024.1, the campaign "
+                    "toolset has 2023.1", summary["steps"]["postsynth"]["failures"])
 
   def test_a_fail_stays_a_fail(self) -> None:
     with tempfile.TemporaryDirectory() as tmp:

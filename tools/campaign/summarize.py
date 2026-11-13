@@ -16,7 +16,9 @@ of each of them passed; the summary lists every rerun with its first and
 second result. The memory thresholds of the EDA lock in effect for the
 campaign (logs/steps.txt) are part of the summary. A vendor_synth or
 post-synthesis result with another tool version than the toolset fails its
-step; without a toolset the campaign fails.
+step, reruns included: a rerun is judged by its own result file
+(rerun/<step>/..., tools/campaign/rerun.py), and a passed rerun without it
+fails. Without a toolset the campaign fails.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import sys
 from pathlib import Path
 
 from tools.campaign import toolset
+from tools.campaign.rerun import _safe
 from tools.eda_archive import archive_campaign
 
 
@@ -56,21 +59,28 @@ def _synthesis(root: Path, name: str, reruns: list[dict], version: str) -> dict:
   counts: dict[str, int] = {}
   bad = []
   for r in data["results"]:
-    status = r["status"]
-    # Only a tool-error is run again; its rerun gives the result.
+    status, result = r["status"], r
+    # Only a tool-error is run again; its rerun gives the result, read from
+    # the result file of the rerun (rerun.py), with its own tool version.
     item = rerun_of.get((r["job"], r["case"])) if status == "tool-error" else None
     if item is not None:
-      status = item.get("rerun_status", "not-run")
+      path = root / "rerun" / name / _safe(r["job"]) / _safe(r["case"]) / "summary.json"
+      found_results = (_load(path) or {}).get("results") or []
+      result = found_results[0] if found_results else None
+      status = result["status"] if result else item.get("rerun_status", "not-run")
+      if result is None:
+        bad.append(f"{r['part']} {r['case']}: no result of the rerun in {path}")
     counts[status] = counts.get(status, 0) + 1
     if status != "pass":
-      problems = item.get("rerun_problems", []) if item else r.get("problems", [])
+      problems = (result or {}).get("problems", []) if item is None or result else item.get("rerun_problems", [])
       note = " (rerun of a tool-error)" if item else ""
       bad.append(f"{r['part']} {r['case']}: {status}{note} {'; '.join(problems)[:200]}")
-    if item is None:  # a rerun is judged by its own run
-      found = "" if r.get("tool_version") in (None, "", "unknown") else r["tool_version"]
-      wrong = _version_problem(found, version, f"{r['part']} {r['case']}")
+    if result is not None:
+      found = "" if result.get("tool_version") in (None, "", "unknown") else result["tool_version"]
+      what = f"{r['part']} {r['case']}" + (" (rerun)" if item else "")
+      wrong = _version_problem(found, version, what)
       if wrong is None and status == "pass" and not found:
-        wrong = f"{r['part']} {r['case']}: pass without a tool version"
+        wrong = f"{what}: pass without a tool version"
       if wrong:
         bad.append(wrong)
   return {"ok": not bad and bool(data["results"]), "counts": counts, "total": len(data["results"]),
@@ -86,6 +96,18 @@ def _postsynth(root: Path, reruns: list[dict], vivado: str) -> dict:
   for part, pd in data.get("parts", {}).items():
     for key, s in pd.get("synth", {}).items():
       wrong = _version_problem(s.get("version"), vivado, f"{part} synthesis {key}")
+      if wrong:
+        bad.append(wrong)
+  # The syntheses of the reruns, with their own tool version.
+  for part, item in rerun_parts.items():
+    path = root / "rerun" / "ps" / _safe(part) / "results.json"
+    rerun_data = _load(path)
+    if rerun_data is None:
+      if item.get("rerun_status") == "pass":
+        bad.append(f"{part}: no result of the rerun in {path}")
+      continue
+    for key, s in rerun_data.get("parts", {}).get(part, {}).get("synth", {}).items():
+      wrong = _version_problem(s.get("version"), vivado, f"{part} synthesis {key} (rerun)")
       if wrong:
         bad.append(wrong)
   for sim, res in data.get("rtl", {}).items():

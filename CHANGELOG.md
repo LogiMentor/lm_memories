@@ -7,6 +7,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Campaign tools come from the environment (issue #8).** `run_amd.sh`
+  no longer falls back to `C:/msys64/ucrt64/bin/ghdl` on Windows: set
+  `GHDL` (or `VUNIT_GHDL_PATH`), or put `ghdl` on `PATH`, as for
+  `LM_VIVADO_DIR`, `LM_QUARTUS_DIR` and `VUNIT_MODELSIM_PATH`
+  (`tools/vendor_synth/local.example.toml`).
+
 ## [0.2.0] - 2026-11-05
 
 First numbered release (issue #3, PR #4). It has breaking changes; before

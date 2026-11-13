@@ -10,8 +10,13 @@ This directory holds the results of the AMD campaign of issue #3
 python -m tools.campaign.publish <campaign root>
 ```
 
-from the result files of the campaign and of its reruns. Each published
-result records:
+from the result files of the campaign and of its reruns. This campaign of
+the Windows laptop cannot be published again with the current
+`tools/campaign/publish.py` (which needs the tool versions of the campaign,
+`logs/toolset.json`, and the record of the expected results of each case):
+these files stay as they are, and their archives remain the reference.
+
+Each published result records:
 - the commit it ran on;
 - the tool and its version;
 - the device;

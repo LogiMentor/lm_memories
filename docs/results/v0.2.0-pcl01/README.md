@@ -39,9 +39,9 @@ code of every step and every archive.
   steps keep their results from `2e95d7a`.
 - **Tool-errors.** None. No step needed a rerun, and no synthesis needed a
   retry inside vendor_synth (`retries` is 0 or empty for every case).
-- **Commits.** `2e95d7a` and `386e8d8` are commits of the branch of
-  issue #8. If that pull request is merged with a squash, they stay
-  readable in the pull request on GitHub, not in the history of `main`.
+- **Commits.** `2e95d7a` and `386e8d8` are commits of PR #9 (issue #8),
+  merged into `main` with a merge commit, not a squash: they stay in the
+  history of `main`.
 
 ## Comparison with the laptop campaign
 

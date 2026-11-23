@@ -54,7 +54,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from tools.campaign import toolset
@@ -96,7 +96,11 @@ def tool_dirs(tools: dict | None) -> dict[str, Path]:
     command = [c for c in entry.get("command", []) if c not in ("cmd", "/c")]
     directory = Path(command[0]).parent.parent if command else None
     # Only a real installation path: never a bare name or a root ("/", "C:/").
-    if tool in _TOOL_PLACEHOLDERS and directory is not None and directory.is_absolute() and len(directory.parts) > 2:
+    # Absolute on either system: a campaign of one system can be published
+    # on the other (a Linux "/opt/..." is not absolute for Windows).
+    absolute = bool(command) and (PurePosixPath(command[0]).is_absolute()
+                                  or PureWindowsPath(command[0]).is_absolute())
+    if tool in _TOOL_PLACEHOLDERS and absolute and len(directory.parts) > 2:
       out[tool] = directory
   return out
 

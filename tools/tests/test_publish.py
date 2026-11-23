@@ -444,6 +444,22 @@ class LinuxPublishTest(unittest.TestCase):
     # The home directory alone, not a longer name that starts with it.
     self.assertEqual(scrub("/home/someone2/x"), "/home/someone2/x")
 
+  def test_paths_of_a_toolset_of_the_other_system_are_removed(self):
+    # A toolset is absolute on its own system: Linux paths published on
+    # Windows (the Windows CI of PR #9) and Windows paths published on Linux.
+    windows_tools = {"tools": {
+      "vivado": {"version": "2023.1", "command": ["cmd", "/c", "D:/eda/Vivado/2023.1/bin/vivado.bat", "-version"]},
+      "ghdl": {"version": "6.0.0", "command": ["C:/msys64/ucrt64/bin/ghdl.exe", "--version"]},
+    }}
+    for tools, raw, clean in (
+        (LINUX_TOOLS, "/opt/eda/ghdl/6.0.0-llvm/lib/ghdl/vendors", "<ghdl>/lib/ghdl/vendors"),
+        (windows_tools, "C:/msys64/ucrt64/lib/ghdl/vendors", "<ghdl>/lib/ghdl/vendors"),
+        (windows_tools, "D:\\eda\\Vivado\\2023.1\\data\\vhdl", "<vivado>\\data\\vhdl")):
+      with self.subTest(raw=raw):
+        self.assertEqual(set(publish.tool_dirs(tools)), set(tools["tools"]))
+        scrub = publish.scrubber(self.base / "c", tools, home=self.base / "home")
+        self.assertEqual(scrub(raw), clean)
+
   def test_paths_under_home_and_opt_stop_the_publication(self):
     self.assertTrue(publish.local_paths("/home/other/file.vhd"))
     self.assertTrue(publish.local_paths("/opt/other/tool/bin/x"))

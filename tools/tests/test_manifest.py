@@ -5,13 +5,65 @@
 from __future__ import annotations
 
 import io
+import os
+import shutil
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
-from tools.manifest import DEFAULT_MANIFEST, ROOT_DIR, ManifestError, load
+from tools.manifest import DEFAULT_MANIFEST, ROOT_DIR, ManifestError, cli, load
 from tools.manifest.cli import main
+
+
+def which_311_windows(cmd: str, mode: int = os.F_OK | os.X_OK, path: str | None = None) -> str | None:
+  """shutil.which of Python 3.11 on Windows (Lib/shutil.py), PATHEXT reduced
+  to .exe: a cmd with a directory part is checked as it is, without PATHEXT;
+  a search tries the name with each extension of PATHEXT."""
+  if os.path.dirname(cmd):
+    return cmd if os.path.isfile(cmd) else None
+  names = [cmd] if cmd.lower().endswith(".exe") else [cmd + ".exe"]
+  for folder in (os.environ.get("PATH", "") if path is None else path).split(os.pathsep):
+    for name in names:
+      if folder and os.path.isfile(os.path.join(folder, name)):
+        return os.path.join(folder, name)
+  return None
+
+
+class GhdlFoundTest(unittest.TestCase):
+  def test_a_windows_path_without_exe_is_found_with_python_3_11(self) -> None:
+    # Review of PR #9: GHDL=C:/msys64/ucrt64/bin/ghdl (tools/vendor_synth/
+    # local.example.toml) is a valid installation, ghdl.exe starts, but
+    # shutil.which of Python 3.11 does not find the path without .exe, so
+    # "python -m tools.manifest check" stopped with "GHDL not found".
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(shutil, "which", which_311_windows), \
+         mock.patch.object(cli, "check", return_value=0):
+      (Path(tmp) / "ghdl.exe").write_text("")
+      for ghdl in (str(Path(tmp) / "ghdl"), str(Path(tmp) / "ghdl.exe")):
+        with self.subTest(ghdl=ghdl), mock.patch.object(cli, "GHDL", ghdl), redirect_stderr(io.StringIO()) as err:
+          self.assertEqual(main(["check", "--flow", "sim"]), 0, err.getvalue())
+      with mock.patch.dict(os.environ, {"PATH": tmp}):
+        self.assertTrue(cli.ghdl_found("ghdl"))
+      self.assertFalse(cli.ghdl_found(str(Path(tmp) / "other" / "ghdl")))
+
+  @unittest.skipUnless(os.name == "nt", "Windows: PATHEXT of the real shutil.which")
+  def test_a_path_without_exe_is_found_on_windows(self) -> None:
+    # The same with the shutil.which of the running Python (CI: 3.11 and 3.12).
+    with tempfile.TemporaryDirectory() as tmp:
+      (Path(tmp) / "ghdl.exe").write_bytes(b"")
+      self.assertTrue(cli.ghdl_found(str(Path(tmp) / "ghdl")))
+      self.assertTrue(cli.ghdl_found(Path(tmp).as_posix() + "/ghdl"))
+      self.assertFalse(cli.ghdl_found(str(Path(tmp) / "other")))
+
+  @unittest.skipIf(os.name == "nt", "POSIX execute permission")
+  def test_a_path_must_be_an_executable(self) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+      ghdl = Path(tmp) / "ghdl"
+      ghdl.write_text("")
+      self.assertFalse(cli.ghdl_found(str(ghdl)))
+      ghdl.chmod(0o755)
+      self.assertTrue(cli.ghdl_found(str(ghdl)))
 
 
 class ManifestTest(unittest.TestCase):

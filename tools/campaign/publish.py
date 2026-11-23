@@ -318,22 +318,24 @@ def _ps_runs(data: dict, archive: dict, configs_only: set[str] | None = None, pa
   return out
 
 
-def _postsynth_problem(entry: dict, versions: dict[str, str]) -> str | None:
+def _postsynth_problem(entry: dict, tools: dict) -> str | None:
   """Why a post-synthesis result is not of the tools of the toolset, or None:
   the synthesis of Vivado, GHDL and xsim (the xsim of that Vivado)."""
   what = f"postsynth {entry.get('part') or 'RTL'} {entry.get('config', '')}".rstrip()
   synthesis = entry.get("synthesis")
-  if synthesis is not None and synthesis.get("tool_version") != versions["vivado"]:
+  vivado = tools["tools"]["vivado"]["version"]
+  if synthesis is not None and synthesis.get("tool_version") != vivado:
     return (f"{what}: synthesis with vivado {synthesis.get('tool_version') or 'unknown'}, the campaign toolset has "
-            f"{versions['vivado']}")
+            f"{vivado}")
   simulator = entry.get("simulator")
-  problem = (toolset.simulator_problem(simulator, entry["simulator_version"], versions)
+  problem = (toolset.simulator_problem(simulator, entry["simulator_version"], tools)
              if simulator and "simulator_version" in entry else None)
   return f"{what}: {problem}" if problem else None
 
 
 def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: str,
-                   versions: dict[str, str] | None = None) -> dict:
+                   tools: dict | None = None) -> dict:
+  """tools: the toolset of the campaign; every result must be of its tools (_postsynth_problem)."""
   data = _load(root / "ps" / "results.json")
   if not data:
     raise PublishError(f"postsynth: no results.json in {root / 'ps'}")
@@ -363,7 +365,7 @@ def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: st
         results.append(e)
       first_runs.append(first)
   for e in results:
-    problem = _postsynth_problem(e, versions) if versions else None
+    problem = _postsynth_problem(e, tools) if tools else None
     if problem:
       raise PublishError(problem)
   verdicts: dict[str, int] = {}
@@ -373,22 +375,18 @@ def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: st
           "verdicts": verdicts, "total": len(results), "results": results}
 
 
-def sim_step(root: Path, step: str, work: Path, directory: Path, tool_entry: dict | None = None) -> dict:
+def sim_step(root: Path, step: str, work: Path, directory: Path, tools: dict | None = None) -> dict:
   """VUnit or mutation results: one simulator, no device.
 
-  tool_entry: the simulator in the campaign toolset (version, edition); the
-  simulator recorded by the run must be that one."""
+  tools: the toolset of the campaign; the simulator recorded by the run must
+  be its simulator of that name (toolset.simulator_problem)."""
   data = _load(work / "results.json")
   if not data:
     raise PublishError(f"{step}: no results.json in {work}")
   tool, edition, version = campaign_parts(work.name)
-  if tool_entry is not None:
-    simulator = data.get("simulator") or ""
-    wanted_edition = tool_entry.get("edition") if tool == "questa" else ""
-    same_edition = (wanted_edition == "starter") == ("starter" in simulator.lower()) if tool == "questa" else True
-    if not toolset.has_version(simulator, tool_entry["version"]) or not same_edition:
-      named = " ".join(filter(None, (tool, wanted_edition, tool_entry["version"])))
-      raise PublishError(f"{step}: simulator {simulator or 'not recorded'}, the campaign toolset has {named}")
+  problem = toolset.simulator_problem(tool, data.get("simulator"), tools) if tools is not None else None
+  if problem:
+    raise PublishError(f"{step}: {problem}")
   return {"step": step, "tool": tool, **({"edition": edition} if edition else {}), "tool_version": version,
           "part": None, **data,
           "archive": verify_archive(data.get("archive"), directory)}
@@ -446,9 +444,9 @@ def collect(root: Path, directory: Path | None = None) -> dict[str, dict]:
   files = {f"{names[step]}.json": synth_step(root, step, reruns, directory, versions[step_tool[step]])
            for step in SYNTH_STEPS}
   postsynth_file = f"{names['postsynth']}.json"
-  files[postsynth_file] = postsynth_step(root, reruns, directory, names["postsynth"], versions)
-  for step, work, name, tool in _sim_dirs(root, names):
-    files[name] = sim_step(root, step, work, directory, tools["tools"][tool])
+  files[postsynth_file] = postsynth_step(root, reruns, directory, names["postsynth"], tools)
+  for step, work, name, _ in _sim_dirs(root, names):
+    files[name] = sim_step(root, step, work, directory, tools)
   driver = verify_archive(summary.get("driver_archive"), directory)
   archives = {}
   for name, content in files.items():

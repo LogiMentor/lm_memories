@@ -23,9 +23,11 @@ campaign (logs/steps.txt) are part of the summary. A vendor_synth or
 post-synthesis result with another tool version than the toolset fails its
 step: for post-synthesis, its Vivado synthesis and its simulator (the GHDL
 of the toolset, the xsim of its Vivado; a simulation with results must
-record its version). Reruns included: a rerun is judged by its own result
-file (rerun/<step>/..., tools/campaign/rerun.py), and a passed rerun
-without it fails. Without a toolset the campaign fails.
+record its version); a VUnit or mutation run of another simulator (the
+GHDL of the toolset, its Questa of the same edition) fails its step too.
+Reruns included: a rerun is judged by its own result file
+(rerun/<step>/..., tools/campaign/rerun.py), and a passed rerun without it
+fails. Without a toolset the campaign fails.
 """
 
 from __future__ import annotations
@@ -105,20 +107,20 @@ def _synthesis(root: Path, name: str, reruns: list[dict], version: str) -> dict:
           "provisional_files": sorted(provisional_files), "failures": bad, "archive": archive}
 
 
-def _postsynth(root: Path, reruns: list[dict], versions: dict[str, str]) -> dict:
-  """versions: tool -> version of the campaign toolset. Every synthesis must
-  be of its Vivado, every simulation with results of its GHDL or of the xsim
-  of its Vivado (toolset.simulator_problem), reruns included."""
+def _postsynth(root: Path, reruns: list[dict], tools: dict) -> dict:
+  """tools: the toolset of the campaign. Every synthesis must be of its
+  Vivado, every simulation with results of its GHDL or of the xsim of its
+  Vivado (toolset.simulator_problem), reruns included."""
   data = _load(root / "ps" / "results.json")
   if data is None:
     return {"ok": False, "detail": "no results.json"}
-  vivado = versions["vivado"]
+  vivado = tools["tools"]["vivado"]["version"]
   rerun_parts = {i["part"]: i for i in reruns}
   runs, bad = 0, []
 
   def simulators(sims: dict, what: str) -> None:
     for sim, res in sims.items():
-      problem = toolset.simulator_problem(sim, res.get("sim"), versions) if res.get("results") else None
+      problem = toolset.simulator_problem(sim, res.get("sim"), tools) if res.get("results") else None
       if problem:
         bad.append(f"{what} {sim}: {problem}")
 
@@ -167,20 +169,27 @@ def _postsynth(root: Path, reruns: list[dict], versions: dict[str, str]) -> dict
           "archive": data.get("archive")}
 
 
-def _vunit(root: Path, name: str) -> dict:
+def _vunit(root: Path, name: str, simulator: str, tools: dict) -> dict:
+  """simulator: "ghdl" or "questa"; the run must be of that simulator of the
+  toolset (toolset.simulator_problem)."""
   data = _load(root / "vu" / name / "results.json")
   if data is None:
     return {"ok": False, "detail": "no results.json"}
-  return {"ok": not data["problems"] and data["total"] > 0, "passed": data["passed"], "total": data["total"],
-          "simulator": data["simulator"], "failures": data["problems"][:20], "archive": data.get("archive")}
+  wrong = toolset.simulator_problem(simulator, data.get("simulator"), tools)
+  bad = ([wrong] if wrong else []) + data["problems"]
+  return {"ok": not bad and data["total"] > 0, "passed": data["passed"], "total": data["total"],
+          "simulator": data.get("simulator"), "failures": bad[:20], "archive": data.get("archive")}
 
 
-def _mutation(root: Path, name: str) -> dict:
+def _mutation(root: Path, name: str, tools: dict) -> dict:
+  """The mutation run must be of the GHDL of the toolset (toolset.simulator_problem)."""
   data = _load(root / "mut" / name / "results.json")
   if data is None:
     return {"ok": False, "detail": "no results.json"}
   detected = sum(m["verdict"] == "DETECTED" for m in data["mutations"])
-  bad = [f"{m['name']}: {m['verdict']}" for m in data["mutations"] if m["verdict"] != "DETECTED"]
+  wrong = toolset.simulator_problem("ghdl", data.get("simulator"), tools)
+  bad = ([wrong] if wrong else []) + [f"{m['name']}: {m['verdict']}" for m in data["mutations"]
+                                      if m["verdict"] != "DETECTED"]
   ok = data["baseline"]["verdict"] == "PASS" and not bad and bool(data["mutations"])
   return {"ok": ok, "baseline": data["baseline"]["verdict"], "detected": detected, "total": len(data["mutations"]),
           "failures": bad, "archive": data.get("archive")}
@@ -251,11 +260,10 @@ def main(argv: list[str] | None = None) -> int:
       "vivado": _synthesis(root, "vs", by_step["vivado"], vivado),
       "checks_vivado": _synthesis(root, "fc", by_step["checks_vivado"], vivado),
       "checks_quartus": _synthesis(root, "qc", by_step["checks_quartus"], quartus),
-      "postsynth": _postsynth(root, by_step["postsynth"],
-                              {tool: entry["version"] for tool, entry in tools["tools"].items()}),
-      "vunit_ghdl": _vunit(root, names["vunit_ghdl"]),
-      "vunit_questa": _vunit(root, names["vunit_questa"]),
-      "mutation": _mutation(root, names["mutation"]),
+      "postsynth": _postsynth(root, by_step["postsynth"], tools),
+      "vunit_ghdl": _vunit(root, names["vunit_ghdl"], "ghdl", tools),
+      "vunit_questa": _vunit(root, names["vunit_questa"], "questa", tools),
+      "mutation": _mutation(root, names["mutation"], tools),
     }
   # The driver logs and the pilot, archived like every campaign step.
   summary["driver_archive"] = archive_campaign("amd_campaign_driver", root / "logs", root / "pilot")

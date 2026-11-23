@@ -260,18 +260,27 @@ def has_version(text: str | None, version: str) -> bool:
   return bool(text) and re.search(r"(?<![\d.])" + re.escape(version) + r"(?![\d.])", text) is not None
 
 
-def simulator_problem(simulator: str, recorded: str | None, versions: dict[str, str]) -> str | None:
-  """Why a post-synthesis simulation is not of the simulator of the toolset, or None.
+def simulator_problem(simulator: str, recorded: str | None, toolset: dict) -> str | None:
+  """Why a simulation is not of the simulator of the toolset, or None.
 
-  simulator: "ghdl" or "xsim"; recorded: its version line in the results of
-  sim/scripts/run_postsynth.py ("GHDL 6.0.0 (...)", "xsim 2024.1"); versions:
-  tool -> version of the toolset. GHDL must be the GHDL of the toolset, xsim
-  the xsim of its Vivado; a version line without the version does not pass."""
-  wanted = {"ghdl": ("ghdl", versions["ghdl"]), "xsim": ("vivado", versions["vivado"])}.get(simulator)
-  if wanted is not None and has_version(recorded, wanted[1]):
+  simulator: "ghdl" or "xsim" (post-synthesis, sim/scripts/run_postsynth.py),
+  "ghdl" or "questa" (VUnit and mutation); recorded: the version line of
+  its results ("GHDL 6.0.0 (...)", "xsim 2024.1", "ghdl_GHDL_6.0.0_...",
+  "modelsim_Questa_Altera_Starter_FPGA_Edition-64_vsim_2025.2_..."). GHDL
+  must be the GHDL of the toolset, xsim the xsim of its Vivado, Questa its
+  Questa of the same edition (Starter or not); a version line without the
+  version does not pass."""
+  tools = toolset["tools"]
+  name = {"ghdl": "ghdl", "xsim": "vivado", "questa": "questa"}.get(simulator)
+  if name is None:
+    return f"simulator {recorded or 'unknown'}, the campaign toolset has no such simulator"
+  entry = tools[name]
+  edition = entry.get("edition", "") if name == "questa" else ""
+  same_edition = (edition == "starter") == ("starter" in (recorded or "").lower()) if name == "questa" else True
+  if has_version(recorded, entry["version"]) and same_edition:
     return None
-  tool = f"{wanted[0]} {wanted[1]}" if wanted else "no such simulator"
-  return f"simulator {recorded or 'unknown'}, the campaign toolset has {tool}"
+  named = " ".join(filter(None, (name, edition, entry["version"])))
+  return f"simulator {recorded or 'unknown'}, the campaign toolset has {named}"
 
 
 def load(root: Path) -> dict:

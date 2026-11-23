@@ -56,6 +56,9 @@ class SummaryTest(unittest.TestCase):
 
 # The version line of the GHDL of the toolset, as run_postsynth.py records it.
 GHDL_LINE = toolsets.LAPTOP_BANNERS["ghdl"].strip()
+# The simulator lines of VUnit and mutation for the toolset (as in docs/results).
+VUNIT_SIMULATORS = {"ghdl_6.0.0": "ghdl_GHDL_6.0.0_(tarball)_Dunoon_edition_",
+                    "questa_2021.1": "modelsim_Questa_Sim-64_vsim_2021.1_Simulator_2021.01_Jan_19_2021"}
 
 
 def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
@@ -82,9 +85,10 @@ def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
     "xc7a35tfgg484-2": {"synth": {"crw_crw_16x64_16_l11": synth}, "sims": sims}}}))
   for name in ("ghdl_6.0.0", "questa_2021.1"):
     (root / "vu" / name / "results.json").write_text(json.dumps({"problems": [], "total": 1, "passed": 1,
-                                                                 "simulator": name}))
+                                                                 "simulator": VUNIT_SIMULATORS[name]}))
   (root / "mut" / "ghdl_6.0.0" / "results.json").write_text(json.dumps({
-    "baseline": {"verdict": "PASS"}, "mutations": [{"name": "m", "verdict": "DETECTED"}]}))
+    "simulator": VUNIT_SIMULATORS["ghdl_6.0.0"], "baseline": {"verdict": "PASS"},
+    "mutations": [{"name": "m", "verdict": "DETECTED"}]}))
   if rerun_items is not None:
     (root / "rerun").mkdir()
     (root / "rerun" / "rerun.json").write_text(json.dumps({"ok": True, "items": rerun_items}))
@@ -259,6 +263,40 @@ class RerunTest(unittest.TestCase):
         code, summary, text = self._summary(root)
         self.assertEqual(code, 1, text)
         self.assertIn(message, summary["steps"]["postsynth"]["failures"])
+
+  def test_a_vunit_or_mutation_run_of_another_simulator_fails(self) -> None:
+    # Review of PR #9: the summary did not check the simulator of VUnit and
+    # mutation, so a run of another GHDL or Questa passed (publish.py refused it).
+    cases = (
+      ("vunit_ghdl", "vu/ghdl_6.0.0", "ghdl_GHDL_5.0.1_(tarball)_Dunoon_edition_",
+       "simulator ghdl_GHDL_5.0.1_(tarball)_Dunoon_edition_, the campaign toolset has ghdl 6.0.0"),
+      ("vunit_ghdl", "vu/ghdl_6.0.0", None, "simulator unknown, the campaign toolset has ghdl 6.0.0"),
+      ("vunit_questa", "vu/questa_2021.1", "modelsim_Questa_Sim-64_vsim_2025.2_Simulator",
+       "simulator modelsim_Questa_Sim-64_vsim_2025.2_Simulator, the campaign toolset has questa 2021.1"),
+      # Same version, another edition.
+      ("vunit_questa", "vu/questa_2021.1", "modelsim_Questa_Altera_Starter_FPGA_Edition-64_vsim_2021.1_Simulator",
+       "simulator modelsim_Questa_Altera_Starter_FPGA_Edition-64_vsim_2021.1_Simulator, the campaign toolset has "
+       "questa 2021.1"),
+      ("mutation", "mut/ghdl_6.0.0", "ghdl_GHDL_5.0.1_(tarball)_Dunoon_edition_",
+       "simulator ghdl_GHDL_5.0.1_(tarball)_Dunoon_edition_, the campaign toolset has ghdl 6.0.0"),
+      ("mutation", "mut/ghdl_6.0.0", None, "simulator unknown, the campaign toolset has ghdl 6.0.0"),
+    )
+    for step, sub, simulator, message in cases:
+      with self.subTest(step=step, simulator=simulator), tempfile.TemporaryDirectory() as tmp:
+        root = _campaign(tmp, ["pass"])
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 0, text)
+        path = root / sub / "results.json"
+        data = json.loads(path.read_text())
+        if simulator is None:
+          data.pop("simulator")
+        else:
+          data["simulator"] = simulator
+        path.write_text(json.dumps(data))
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 1, text)
+        self.assertFalse(summary["steps"][step]["ok"])
+        self.assertIn(message, summary["steps"][step]["failures"])
 
   def test_provisional_results_are_not_a_pass(self) -> None:
     # Review of PR #9: results compared with expected results not yet

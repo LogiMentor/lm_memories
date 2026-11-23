@@ -32,6 +32,16 @@ All notable changes to this project are documented here.
   reruns included (for post-synthesis, both the Vivado of the synthesis
   and the simulator, GHDL or xsim), and VUnit and mutation runs of
   another simulator (GHDL, or Questa of another version or edition).
+- **Command line of the EDA lock (issue #10).** `python3 tools/eda_lock.py
+  [--kind synthesis|simulation] [--timeout SECONDS] [--purpose TEXT] --
+  COMMAND [ARG...]` runs any command (a Tcl flow, a CI job) holding the
+  machine-wide lock. It waits for the lock and then for free memory, and
+  releases the lock only after the command has exited, also after an error
+  or an interruption. Exit code: the command's (128 + N if signal N stopped
+  it); 125 if the command did not run (lock or memory timeout, wrong
+  options), 126 if it cannot be started, 127 if it does not exist. The file
+  depends only on the Python standard library, so other repositories can
+  keep an identical copy.
 
 ### Changed
 

@@ -239,6 +239,22 @@ in MB) and 2 GB for simulation (`LM_EDA_MIN_FREE_MB_SIM`). The timeout is
 projects do not take this lock; the memory check keeps a run from starting
 while they fill the memory.
 
+Any other command can run under the same lock, for example a Tcl flow or a
+CI job:
+
+```sh
+python3 tools/eda_lock.py --kind synthesis --timeout 3600 -- vivado -mode batch -source build.tcl
+```
+
+It waits for the lock and then for free memory (`--kind synthesis` or
+`simulation`), runs the command, and releases the lock when the command
+exits, also after an error or an interruption. Its exit code is the
+command's; 125 means that the command did not run (lock or memory timeout,
+wrong options), 126 and 127 that it cannot be started or does not exist.
+`python3 tools/eda_lock.py --help` lists the options. The file depends only
+on the Python standard library, so other repositories keep an identical
+copy and queue on the same lock.
+
 ## Local Vendor Synthesis
 
 Vendor synthesis checks run as local scripts rather than in hosted CI, because

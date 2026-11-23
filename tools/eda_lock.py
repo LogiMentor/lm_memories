@@ -2,15 +2,35 @@
 # Copyright 2026 LogiMentor Srl
 """Machine-wide lock for heavy EDA runs (synthesis, large simulations).
 
-Every lm_memories script that starts a heavy tool takes this lock first, so
-sessions on the same machine queue up instead of running in parallel. The
-lock is a file with a fixed name in the system temporary directory, not tied
-to any repository, so other projects can use the same file to queue with us.
+Every script that starts a heavy tool takes this lock first, so sessions on
+the same machine queue up instead of running in parallel. The lock is a file
+with a fixed name, not tied to any repository, so every project that uses it
+queues with the others. This file depends only on the Python standard
+library (3.11 or newer): other repositories keep an identical copy.
+
+From Python: "with heavy_tool_lock(purpose, kind=...):". From a shell, a
+Tcl flow or CI, the command line runs a command holding the lock:
+
+  python3 eda_lock.py [--kind synthesis|simulation] [--timeout SECONDS]
+                      [--purpose TEXT] -- COMMAND [ARG...]
+
+It waits for the lock and then for free memory (--kind, default synthesis),
+runs COMMAND, and releases the lock when COMMAND exits. Its exit code is
+that of COMMAND (128 + N if signal N stopped it); 125 if COMMAND did not run
+(wrong options, lock or memory timeout), 126 if it cannot be started, 127 if
+it does not exist. Messages go to stderr. The lock is released only after
+COMMAND has exited: the signals a terminal sends to its whole foreground
+process group (SIGINT, SIGQUIT; SIGBREAK on Windows) reach COMMAND directly
+and the command line ignores them; SIGTERM and SIGHUP are relayed to COMMAND.
+A signal before COMMAND starts stops the wait, and COMMAND does not run. A
+process killed with SIGKILL cannot do any of this: the operating system
+releases the lock and COMMAND goes on without it.
 
 - The lock is an operating-system lock on that file (msvcrt.locking on
   Windows, flock elsewhere). The operating system releases it when the holder
   exits, also after a crash, so there is no stale-lock cleanup and no window
-  where two waiters can both take it. No process is ever terminated.
+  where two waiters can both take it. The lock never terminates a process
+  (the command line only relays the signals it receives itself).
 - The file holds JSON describing the holder (pid, host, user, purpose,
   command, start time); a waiting process prints it. The file itself is never
   deleted.
@@ -43,10 +63,13 @@ to any repository, so other projects can use the same file to queue with us.
 
 from __future__ import annotations
 
+import argparse
 import getpass
 import json
 import os
+import signal
 import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -55,6 +78,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NoReturn
 
 LOCK_NAME = "lm_eda_heavy_tools.lock"
 TOKEN_ENV = "LM_EDA_LOCK_TOKEN"
@@ -348,3 +372,141 @@ def _release_ticket(ticket: Path, fd: int) -> None:
     ticket.unlink()
   except OSError:
     pass
+
+
+# Command line ----------------------------------------------------------------
+
+# Exit codes of the command line besides the exit code of the command, as GNU
+# env and timeout use them.
+EXIT_LOCK_FAILED = 125  # wrong options, lock or memory timeout: the command did not run
+EXIT_CANNOT_RUN = 126  # the command exists but cannot be started
+EXIT_NOT_FOUND = 127  # no such command
+
+# Signals that a terminal sends to its whole foreground process group: the
+# command receives them itself, so the command line only ignores them while
+# the command runs. The others are relayed to the command.
+_TERMINAL_SIGNALS = ("SIGINT", "SIGQUIT", "SIGBREAK")
+_RELAYED_SIGNALS = ("SIGTERM", "SIGHUP")
+
+
+class _Interrupted(Exception):
+  """A signal arrived before the command started."""
+
+  def __init__(self, signum: int) -> None:
+    super().__init__(signum)
+    self.signum = signum
+
+
+def exit_code(returncode: int) -> int:
+  """Exit code of a command as a shell reports it: 128 + N when signal N stopped it."""
+  return 128 - returncode if returncode < 0 else returncode
+
+
+def run(
+  command: list[str],
+  kind: str = "synthesis",
+  timeout_s: float | None = None,
+  purpose: str | None = None,
+  lock_path: Path | None = None,
+  log: Callable[[str], None] = print,
+  free_mb: Callable[[], float | None] = free_physical_mb,
+) -> int:
+  """Run a command holding the lock (heavy_tool_lock) and return its exit code.
+
+  The lock is released only after the command has exited, whatever happens:
+  an error, a signal, an interruption. A signal before the command starts
+  stops the wait and returns 128 + N; the command is then not started."""
+  signal_names = {getattr(signal, name): name for name in _TERMINAL_SIGNALS + _RELAYED_SIGNALS if hasattr(signal, name)}
+  relayed = {getattr(signal, name) for name in _RELAYED_SIGNALS if hasattr(signal, name)}
+  state: dict = {"child": None, "starting": False, "pending": []}
+
+  def handler(signum: int, frame: object) -> None:
+    child = state["child"]
+    if child is not None:
+      if signum in relayed:
+        child.send_signal(signum)
+      return
+    if state["starting"]:
+      state["pending"].append(signum)  # sent to the command once it exists
+      return
+    raise _Interrupted(signum)
+
+  previous = {}
+  for signum in signal_names:
+    if signal.getsignal(signum) is signal.SIG_IGN:
+      continue  # an ignored signal stays ignored (nohup), for the command too
+    previous[signum] = signal.signal(signum, handler)
+  try:
+    with heavy_tool_lock(purpose or Path(command[0]).name, timeout_s=timeout_s, lock_path=lock_path, log=log,
+                         kind=kind, free_mb=free_mb):
+      state["starting"] = True
+      try:
+        child = subprocess.Popen(command)
+      except FileNotFoundError as exc:
+        log(f"[eda-lock] command not found: {command[0]} ({exc})")
+        return EXIT_NOT_FOUND
+      except OSError as exc:
+        log(f"[eda-lock] cannot run {command[0]}: {exc}")
+        return EXIT_CANNOT_RUN
+      state["child"] = child
+      for signum in state["pending"]:
+        child.send_signal(signum)
+      returncode = child.wait()
+    return exit_code(returncode)
+  except _Interrupted as exc:
+    log(f"[eda-lock] {signal_names.get(exc.signum, exc.signum)} before the command started: not started")
+    return 128 + exc.signum
+  except (LockTimeout, MemoryTimeout) as exc:
+    log(str(exc))
+    return EXIT_LOCK_FAILED
+  finally:
+    for signum, old in previous.items():
+      signal.signal(signum, old)
+
+
+class _UsageError(Exception):
+  pass
+
+
+class _Parser(argparse.ArgumentParser):
+  def error(self, message: str) -> NoReturn:
+    raise _UsageError(message)
+
+
+def main(argv: list[str] | None = None) -> int:
+  """python3 eda_lock.py [--kind KIND] [--timeout SECONDS] [--purpose TEXT] -- COMMAND [ARG...]"""
+  argv = sys.argv[1:] if argv is None else argv
+  parser = _Parser(
+    prog="eda_lock.py",
+    usage="%(prog)s [--kind {" + ",".join(MIN_FREE_MB) + "}] [--timeout SECONDS] [--purpose TEXT] -- COMMAND [ARG...]",
+    description="Run COMMAND holding the machine-wide EDA lock: wait for the lock, then for free memory, "
+                "run the command, release the lock when it exits. Exit code: that of the command (128 + N "
+                f"if signal N stopped it); {EXIT_LOCK_FAILED} if the command did not run (wrong options, lock "
+                f"or memory timeout), {EXIT_CANNOT_RUN} if it cannot be started, {EXIT_NOT_FOUND} if it "
+                "does not exist. Lock directory: LM_EDA_LOCK_DIR.")
+  parser.add_argument("--kind", choices=list(MIN_FREE_MB), default="synthesis",
+                      help="kind of run, selects the free-memory threshold (default: synthesis)")
+  parser.add_argument("--timeout", type=float, metavar="SECONDS",
+                      help=f"maximum wait for the lock (default: {TIMEOUT_ENV}, else {DEFAULT_TIMEOUT_S:.0f} s)")
+  parser.add_argument("--purpose", metavar="TEXT", help="shown to waiting runs (default: the command name)")
+  split = argv.index("--") if "--" in argv else len(argv)
+  options, command = argv[:split], argv[split + 1:]
+
+  def log(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+  try:
+    args = parser.parse_args(options)
+    if split == len(argv) or not command:
+      raise _UsageError("give the command after --")
+    if args.timeout is not None and args.timeout < 0:
+      raise _UsageError("--timeout must not be negative")
+  except _UsageError as exc:
+    parser.print_usage(sys.stderr)
+    log(f"eda_lock.py: {exc}")
+    return EXIT_LOCK_FAILED
+  return run(command, kind=args.kind, timeout_s=args.timeout, purpose=args.purpose, log=log)
+
+
+if __name__ == "__main__":
+  sys.exit(main())

@@ -255,6 +255,25 @@ def versions(toolset: dict) -> dict[str, dict[str, str]]:
           for tool, entry in toolset["tools"].items()}
 
 
+def has_version(text: str | None, version: str) -> bool:
+  """The version, as a whole number, in a version line ("GHDL 6.0.0 (...)", "ghdl_GHDL_6.0.0_...")."""
+  return bool(text) and re.search(r"(?<![\d.])" + re.escape(version) + r"(?![\d.])", text) is not None
+
+
+def simulator_problem(simulator: str, recorded: str | None, versions: dict[str, str]) -> str | None:
+  """Why a post-synthesis simulation is not of the simulator of the toolset, or None.
+
+  simulator: "ghdl" or "xsim"; recorded: its version line in the results of
+  sim/scripts/run_postsynth.py ("GHDL 6.0.0 (...)", "xsim 2024.1"); versions:
+  tool -> version of the toolset. GHDL must be the GHDL of the toolset, xsim
+  the xsim of its Vivado; a version line without the version does not pass."""
+  wanted = {"ghdl": ("ghdl", versions["ghdl"]), "xsim": ("vivado", versions["vivado"])}.get(simulator)
+  if wanted is not None and has_version(recorded, wanted[1]):
+    return None
+  tool = f"{wanted[0]} {wanted[1]}" if wanted else "no such simulator"
+  return f"simulator {recorded or 'unknown'}, the campaign toolset has {tool}"
+
+
 def load(root: Path) -> dict:
   """The toolset of a campaign root (<root>/logs/toolset.json)."""
   path = root / "logs" / TOOLSET_FILE

@@ -27,6 +27,10 @@ All notable changes to this project are documented here.
   toolset of the campaign: vendor_synth results and their reruns (tool
   version and file of expected results), post-synthesis (Vivado, xsim,
   GHDL), VUnit and mutation (simulator), and the toolset of `summary.json`.
+  The campaign summary fails such results too, before publication:
+  vendor_synth and post-synthesis results of another tool version,
+  reruns included; for post-synthesis, both the Vivado of the synthesis
+  and the simulator (GHDL, xsim).
 
 ### Changed
 

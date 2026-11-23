@@ -54,6 +54,10 @@ class SummaryTest(unittest.TestCase):
       self.assertEqual(summary["retry_waits"], "not recorded")
 
 
+# The version line of the GHDL of the toolset, as run_postsynth.py records it.
+GHDL_LINE = toolsets.LAPTOP_BANNERS["ghdl"].strip()
+
+
 def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
               rerun_items: list[dict] | None = None, rc: dict | None = None) -> Path:
   """A campaign root where every step passed, except what the arguments say."""
@@ -73,7 +77,7 @@ def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
     (root / sub / "summary.json").write_text(json.dumps({"results": [
       {"job": "j", "part": "p", "case": "x", "status": "pass", "tool_version": version, "problems": []}]}))
   synth = {"ok": not ps_tool_error, "tool_error": ps_tool_error, "problems": ["transient"] if ps_tool_error else []}
-  sims = {} if ps_tool_error else {"ghdl": {"results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
+  sims = {} if ps_tool_error else {"ghdl": {"sim": GHDL_LINE, "results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
   (root / "ps" / "results.json").write_text(json.dumps({"configs": ["crw_crw.1clk.16x64"], "rtl": {}, "parts": {
     "xc7a35tfgg484-2": {"synth": {"crw_crw_16x64_16_l11": synth}, "sims": sims}}}))
   for name in ("ghdl_6.0.0", "questa_2021.1"):
@@ -199,7 +203,7 @@ class RerunTest(unittest.TestCase):
     with tempfile.TemporaryDirectory() as tmp:
       root = _campaign(tmp, ["pass"], ps_tool_error=True, rerun_items=[item], rc={"postsynth": 1})
       ps = json.loads((root / "ps" / "results.json").read_text())
-      ps["rtl"] = {"ghdl": {"results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
+      ps["rtl"] = {"ghdl": {"sim": GHDL_LINE, "results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
       (root / "ps" / "results.json").write_text(json.dumps(ps))
       code, summary, text = self._summary(root)
       self.assertEqual(code, 0, text)
@@ -211,6 +215,50 @@ class RerunTest(unittest.TestCase):
       self.assertEqual(code, 1, text)
       self.assertIn("xc7a35tfgg484-2 synthesis crw_crw_16x64_16_l11 (rerun): tool version 2024.1, the campaign "
                     "toolset has 2023.1", summary["steps"]["postsynth"]["failures"])
+
+  def test_a_postsynth_simulation_of_another_simulator_fails(self) -> None:
+    # Review of PR #9: the summary checked only the Vivado of the syntheses,
+    # so a simulation with another GHDL or xsim, or without its version, passed.
+    part = "xc7a35tfgg484-2"
+    passed = {"crw_crw.1clk.16x64": {"verdict": "PASS"}}
+
+    def rtl_xsim(d: dict) -> None:
+      d["rtl"] = {"xsim": {"sim": "xsim 2024.1", "results": passed}}
+
+    def rerun_ghdl(d: dict) -> None:
+      d["parts"][part]["sims"] = {"ghdl": {"sim": "GHDL 5.0.1 (tarball) [Dunoon edition]", "results": passed}}
+
+    cases = (
+      (False, lambda d: d["parts"][part]["sims"]["ghdl"].update(sim="GHDL 5.0.1 (tarball) [Dunoon edition]"),
+       f"{part} ghdl: simulator GHDL 5.0.1 (tarball) [Dunoon edition], the campaign toolset has ghdl 6.0.0"),
+      (False, lambda d: d["parts"][part]["sims"]["ghdl"].pop("sim"),
+       f"{part} ghdl: simulator unknown, the campaign toolset has ghdl 6.0.0"),
+      (False, rtl_xsim, "RTL xsim: simulator xsim 2024.1, the campaign toolset has vivado 2023.1"),
+      (True, rerun_ghdl,
+       f"{part} (rerun) ghdl: simulator GHDL 5.0.1 (tarball) [Dunoon edition], the campaign toolset has ghdl 6.0.0"),
+    )
+    item = {"step": "postsynth", "job": "postsynth", "part": part, "case": "crw_crw.1clk.16x64",
+            "first_status": "tool-error", "first_problems": ["transient"], "rerun_status": "pass",
+            "rerun_problems": []}
+    for rerun_case, change, message in cases:
+      with self.subTest(message=message), tempfile.TemporaryDirectory() as tmp:
+        if rerun_case:
+          root = _campaign(tmp, ["pass"], ps_tool_error=True, rerun_items=[item], rc={"postsynth": 1})
+          ps = json.loads((root / "ps" / "results.json").read_text())
+          ps["rtl"] = {"ghdl": {"sim": GHDL_LINE, "results": passed}}
+          (root / "ps" / "results.json").write_text(json.dumps(ps))
+          path = root / "rerun" / "ps" / part / "results.json"
+        else:
+          root = _campaign(tmp, ["pass"])
+          path = root / "ps" / "results.json"
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 0, text)
+        data = json.loads(path.read_text())
+        change(data)
+        path.write_text(json.dumps(data))
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 1, text)
+        self.assertIn(message, summary["steps"]["postsynth"]["failures"])
 
   def test_provisional_results_are_not_a_pass(self) -> None:
     # Review of PR #9: results compared with expected results not yet

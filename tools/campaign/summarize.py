@@ -21,9 +21,11 @@ of each of them passed; the summary lists every rerun with its first and
 second result. The memory thresholds of the EDA lock in effect for the
 campaign (logs/steps.txt) are part of the summary. A vendor_synth or
 post-synthesis result with another tool version than the toolset fails its
-step, reruns included: a rerun is judged by its own result file
-(rerun/<step>/..., tools/campaign/rerun.py), and a passed rerun without it
-fails. Without a toolset the campaign fails.
+step: for post-synthesis, its Vivado synthesis and its simulator (the GHDL
+of the toolset, the xsim of its Vivado; a simulation with results must
+record its version). Reruns included: a rerun is judged by its own result
+file (rerun/<step>/..., tools/campaign/rerun.py), and a passed rerun
+without it fails. Without a toolset the campaign fails.
 """
 
 from __future__ import annotations
@@ -103,18 +105,31 @@ def _synthesis(root: Path, name: str, reruns: list[dict], version: str) -> dict:
           "provisional_files": sorted(provisional_files), "failures": bad, "archive": archive}
 
 
-def _postsynth(root: Path, reruns: list[dict], vivado: str) -> dict:
+def _postsynth(root: Path, reruns: list[dict], versions: dict[str, str]) -> dict:
+  """versions: tool -> version of the campaign toolset. Every synthesis must
+  be of its Vivado, every simulation with results of its GHDL or of the xsim
+  of its Vivado (toolset.simulator_problem), reruns included."""
   data = _load(root / "ps" / "results.json")
   if data is None:
     return {"ok": False, "detail": "no results.json"}
+  vivado = versions["vivado"]
   rerun_parts = {i["part"]: i for i in reruns}
   runs, bad = 0, []
+
+  def simulators(sims: dict, what: str) -> None:
+    for sim, res in sims.items():
+      problem = toolset.simulator_problem(sim, res.get("sim"), versions) if res.get("results") else None
+      if problem:
+        bad.append(f"{what} {sim}: {problem}")
+
+  simulators(data.get("rtl", {}), "RTL")
   for part, pd in data.get("parts", {}).items():
     for key, s in pd.get("synth", {}).items():
       wrong = _version_problem(s.get("version"), vivado, f"{part} synthesis {key}")
       if wrong:
         bad.append(wrong)
-  # The syntheses of the reruns, with their own tool version.
+    simulators(pd.get("sims", {}), part)
+  # The syntheses and simulations of the reruns, with their own tool versions.
   for part, item in rerun_parts.items():
     path = root / "rerun" / "ps" / _safe(part) / "results.json"
     rerun_data = _load(path)
@@ -122,10 +137,12 @@ def _postsynth(root: Path, reruns: list[dict], vivado: str) -> dict:
       if item.get("rerun_status") == "pass":
         bad.append(f"{part}: no result of the rerun in {path}")
       continue
-    for key, s in rerun_data.get("parts", {}).get(part, {}).get("synth", {}).items():
+    rerun_part = rerun_data.get("parts", {}).get(part, {})
+    for key, s in rerun_part.get("synth", {}).items():
       wrong = _version_problem(s.get("version"), vivado, f"{part} synthesis {key} (rerun)")
       if wrong:
         bad.append(wrong)
+    simulators(rerun_part.get("sims", {}), f"{part} (rerun)")
   for sim, res in data.get("rtl", {}).items():
     for name, r in res.get("results", {}).items():
       runs += 1
@@ -234,7 +251,8 @@ def main(argv: list[str] | None = None) -> int:
       "vivado": _synthesis(root, "vs", by_step["vivado"], vivado),
       "checks_vivado": _synthesis(root, "fc", by_step["checks_vivado"], vivado),
       "checks_quartus": _synthesis(root, "qc", by_step["checks_quartus"], quartus),
-      "postsynth": _postsynth(root, by_step["postsynth"], vivado),
+      "postsynth": _postsynth(root, by_step["postsynth"],
+                              {tool: entry["version"] for tool, entry in tools["tools"].items()}),
       "vunit_ghdl": _vunit(root, names["vunit_ghdl"]),
       "vunit_questa": _vunit(root, names["vunit_questa"]),
       "mutation": _mutation(root, names["mutation"]),

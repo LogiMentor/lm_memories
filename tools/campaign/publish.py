@@ -204,11 +204,6 @@ def _synth_entry(job: str, public: dict, archive: dict, evaluated_on: str | None
   return entry
 
 
-def _has_version(text: str | None, version: str) -> bool:
-  """The version, as a whole number, in a version line ("GHDL 6.0.0 (...)", "ghdl_GHDL_6.0.0_...")."""
-  return bool(text) and re.search(r"(?<![\d.])" + re.escape(version) + r"(?![\d.])", text) is not None
-
-
 def _expected_file(vendor: str, version: str) -> str:
   """The file of expected results of a tool version, as vendor_synth records it."""
   return f"{check.EXPECTED_FILES}/{check.VENDOR_FILES.get(vendor.lower(), vendor)}/{check.expected_key(vendor, version)}.toml"
@@ -328,12 +323,9 @@ def _postsynth_problem(entry: dict, versions: dict[str, str]) -> str | None:
     return (f"{what}: synthesis with vivado {synthesis.get('tool_version') or 'unknown'}, the campaign toolset has "
             f"{versions['vivado']}")
   simulator = entry.get("simulator")
-  wanted = {"ghdl": ("ghdl", versions["ghdl"]), "xsim": ("vivado", versions["vivado"])}.get(simulator)
-  if simulator and "simulator_version" in entry and (wanted is None
-                                                     or not _has_version(entry["simulator_version"], wanted[1])):
-    tool = f"{wanted[0]} {wanted[1]}" if wanted else "no such simulator"
-    return f"{what}: simulator {entry['simulator_version'] or 'unknown'}, the campaign toolset has {tool}"
-  return None
+  problem = (toolset.simulator_problem(simulator, entry["simulator_version"], versions)
+             if simulator and "simulator_version" in entry else None)
+  return f"{what}: {problem}" if problem else None
 
 
 def postsynth_step(root: Path, reruns: list[dict], directory: Path, campaign: str,
@@ -390,7 +382,7 @@ def sim_step(root: Path, step: str, work: Path, directory: Path, tool_entry: dic
     simulator = data.get("simulator") or ""
     wanted_edition = tool_entry.get("edition") if tool == "questa" else ""
     same_edition = (wanted_edition == "starter") == ("starter" in simulator.lower()) if tool == "questa" else True
-    if not _has_version(simulator, tool_entry["version"]) or not same_edition:
+    if not toolset.has_version(simulator, tool_entry["version"]) or not same_edition:
       named = " ".join(filter(None, (tool, wanted_edition, tool_entry["version"])))
       raise PublishError(f"{step}: simulator {simulator or 'not recorded'}, the campaign toolset has {named}")
   return {"step": step, "tool": tool, **({"edition": edition} if edition else {}), "tool_version": version,

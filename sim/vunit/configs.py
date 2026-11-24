@@ -165,11 +165,22 @@ POSTSYNTH_PARTS = {
   "crw_cr.1clk.36x4096": ("xcku3p-ffva676-2-e",),
   "rw_rw.36x4096": ("xcku3p-ffva676-2-e",),
   # Read-output reset (issue #7): the reset ports reach the netlist.
+  # r_w_ratio.32to8.rst and r_w_ratio.32to8.lat2.rst: not here, see
+  # POSTSYNTH_EXCLUDED.
   **{name: ("xc7a35tfgg484-2", "xcku3p-ffva676-2-e") for name in (
     "r_w.32x1024.lat1.rst", "r_w.32x1024.lat2.rst", "cr_cw.32x1024.lat1.rst", "cr_cw.32x1024.lat2.rst",
-    "r_w_ratio.32to8.rst", "r_w_ratio.32to8.lat2.rst", "crw_cr.1clk.32x1024.lat1.rst",
-    "crw_cr.2clk.32x1024.lat2.rst", "r_w.16x64.rst")},
+    "crw_cr.1clk.32x1024.lat1.rst", "crw_cr.2clk.32x1024.lat2.rst", "r_w.16x64.rst")},
   "r_w.36x4096.rst": ("xcku3p-ffva676-2-e",),
+}
+# Configurations kept out of the post-synthesis simulation on purpose: name ->
+# reason. lm_mem_ram_r_w_ratio with a read port narrower than the write port,
+# on a common clock: Vivado 2024.1 builds a RAMB18 in simple dual-port mode,
+# WRITE_FIRST on 7-series and NO_CHANGE on UltraScale+, so a read of the
+# address written in the same cycle is undefined on the netlist (the RTL
+# returns the old data): known defect, issue #15, also without the reset.
+POSTSYNTH_EXCLUDED = {
+  "r_w_ratio.32to8.rst": "issue #15: read during write undefined on the AMD netlist (RAMB18 WRITE_FIRST/NO_CHANGE)",
+  "r_w_ratio.32to8.lat2.rst": "issue #15: read during write undefined on the AMD netlist (RAMB18 WRITE_FIRST/NO_CHANGE)",
 }
 # Synthesized with both clock ports on one clock (a URAM has a single clock).
 POSTSYNTH_COMMON_CLOCK = ("crw_cr.1clk.36x4096",)

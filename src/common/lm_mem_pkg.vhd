@@ -137,7 +137,7 @@ package body lm_mem_pkg is
     variable v_int : std_logic;
   begin
     v_int := '0';
-    for n in v_a'length - 1 downto 0 loop
+    for n in v_a'range loop
       v_bin(n) := v_a(n) xor v_int;
       v_int    := v_bin(n);
     end loop;

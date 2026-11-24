@@ -7,6 +7,7 @@ from __future__ import annotations
 import io
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -98,6 +99,20 @@ class ManifestTest(unittest.TestCase):
         if rel.startswith(("src/core/", "src/generic/", "src/sim/")):
           self.assertEqual(fileset["check"], "ghdl-93-08", f"{name}: {rel}")
 
+  def test_strict_file_sets_are_checked_with_strict_vhdl_93(self) -> None:
+    # Issue #12: --std=93c accepted a loop bound that VHDL-93 does not allow.
+    calls: list[tuple[list[str], set[str]]] = []
+
+    def analyze(files: list, flags: list[str], workdir: Path) -> list[str]:
+      calls.append((list(flags), {f.check for f in files}))
+      return []
+
+    with mock.patch.object(cli, "_analyze", analyze), redirect_stdout(io.StringIO()):
+      self.assertEqual(cli.check(["sim"], DEFAULT_MANIFEST), 0)
+    strict = [flags for flags, checks in calls if checks == {"ghdl-93-08"} and "--std=08" not in flags]
+    self.assertEqual(strict, [["--std=93"]])
+    self.assertFalse([flags for flags, _ in calls if "--std=93c" in flags])
+
   def test_package_comes_first(self) -> None:
     for flow in self.manifest.flow_names():
       first = self.manifest.files(flow)[0].path.relative_to(ROOT_DIR).as_posix()
@@ -123,6 +138,23 @@ class ManifestTest(unittest.TestCase):
       fake.write_text(text, encoding="utf-8")
       with self.assertRaises(ManifestError):
         load(fake)
+
+
+@unittest.skipUnless(cli.ghdl_found(cli.GHDL), "GHDL not installed")
+class StrictVhdl93Test(unittest.TestCase):
+  def test_strict_file_sets_analyse_with_strict_vhdl_93(self) -> None:
+    # Issue #12: lm_mem_pkg.vhd stopped at a loop bound, and every source
+    # after it.
+    manifest = load()
+    files: list = []
+    for flow in manifest.flow_names():
+      files += [f for f in manifest.files(flow) if f.check == "ghdl-93-08" and f not in files]
+    self.assertIn("src/common/lm_mem_pkg.vhd", [f.path.relative_to(ROOT_DIR).as_posix() for f in files])
+    with tempfile.TemporaryDirectory() as tmp:
+      for f in files:
+        result = subprocess.run([cli.GHDL, "-a", "--std=93", f"--workdir={tmp}", str(f.path)],
+                                cwd=tmp, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, f"{f.path.as_posix()}:\n{result.stdout}{result.stderr}")
 
 
 if __name__ == "__main__":

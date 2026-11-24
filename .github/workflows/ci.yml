@@ -28,7 +28,7 @@ jobs:
           sudo apt-get install -y ghdl
           python -m pip install "vunit_hdl>=4.7,<5"
 
-      - name: Check RTL language level (GHDL --std=93c and --std=08)
+      - name: Check RTL language level (GHDL --std=93 and --std=08)
         run: python -m tools.manifest check --flow sim --flow synth-intel --flow test-legacy --flow test-vunit
 
       - name: Run existing VHDL tests

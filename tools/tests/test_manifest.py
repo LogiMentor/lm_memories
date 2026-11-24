@@ -144,17 +144,22 @@ class ManifestTest(unittest.TestCase):
 class StrictVhdl93Test(unittest.TestCase):
   def test_strict_file_sets_analyse_with_strict_vhdl_93(self) -> None:
     # Issue #12: lm_mem_pkg.vhd stopped at a loop bound, and every source
-    # after it.
+    # after it. Each flow is analysed in its own library, in the order of the
+    # flow: the flows select different architectures (a_rtl of
+    # lm_mem_ram_crw_crw in src/sim and in src/vendor/unsupported), and a file
+    # must not pass thanks to a unit that only another flow provides.
     manifest = load()
-    files: list = []
+    checked: set[str] = set()
     for flow in manifest.flow_names():
-      files += [f for f in manifest.files(flow) if f.check == "ghdl-93-08" and f not in files]
-    self.assertIn("src/common/lm_mem_pkg.vhd", [f.path.relative_to(ROOT_DIR).as_posix() for f in files])
-    with tempfile.TemporaryDirectory() as tmp:
-      for f in files:
-        result = subprocess.run([cli.GHDL, "-a", "--std=93", f"--workdir={tmp}", str(f.path)],
-                                cwd=tmp, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, f"{f.path.as_posix()}:\n{result.stdout}{result.stderr}")
+      files = [f for f in manifest.files(flow) if f.check == "ghdl-93-08"]
+      with self.subTest(flow=flow), tempfile.TemporaryDirectory() as tmp:
+        for f in files:
+          result = subprocess.run([cli.GHDL, "-a", "--std=93", f"--workdir={tmp}", str(f.path)],
+                                  cwd=tmp, capture_output=True, text=True)
+          self.assertEqual(result.returncode, 0,
+                           f"flow {flow}: {f.path.as_posix()}:\n{result.stdout}{result.stderr}")
+          checked.add(f.path.relative_to(ROOT_DIR).as_posix())
+    self.assertIn("src/common/lm_mem_pkg.vhd", checked)
 
 
 if __name__ == "__main__":

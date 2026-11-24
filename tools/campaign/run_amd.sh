@@ -44,7 +44,8 @@
 #                   ends as tool-error runs again, at most twice; if a case
 #                   fails or stays a tool-error, the script stops with exit
 #                   code 1
-#   vivado          vendor_synth, vivado_check.toml (55 cases)
+#   vivado          vendor_synth, vivado_check.toml (92 runs: 44 cases on Artix-7,
+#                   48 on Kintex UltraScale+)
 #   checks_vivado   vendor_synth, fallback_check.toml (with and without -assert)
 #   checks_quartus  vendor_synth, quartus_check.toml
 #   postsynth       run_postsynth.py, both parts, URAM configurations included

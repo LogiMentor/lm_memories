@@ -28,14 +28,14 @@ jobs:
           sudo apt-get install -y ghdl
           python -m pip install "vunit_hdl>=4.7,<5"
 
-      - name: Check RTL language level (GHDL --std=93c and --std=08)
+      - name: Check RTL language level (GHDL --std=93 and --std=08)
         run: python -m tools.manifest check --flow sim --flow synth-intel --flow test-legacy --flow test-vunit
 
       - name: Run existing VHDL tests
         run: python sim/scripts/run_ghdl.py
 
-      - name: Check static checks of generics (rule on src/, negative cases with GHDL)
-        run: python -m unittest -v tools.tests.test_static_checks
+      - name: Check static checks of generics and the manifest (negative cases and strict VHDL-93 with GHDL)
+        run: python -m unittest -v tools.tests.test_static_checks tools.tests.test_manifest
 
       - name: Run VUnit tests
         run: python sim/vunit/run.py -p 2 --xunit-xml vunit_results.xml

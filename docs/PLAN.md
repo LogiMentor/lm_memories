@@ -281,8 +281,8 @@ filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "fifo", "infere
 ### 3.4 Conservative VHDL
 
 - Every file under `src/core/`, `src/generic/` and `src/sim/` must analyze
-  with GHDL `--std=93c` **and** `--std=08`. CI checks this. The current code
-  already passes both.
+  with GHDL `--std=93` **and** `--std=08`. CI checks this. The current code
+  passes both (strict `--std=93` instead of `--std=93c` since issue #12).
 - Not allowed in those directories: `process(all)`, `else`/`elsif` and `case`
   generate, `std.env`, `to_hstring`, unconstrained element types, generic types
   and packages, protected types, `??` and matching operators, sequential
@@ -293,7 +293,7 @@ filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "fifo", "infere
 
   | `check` value | Meaning | Used for |
   | --- | --- | --- |
-  | `ghdl-93-08` | GHDL analysis in `--std=93c` and `--std=08` | `src/vendor/unsupported/` (fallback architecture) |
+  | `ghdl-93-08` | GHDL analysis in `--std=93` and `--std=08` | `src/vendor/unsupported/` (fallback architecture) |
   | `ghdl-relaxed` | GHDL analysis with `--std=08 -frelaxed` (warnings allowed) | vendor files that GHDL can parse |
   | `target-tool` | Analysis and synthesis only with the tool in `tools = [...]`, plus post-synthesis simulation of the netlist | `src/vendor/amd/` (UG901 template with a plain `shared variable`) |
 

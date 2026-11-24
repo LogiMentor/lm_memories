@@ -6,7 +6,7 @@
 #
 # - [filesets.<name>]: files in compile order, all in library "work".
 #   check  = how the files are checked (python -m tools.manifest check):
-#            "ghdl-93-08"   GHDL analysis with --std=93c and --std=08
+#            "ghdl-93-08"   GHDL analysis with --std=93 and --std=08
 #            "ghdl-08"      GHDL analysis with --std=08 (testbench code)
 #            "ghdl-relaxed" GHDL analysis with --std=08 -frelaxed
 #            "target-tool"  only the tools in `tools` analyze the files; they

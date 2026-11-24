@@ -51,6 +51,15 @@ All notable changes to this project are documented here.
   `LM_VIVADO_DIR`, `LM_QUARTUS_DIR` and `VUNIT_MODELSIM_PATH`
   (`tools/vendor_synth/local.example.toml`).
 
+### Fixed
+
+- **Strict VHDL-93 (issue #12).** `src/common/lm_mem_pkg.vhd` did not
+  analyse with GHDL `--std=93` (a loop bound in `f_gray2bin` that VHDL-93
+  does not allow), and with it every library source failed; `--std=93c`
+  accepted it. The file sets with `check = "ghdl-93-08"` are now checked
+  with `--std=93` instead of `--std=93c` (`python -m tools.manifest check`,
+  CI).
+
 ## [0.2.0] - 2026-11-05
 
 First numbered release (issue #3, PR #4). It has breaking changes; before

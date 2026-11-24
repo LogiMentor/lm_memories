@@ -10,10 +10,13 @@
 # 0b2dce2a2d36abca5143cd3a41657b618985c2673cb1365d56b3e6d01309e3e4).
 # Every case gave the same result as Quartus 23.1std (11 static checks: the
 # same errors at the same lines, exit code 3).
+# bad_r_w_ratio_8to32_rst (read-output reset with a read port wider than the
+# write port, issue #7): measured with the same release on PCL01 on
+# 2026-11-24 (tools/vendor_synth on the code of that change).
 #
 # One file per Quartus release (tools/vendor_synth/check.py load_expected):
 # a run is compared with the file of the release in its log ("Info: Version
-# 23.1std.0 Build 991" -> 23.1std), and [meta] tool_version must name it.
+# 25.1std.0 Build 1129" -> 25.1std), and [meta] tool_version must name it.
 #
 # There is no validated Intel two-writer architecture yet, so the synth-intel
 # flow compiles the fallback (src/vendor/unsupported). Expected result for the
@@ -95,3 +98,9 @@ case = "bad_r_w_infer_latency3"
 parts = ["5CEBA4F23C7"]
 expect_failure_constant = "C_ERROR_LATENCY_NOT_1_OR_2"
 expect_failure = ["lm_mem_ram_r_w_infer: latency must be 1 or 2"]
+
+[[expect]]
+case = "bad_r_w_ratio_8to32_rst"
+parts = ["5CEBA4F23C7"]
+expect_failure_constant = "C_ERROR_RD_RST_WITH_WIDE_READ"
+expect_failure = ["lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port"]

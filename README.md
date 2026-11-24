@@ -189,7 +189,12 @@ python -m tools.manifest list --flow synth-amd --format tcl
 - Read during write on the same port returns the old data. On a
   common-clock simple dual-port RAM (`lm_mem_ram_r_w`,
   `lm_mem_ram_r_w_ratio`) the old data is guaranteed only where it is
-  verified for the vendor: AMD Vivado, block RAM and URAM. On Intel it is
+  verified for the vendor: AMD Vivado, block RAM and URAM, for
+  `lm_mem_ram_r_w`. For `lm_mem_ram_r_w_ratio` it is not verified on the
+  AMD netlist, and with a read port narrower than the write port it is a
+  known defect: Vivado 2024.1 builds a RAMB18 in `WRITE_FIRST` (7-series)
+  or `NO_CHANGE` (UltraScale+) mode, and the read returns undefined data
+  ([issue #15](https://github.com/LogiMentor/lm_memories/issues/15)). On Intel it is
   checked in phase 4 (Quartus 23.1 infers `lm_mem_ram_r_w` as a dual-clock
   RAM and reports its read-during-write behaviour as undefined, `Warning
   (276027)`); Lattice and Microchip are not verified

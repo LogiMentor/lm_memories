@@ -36,7 +36,7 @@ Status values:
 | --- | --- | --- | --- | --- | --- |
 | `lm_mem_ram_r_w` | simulated | synthesis checked; 36 x 4096 on UltraScale+ (URAM) netlist checked | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_cr_cw` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
-| `lm_mem_ram_r_w_ratio` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
+| `lm_mem_ram_r_w_ratio` | simulated | synthesis checked; read during write undefined on the netlist with a narrower read port (known defect, [issue #15](https://github.com/LogiMentor/lm_memories/issues/15)) | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_cr_cw_ratio` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_crw_cr` | simulated | synthesis checked; 36 x 4096 on one clock netlist checked | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_crw_crw` | simulated | synthesis checked, netlist checked | stops | not run (stops by design) | not run (stops by design) |
@@ -55,7 +55,11 @@ Wrong generics stop synthesis for every entity (static checks,
 
 - Read of the address written in the same cycle on a common-clock simple
   dual-port RAM (`lm_mem_ram_r_w`, `lm_mem_ram_r_w_ratio`): old data,
-  **verified on AMD only** (RTL and netlist, block RAM and URAM). Quartus
+  **verified on AMD only** (RTL and netlist, block RAM and URAM) for
+  `lm_mem_ram_r_w`. `lm_mem_ram_r_w_ratio`: not verified on the AMD
+  netlist; with a read port narrower than the write port it is a known
+  defect, the netlist returns undefined data (Vivado 2024.1, RAMB18 in
+  `WRITE_FIRST` or `NO_CHANGE` mode; [issue #15](https://github.com/LogiMentor/lm_memories/issues/15)). Quartus
   23.1 reports `Warning (276027): Inferred dual-clock RAM node ... The
   read-during-write behavior of a dual-clock RAM is undefined` for
   `lm_mem_ram_r_w` 32 x 1024 on Cyclone V; whether old data holds on Intel is

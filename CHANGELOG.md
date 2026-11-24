@@ -90,6 +90,12 @@ All notable changes to this project are documented here.
 - **Read outputs before the first read:** still undefined until the first
   enabled read reaches them, unless a read-output reset is applied with the
   enable high: then they are zero from that cycle.
+- **Read during write on `lm_mem_ram_r_w_ratio` (issue #15):** the old
+  data on a read of the address written in the same cycle is no longer
+  documented as verified on the AMD netlist. With a read port narrower than
+  the write port it is a known defect: Vivado 2024.1 builds a RAMB18 in
+  `WRITE_FIRST` (7-series) or `NO_CHANGE` (UltraScale+) mode, and the
+  netlist returns undefined data. `lm_mem_ram_r_w` is not affected.
 
 ### Fixed
 

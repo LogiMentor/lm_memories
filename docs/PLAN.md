@@ -313,10 +313,19 @@ Defined behaviour (checked):
 - Common-clock simple dual port (`lm_mem_ram_r_w`, `lm_mem_ram_r_w_ratio`):
   a read of the address being written in the same cycle returns the old data,
   **guaranteed only where verified for the vendor**: AMD (RTL and netlist,
-  block RAM and URAM). Intel is checked in phase 4: Quartus 23.1 infers
-  `lm_mem_ram_r_w` 32 x 1024 on Cyclone V as a dual-clock RAM and warns
-  that its read-during-write behaviour is undefined (`Warning (276027)`).
-  Lattice and Microchip: not verified. The status per vendor is in
+  block RAM and URAM) for `lm_mem_ram_r_w`. For `lm_mem_ram_r_w_ratio` the
+  netlist is not verified, and with a read port narrower than the write port
+  it is a known defect
+  ([issue #15](https://github.com/LogiMentor/lm_memories/issues/15)):
+  Vivado 2024.1 builds a RAMB18 in simple dual-port mode, `WRITE_FIRST` on
+  7-series and `NO_CHANGE` on UltraScale+, and the post-synthesis simulation
+  returns undefined data on such a read (2026-11-24, with and without the
+  read-output reset); those configurations are kept out of the
+  post-synthesis simulation (`POSTSYNTH_EXCLUDED` in
+  `sim/vunit/configs.py`). Intel is checked in phase 4: Quartus 23.1 infers
+  `lm_mem_ram_r_w` 32 x 1024 on Cyclone V as a dual-clock RAM and warns that
+  its read-during-write behaviour is undefined (`Warning (276027)`). Lattice
+  and Microchip: not verified. The status per vendor is in
   `docs/support_matrix.md`.
 - Enable gating: `ena_i` gates the port A read and write; `enb_i` gates port
   B. Both output stages hold their value while disabled.

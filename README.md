@@ -152,10 +152,49 @@ python -m tools.manifest list --flow synth-amd --format tcl
   dual-port RAMs of the same size (`lm_mem_ram_crw_cr` on one clock,
   `lm_mem_ram_rw_rw`) stay in block RAM. A `g_ram_style` generic is proposed
   (PLAN 3.13) but not implemented.
+- Read outputs have no initial value: each is undefined until the first
+  enabled read reaches it (with latency 2, until the second), or until a
+  read-output reset applied with the enable of its port high clears it to
+  zero. Do not sample a read output, or anything derived from it, before
+  that.
+- Read-output reset (issue #7): `lm_mem_ram_sdp` and its wrappers
+  (`lm_mem_ram_r_w`, `lm_mem_ram_cr_cw`, `lm_mem_ram_r_w_ratio`,
+  `lm_mem_ram_cr_cw_ratio`) have `rd_rst_n_i`; `lm_mem_ram_tdp1w` and
+  `lm_mem_ram_crw_cr` have `rst_a_n_i` and `rst_b_n_i`, one per read output.
+  Each is a synchronous reset, active low, in the clock domain of its read
+  port, last in the port list, default `'1'` (inactive).
+  - Each reset is enabled by a generic, default `false`: `g_rd_rst_en` on
+    `lm_mem_ram_sdp`, `g_a_rst_en` and `g_b_rst_en` on `lm_mem_ram_tdp1w`,
+    `g_ram_rst_en` on `lm_mem_ram_r_w` and `lm_mem_ram_cr_cw`,
+    `g_ram_b_rst_en` on the two ratio wrappers, `g_ram_a_rst_en` and
+    `g_ram_b_rst_en` on `lm_mem_ram_crw_cr`. Disabled, the port is the one
+    of v0.2.0 (same netlist with Vivado 2024.1) and the reset input is
+    ignored; simulation warns if it is driven low.
+  - It acts only while the enable of its port (`enb_i`, or `ena_i` for port
+    A) is high, as the output reset of the 7-series block RAM; with the
+    enable low it has no effect and the output holds its value.
+  - Latency 1: it clears the output register (block RAM `RSTRAM` on AMD).
+    Latency 2: it clears both stages (`RSTRAM` and `RSTREG`), so the output
+    stays zero until a read made after the reset reaches it.
+  - The read of a reset cycle is discarded. The storage is never reset, and
+    a write in a reset cycle is done.
+  - A read port wider than the write port with the reset enabled stops
+    elaboration (static check): Vivado would replicate the memory.
+  - Cost with Vivado 2024.1: one LUT per reset port on the reset pins of the
+    memory, same memory, no extra flip-flop; with the port A reset of
+    `lm_mem_ram_crw_cr`, one more LUT on the write enable of the block RAM
+    ([`docs/PLAN.md`](docs/PLAN.md) section 3.17).
+  - The two-writer RAMs (`lm_mem_ram_crw_crw`, `lm_mem_ram_rw_rw`,
+    `lm_mem_ram_crw_cw`) and the FIFOs have no read-output reset.
 - Read during write on the same port returns the old data. On a
   common-clock simple dual-port RAM (`lm_mem_ram_r_w`,
   `lm_mem_ram_r_w_ratio`) the old data is guaranteed only where it is
-  verified for the vendor: AMD Vivado, block RAM and URAM. On Intel it is
+  verified for the vendor: AMD Vivado, block RAM and URAM, for
+  `lm_mem_ram_r_w`. For `lm_mem_ram_r_w_ratio` it is not verified on the
+  AMD netlist, and with a read port narrower than the write port it is a
+  known defect: Vivado 2024.1 builds a RAMB18 in `WRITE_FIRST` (7-series)
+  or `NO_CHANGE` (UltraScale+) mode, and the read returns undefined data
+  ([issue #15](https://github.com/LogiMentor/lm_memories/issues/15)). On Intel it is
   checked in phase 4 (Quartus 23.1 infers `lm_mem_ram_r_w` as a dual-clock
   RAM and reports its read-during-write behaviour as undefined, `Warning
   (276027)`); Lattice and Microchip are not verified

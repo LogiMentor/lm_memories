@@ -36,7 +36,7 @@ Status values:
 | --- | --- | --- | --- | --- | --- |
 | `lm_mem_ram_r_w` | simulated | synthesis checked; 36 x 4096 on UltraScale+ (URAM) netlist checked | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_cr_cw` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
-| `lm_mem_ram_r_w_ratio` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
+| `lm_mem_ram_r_w_ratio` | simulated | synthesis checked; read during write undefined on the netlist with a narrower read port (known defect, [issue #15](https://github.com/LogiMentor/lm_memories/issues/15)) | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_cr_cw_ratio` | simulated | synthesis checked | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_crw_cr` | simulated | synthesis checked; 36 x 4096 on one clock netlist checked | not checked (phase 4) | not run | not run |
 | `lm_mem_ram_crw_crw` | simulated | synthesis checked, netlist checked | stops | not run (stops by design) | not run (stops by design) |
@@ -55,11 +55,25 @@ Wrong generics stop synthesis for every entity (static checks,
 
 - Read of the address written in the same cycle on a common-clock simple
   dual-port RAM (`lm_mem_ram_r_w`, `lm_mem_ram_r_w_ratio`): old data,
-  **verified on AMD only** (RTL and netlist, block RAM and URAM). Quartus
+  **verified on AMD only** (RTL and netlist, block RAM and URAM) for
+  `lm_mem_ram_r_w`. `lm_mem_ram_r_w_ratio`: not verified on the AMD
+  netlist; with a read port narrower than the write port it is a known
+  defect, the netlist returns undefined data (Vivado 2024.1, RAMB18 in
+  `WRITE_FIRST` or `NO_CHANGE` mode; [issue #15](https://github.com/LogiMentor/lm_memories/issues/15)). Quartus
   23.1 reports `Warning (276027): Inferred dual-clock RAM node ... The
   read-during-write behavior of a dual-clock RAM is undefined` for
   `lm_mem_ram_r_w` 32 x 1024 on Cyclone V; whether old data holds on Intel is
   checked in phase 4.
+- Read-output reset (`rd_rst_n_i`, `rst_a_n_i`, `rst_b_n_i`; issue #7):
+  simulated on GHDL 6.0.0 and Questa Starter 2025.2, latency 1 and 2, one
+  and two clocks. AMD, Vivado 2024.1 on both parts: synthesis checked (one
+  LUT "enable AND NOT reset" per reset port on the reset pins of the block
+  RAM, URAM or output flip-flops; with the port A reset of
+  `lm_mem_ram_crw_cr` one more LUT on the write enable of the block RAM;
+  same memory, no extra flip-flop), and the netlists of `lm_mem_ram_r_w`,
+  `lm_mem_ram_cr_cw` and `lm_mem_ram_crw_cr` with the reset simulated on
+  GHDL and xsim. Intel (M10K, M9K) is checked in phase 4 (issue #6). Not on
+  the two-writer RAMs and the FIFOs.
 - Collisions between the ports of a true dual-port RAM, and accesses beyond
   a depth that is not a power of two, are undefined on every vendor.
 - URAM: Vivado chooses it by itself for `lm_mem_ram_r_w` 36 x 4096 on

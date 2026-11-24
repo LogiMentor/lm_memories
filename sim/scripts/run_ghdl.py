@@ -32,6 +32,9 @@ TESTS = [
   "tb_lm_mem_ram_r_w_primitives",
   "tb_lm_mem_fifo_sync",
   "tb_lm_mem_fifo_async",
+  # Component declarations without the read-output reset ports (v0.2.0)
+  # must still bind; GHDL warns that the port is not bound (-Wbinding).
+  "tb_lm_mem_component_compat",
 ]
 
 

@@ -65,8 +65,20 @@ package lm_mem_tb_pkg is
     cov_rdw_old_data : natural;
     hold_checks      : natural;
     undef_out_checks : natural;
+    rst_before_read  : natural;
+    rst_during_reads : natural;
+    rst_disabled     : natural;
+    rst_flushes      : natural;
+    rst_zero_checks  : natural;
     errors           : natural;
   end record t_tb_counts;
+
+  -- Kinds of read-output reset events (count_reset, reset_count), per port.
+  constant C_TB_RST_BEFORE_READ  : natural := 0;  -- enable high, before the first read of the port
+  constant C_TB_RST_DURING_READS : natural := 1;  -- enable high, after reads started
+  constant C_TB_RST_DISABLED     : natural := 2;  -- enable low: no effect expected
+  constant C_TB_RST_FLUSH        : natural := 3;  -- latency 2: a read in the first stage discarded
+  constant C_TB_RST_ZERO_CHECK   : natural := 4;  -- output checked to be zero after a reset
 
   -- State of a read when it is issued (before any write at the same instant).
   type t_tb_read is record
@@ -104,10 +116,17 @@ package lm_mem_tb_pkg is
       ref     : std_logic_vector;
       tag     : string
     );
+    -- A read that the DUT performs but that is not compared (the read of a
+    -- reset cycle, issue #7): only a read/write collision with a write of the
+    -- other port is counted and reported, for the pairing with the
+    -- collision messages of vendor models (run_postsynth.py).
+    procedure push_discarded_read(port_id : natural; rd : t_tb_read; tag : string);
     procedure resolve(now_t : time; flush : boolean);
     procedure add_error(msg : string);
     procedure count_hold_check;
     procedure count_undef_output_check;
+    procedure count_reset(port_id : natural; kind : natural);
+    impure function reset_count(port_id : natural; kind : natural) return natural;
     impure function counts return t_tb_counts;
     impure function pending return natural;
   end protected t_scoreboard;
@@ -168,6 +187,11 @@ package body lm_mem_tb_pkg is
            " old_data_reads=" & integer'image(c.cov_rdw_old_data) &
            " hold_checks=" & integer'image(c.hold_checks) &
            " undefined_output_checks=" & integer'image(c.undef_out_checks) &
+           " resets_before_read=" & integer'image(c.rst_before_read) &
+           " resets_during_reads=" & integer'image(c.rst_during_reads) &
+           " resets_disabled=" & integer'image(c.rst_disabled) &
+           " reset_flushes=" & integer'image(c.rst_flushes) &
+           " reset_zero_checks=" & integer'image(c.rst_zero_checks) &
            " errors=" & integer'image(c.errors);
   end function f_tb_counts_image;
 
@@ -313,6 +337,7 @@ package body lm_mem_tb_pkg is
       ref     : t_tb_data;
       width   : natural;
       tag     : string(1 to 16);
+      discard : boolean;
     end record t_pending;
 
     type t_pending_arr is array (0 to C_TB_PEND_LEN - 1) of t_pending;
@@ -328,6 +353,8 @@ package body lm_mem_tb_pkg is
     variable v_log_wr     : natural := 0;
     variable v_pend       : t_pending_arr;
     variable v_counts     : t_tb_counts := (others => 0);
+    type t_rst_counts is array (0 to 1, C_TB_RST_BEFORE_READ to C_TB_RST_ZERO_CHECK) of natural;
+    variable v_rst        : t_rst_counts := (others => (others => 0));
 
     function f_overlap(a_base, a_n, b_base, b_n : natural) return boolean is
     begin
@@ -494,12 +521,14 @@ package body lm_mem_tb_pkg is
       return v_res;
     end function snapshot;
 
-    procedure push_read(
+    -- A pending read, compared when it resolves unless discard.
+    procedure p_push(
       port_id : natural;
       rd      : t_tb_read;
       dut     : std_logic_vector;
       ref     : std_logic_vector;
-      tag     : string
+      tag     : string;
+      discard : boolean
     ) is
       variable v_slot : integer := -1;
       variable v_lbl  : string(1 to 16) := (others => ' ');
@@ -526,8 +555,26 @@ package body lm_mem_tb_pkg is
       v_pend(v_slot).dut(dut'length - 1 downto 0) := dut;
       v_pend(v_slot).ref(ref'length - 1 downto 0) := ref;
       v_pend(v_slot).tag     := v_lbl;
+      v_pend(v_slot).discard := discard;
+    end procedure p_push;
+
+    procedure push_read(
+      port_id : natural;
+      rd      : t_tb_read;
+      dut     : std_logic_vector;
+      ref     : std_logic_vector;
+      tag     : string
+    ) is
+    begin
+      p_push(port_id, rd, dut, ref, tag, false);
       v_counts.reads := v_counts.reads + 1;
     end procedure push_read;
+
+    procedure push_discarded_read(port_id : natural; rd : t_tb_read; tag : string) is
+      constant C_NONE : std_logic_vector(0 downto 0) := "0";
+    begin
+      p_push(port_id, rd, C_NONE, C_NONE, tag, true);
+    end procedure push_discarded_read;
 
     procedure resolve(now_t : time; flush : boolean) is
       variable v_ready : boolean;
@@ -568,7 +615,16 @@ package body lm_mem_tb_pkg is
               end loop;
             end if;
             v_w := v_pend(i).width;
-            if v_rd.oor then
+            if v_pend(i).discard then
+              -- Not compared; a collision is still counted and reported.
+              if v_rw and not v_rd.oor then
+                v_counts.coll_rw := v_counts.coll_rw + 1;
+                report "lm_mem_tb_pkg: read/write collision on " & v_pend(i).tag &
+                       " cell " & integer'image(v_rd.base) & " (read at " & f_tb_ps_image(v_rd.t) &
+                       " ps, write at " & f_tb_ps_image(v_t_wr) & " ps); read discarded by a reset"
+                  severity warning;
+              end if;
+            elsif v_rd.oor then
               v_counts.reads_excl_oor := v_counts.reads_excl_oor + 1;
               report "lm_mem_tb_pkg: " & v_pend(i).tag & " read beyond the depth (cell " &
                      integer'image(v_rd.base) & "); read excluded"
@@ -637,6 +693,23 @@ package body lm_mem_tb_pkg is
     begin
       v_counts.undef_out_checks := v_counts.undef_out_checks + 1;
     end procedure count_undef_output_check;
+
+    procedure count_reset(port_id : natural; kind : natural) is
+    begin
+      v_rst(port_id, kind) := v_rst(port_id, kind) + 1;
+      case kind is
+        when C_TB_RST_BEFORE_READ  => v_counts.rst_before_read  := v_counts.rst_before_read + 1;
+        when C_TB_RST_DURING_READS => v_counts.rst_during_reads := v_counts.rst_during_reads + 1;
+        when C_TB_RST_DISABLED     => v_counts.rst_disabled     := v_counts.rst_disabled + 1;
+        when C_TB_RST_FLUSH        => v_counts.rst_flushes      := v_counts.rst_flushes + 1;
+        when others                => v_counts.rst_zero_checks  := v_counts.rst_zero_checks + 1;
+      end case;
+    end procedure count_reset;
+
+    impure function reset_count(port_id : natural; kind : natural) return natural is
+    begin
+      return v_rst(port_id, kind);
+    end function reset_count;
 
     impure function counts return t_tb_counts is
     begin

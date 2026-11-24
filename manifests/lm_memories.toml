@@ -113,6 +113,7 @@ files = [
   "sim/tb/tb_lm_mem_ram_r_w_primitives.vhd",
   "sim/tb/tb_lm_mem_fifo_sync.vhd",
   "sim/tb/tb_lm_mem_fifo_async.vhd",
+  "sim/tb/tb_lm_mem_component_compat.vhd",
 ]
 
 [filesets.tb_pkg]

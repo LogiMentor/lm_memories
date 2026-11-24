@@ -3,15 +3,38 @@
 
 # Verification results
 
-This directory holds the results of the AMD campaign of issue #3
+This directory holds the results of the verification campaigns
 (`tools/campaign/run_amd.sh`). They are written by
 
 ```sh
-python -m tools.campaign.publish <campaign root>
+python -m tools.campaign.publish <campaign root> --out docs/results/<campaign>
 ```
 
-from the result files of the campaign and of its reruns. Each published
-result records:
+from the result files of the campaign and of its reruns. Each campaign has
+its own directory, named by the code and the machine; the first campaign,
+of the Windows laptop, stays in this directory.
+
+## Campaigns
+
+| Campaign | Code | Machine | Tools | Result | Directory |
+| --- | --- | --- | --- | --- | --- |
+| v0.2.0 on the laptop (issue #3) | `4d1380c`, resumed on `f971122` (sources of v0.2.0) | Windows 11 laptop | Vivado 2023.1, xsim 2023.1, Quartus Prime Lite 23.1std, Questa Sim-64 2021.1, GHDL 6.0.0 | all steps pass; 11 tool-errors, each passed when run again | this directory ([below](#campaign-v020-on-the-windows-laptop)) |
+| v0.2.0-pcl01 (issue #8) | `2e95d7a`, evaluated again on `386e8d8` (sources of v0.2.0) | PCL01, Linux | Vivado 2024.1, xsim 2024.1, Quartus Prime Lite 25.1std, Questa Altera Starter FPGA Edition 2025.2, GHDL 6.0.0 | all steps pass; no tool-error; same results as the laptop | [`v0.2.0-pcl01/`](v0.2.0-pcl01/README.md) |
+
+Results of different tool versions are never mixed: each campaign
+publishes the files of its own tool versions, and its synthesis results
+are compared with the expected results of those versions
+(`tools/vendor_synth/expected/<vendor>/<version>.toml`).
+
+## Campaign v0.2.0 on the Windows laptop
+
+The rest of this file describes the laptop campaign, whose files are in
+this directory. This campaign cannot be published again with the current
+`tools/campaign/publish.py` (which needs the tool versions of the campaign,
+`logs/toolset.json`, and the record of the expected results of each case):
+these files stay as they are, and their archives remain the reference.
+
+Each published result records:
 - the commit it ran on;
 - the tool and its version;
 - the device;
@@ -35,7 +58,7 @@ paths:
 - `<vivado>` stands for the Vivado installation;
 - `Vivado-<pid>-<host>` stands for Vivado's temporary directories.
 
-## The campaign
+### The campaign
 
 - **Commit.** The campaign started on `4d1380c` (2026-11-04).
 - **Resume.** On 2026-11-05 it resumed on `f971122` (`LM_CAMPAIGN_RESUME="checks_vivado postsynth"`):
@@ -77,7 +100,7 @@ Steps of the campaign whose exit code is 1 (`amd_campaign.json`,
 `exit_codes`) are the steps that had tool-errors. They passed through the
 rerun.
 
-## `vivado_2023.1_amd.json`
+### `vivado_2023.1_amd.json`
 
 - **Synthesis.** Vivado v2023.1 (64-bit), out-of-context synthesis:
   - `python -m tools.vendor_synth --config tools/vendor_synth/vivado_check.toml`;
@@ -101,7 +124,7 @@ rerun.
   - `r_w_36x4096` on `xcku3p-ffva676-2-e` uses one URAM288, with no LUTs and no registers. Vivado reports `[Synth 8-6794] ... will be automatically implemented using URAM`, without any attribute.
   - `crw_cr_36x4096_cc` (both clock ports on one clock) and `rw_rw_36x4096` are not built as URAM. Vivado uses the true dual-port template: 4 RAMB36E2 plus an output multiplexer (10 and 12 LUTs).
 
-## `static_checks_vivado_2023.1.json`
+### `static_checks_vivado_2023.1.json`
 
 Static checks (`f_static_check` in `lm_mem_pkg`): the fallback of the
 two-writer RAMs and wrong generics must stop synthesis at the right check.
@@ -118,7 +141,7 @@ The tool is Vivado v2023.1 on `xc7a35tfgg484-2` (`tools/vendor_synth/fallback_ch
   - That case ran again on `f971122` and passed.
   - 4 other runs ended as tool-error (unreadable installation files) and passed when run again.
 
-## `static_checks_quartus_23.1.json`
+### `static_checks_quartus_23.1.json`
 
 The same checks with Quartus Prime Lite 23.1std.0 Build 991, Analysis &
 Synthesis on `5CEBA4F23C7` (`tools/vendor_synth/quartus_check.toml`).
@@ -128,7 +151,7 @@ Synthesis on `5CEBA4F23C7` (`tools/vendor_synth/quartus_check.toml`).
   - The wrong generics stop with `Error (10652): VHDL Assertion Statement ... assertion is false - report "<message>"`.
 - **Tool version.** The vendor_synth of this campaign (`4d1380c`) did not record the Quartus version; it does since the second review of PR #4. For these results, `publish.py` reads it from the run logs of the step (`Info: Version ...`). All of them carry the same version, and an evaluation of the archived logs with the current vendor_synth gives the same.
 
-## `postsynth_vivado_2023.1_amd.json`
+### `postsynth_vivado_2023.1_amd.json`
 
 Post-synthesis simulation of the two-writer RAMs and of the 36 x 4096 RAMs
 (`python sim/scripts/run_postsynth.py`).
@@ -170,7 +193,7 @@ and every message is paired:
 | `crw_cr.1clk.36x4096` | 3339 | 30 | - / 4 RAMB36 | 0 / 30 | - | 0 + 0 |
 | `rw_rw.36x4096` | 3346 | 77 | - / 4 RAMB36 | 11 / 55 | - | 11 + 0 |
 
-### Collision check on the netlist
+#### Collision check on the netlist
 
 The harness provokes collisions on purpose and excludes from the comparison
 every read that collides, and every cell left undefined by a write/write
@@ -183,7 +206,7 @@ collision. The UNISIM block RAM models report collisions as assertion errors.
 - **Everything else is fatal:** a message that does not pair, an unreadable message, and every other UNISIM diagnostic.
 - **Harness collisions without a message** are allowed. Coverage of collisions comes from the harness (`g_min_checked`), not from the model.
 
-### UltraScale+ with two clocks
+#### UltraScale+ with two clocks
 
 **On UltraScale+ the collision check has less weight with two clocks.** The
 RAMB18E2/RAMB36E2 models report a collision only when the edges of the two
@@ -207,13 +230,13 @@ What the netlist simulation shows on UltraScale+ with two clocks:
 - Without the model messages, it shows that the netlist returns the right data on every read the harness compares.
 - It does not show that the model agrees with the harness about which accesses collide.
 
-### URAM on `xcku3p-ffva676-2-e`
+#### URAM on `xcku3p-ffva676-2-e`
 
 - **Behaviour.** On the URAM netlist of `r_w.36x4096`, a read of an address written by the other port in the same cycle returns the old data. This is the behaviour specified for a common-clock simple dual-port RAM.
 - **Other checks.** Latency 1, the output hold while the enable is low, and the reads of never-written cells match the RTL.
 - **Limit.** This is a check against the UNISIM `URAM288` model, not against hardware.
 
-## `vunit_ghdl_6.0.0.json`, `vunit_questa_2021.1.json`
+### `vunit_ghdl_6.0.0.json`, `vunit_questa_2021.1.json`
 
 The whole VUnit suite (`python sim/scripts/run_vunit_campaign.py`), with no
 device:
@@ -222,7 +245,7 @@ device:
 
 Each test records its harness counters.
 
-## `mutation_ghdl_6.0.0.json`
+### `mutation_ghdl_6.0.0.json`
 
 Mutation check on GHDL 6.0.0 (`sim/vunit/mutation_check.py`). The baseline
 passes, and all 14 mutations of the cores and of the two-writer simulation

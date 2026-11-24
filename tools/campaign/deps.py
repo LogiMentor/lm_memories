@@ -50,9 +50,9 @@ _SYNTH = ["tools/vendor_synth/cases.toml"]
 _VUNIT = ["sim/vunit/run.py", "sim/vunit/configs.py"]
 CONFIGURATION = {
   "pilot": ["tools/campaign/pilot.toml", *_SYNTH],
-  "vivado": ["tools/vendor_synth/vivado_check.toml", "tools/vendor_synth/expected/amd.toml", *_SYNTH],
-  "checks_vivado": ["tools/vendor_synth/fallback_check.toml", "tools/vendor_synth/expected/amd.toml", *_SYNTH],
-  "checks_quartus": ["tools/vendor_synth/quartus_check.toml", "tools/vendor_synth/expected/intel.toml", *_SYNTH],
+  "vivado": ["tools/vendor_synth/vivado_check.toml", "tools/vendor_synth/expected/amd/**", *_SYNTH],
+  "checks_vivado": ["tools/vendor_synth/fallback_check.toml", "tools/vendor_synth/expected/amd/**", *_SYNTH],
+  "checks_quartus": ["tools/vendor_synth/quartus_check.toml", "tools/vendor_synth/expected/intel/**", *_SYNTH],
   "postsynth": ["sim/scripts/run_postsynth.py", "sim/vunit/configs.py"],
   "vunit_ghdl": _VUNIT,
   "vunit_questa": _VUNIT,

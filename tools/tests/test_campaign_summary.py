@@ -13,7 +13,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tools.campaign import rerun, summarize
+from tools.campaign import rerun, summarize, toolset
+from tools.tests import toolsets
 
 
 class SummaryTest(unittest.TestCase):
@@ -24,6 +25,7 @@ class SummaryTest(unittest.TestCase):
     (root / "logs" / "steps.txt").write_text("t start commit abc\nt end pilot rc=%d\n" % (0 if pilot_ok else 1))
     pilot = {"ok": pilot_ok, "launcher": {"ok": pilot_ok, "problems": [] if pilot_ok else ["exit code 0"]}}
     (root / "pilot" / "pilot.json").write_text(json.dumps(pilot))
+    toolsets.write(root)
     return root
 
   def _run(self, root: Path) -> int:
@@ -52,6 +54,13 @@ class SummaryTest(unittest.TestCase):
       self.assertEqual(summary["retry_waits"], "not recorded")
 
 
+# The version line of the GHDL of the toolset, as run_postsynth.py records it.
+GHDL_LINE = toolsets.LAPTOP_BANNERS["ghdl"].strip()
+# The simulator lines of VUnit and mutation for the toolset (as in docs/results).
+VUNIT_SIMULATORS = {"ghdl_6.0.0": "ghdl_GHDL_6.0.0_(tarball)_Dunoon_edition_",
+                    "questa_2021.1": "modelsim_Questa_Sim-64_vsim_2021.1_Simulator_2021.01_Jan_19_2021"}
+
+
 def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
               rerun_items: list[dict] | None = None, rc: dict | None = None) -> Path:
   """A campaign root where every step passed, except what the arguments say."""
@@ -64,24 +73,39 @@ def _campaign(tmp: str, vivado_statuses: list[str], ps_tool_error: bool = False,
     "t start commit abc\nmemory thresholds: synthesis 4096 MB (LM_EDA_MIN_FREE_MB_SYNTH); simulation 2048 MB "
     "(LM_EDA_MIN_FREE_MB_SIM)\nretry waits: 30, 60 s (LM_EDA_RETRY_DELAYS)\n" + "".join(f"t end {k} rc={v}\n" for k, v in codes.items()))
   (root / "pilot" / "pilot.json").write_text(json.dumps({"ok": True, "launcher": {"ok": True, "problems": []}}))
-  results = [{"job": "artix7", "part": "xc7a35tfgg484-2", "case": f"case{i}", "status": s,
+  results = [{"job": "artix7", "part": "xc7a35tfgg484-2", "case": f"case{i}", "status": s, "tool_version": "2023.1",
               "problems": [] if s == "pass" else [f"{s} of case{i}"]} for i, s in enumerate(vivado_statuses)]
   (root / "vs" / "summary.json").write_text(json.dumps({"results": results}))
-  for sub in ("fc", "qc"):
+  for sub, version in (("fc", "2023.1"), ("qc", "23.1std.0 Build 991")):
     (root / sub / "summary.json").write_text(json.dumps({"results": [
-      {"job": "j", "part": "p", "case": "x", "status": "pass", "problems": []}]}))
+      {"job": "j", "part": "p", "case": "x", "status": "pass", "tool_version": version, "problems": []}]}))
   synth = {"ok": not ps_tool_error, "tool_error": ps_tool_error, "problems": ["transient"] if ps_tool_error else []}
-  sims = {} if ps_tool_error else {"ghdl": {"results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
+  sims = {} if ps_tool_error else {"ghdl": {"sim": GHDL_LINE, "results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
   (root / "ps" / "results.json").write_text(json.dumps({"configs": ["crw_crw.1clk.16x64"], "rtl": {}, "parts": {
     "xc7a35tfgg484-2": {"synth": {"crw_crw_16x64_16_l11": synth}, "sims": sims}}}))
   for name in ("ghdl_6.0.0", "questa_2021.1"):
     (root / "vu" / name / "results.json").write_text(json.dumps({"problems": [], "total": 1, "passed": 1,
-                                                                 "simulator": name}))
+                                                                 "simulator": VUNIT_SIMULATORS[name]}))
   (root / "mut" / "ghdl_6.0.0" / "results.json").write_text(json.dumps({
-    "baseline": {"verdict": "PASS"}, "mutations": [{"name": "m", "verdict": "DETECTED"}]}))
+    "simulator": VUNIT_SIMULATORS["ghdl_6.0.0"], "baseline": {"verdict": "PASS"},
+    "mutations": [{"name": "m", "verdict": "DETECTED"}]}))
   if rerun_items is not None:
     (root / "rerun").mkdir()
     (root / "rerun" / "rerun.json").write_text(json.dumps({"ok": True, "items": rerun_items}))
+    for i in rerun_items:  # the result files of each rerun, as rerun.py leaves them
+      if i["step"] in rerun.SYNTH_STEPS:
+        work = root / "rerun" / rerun.SYNTH_STEPS[i["step"]][0] / rerun._safe(i["job"]) / rerun._safe(i["case"])
+        work.mkdir(parents=True)
+        version = "23.1std.0 Build 991" if i["step"] == "checks_quartus" else "2023.1"
+        (work / "summary.json").write_text(json.dumps({"results": [
+          {"job": i["job"], "part": i["part"], "case": i["case"], "status": i.get("rerun_status", "not-run"),
+           "tool_version": version, "problems": i.get("rerun_problems", [])}]}))
+      else:
+        work = root / "rerun" / "ps" / rerun._safe(i["part"])
+        work.mkdir(parents=True)
+        (work / "results.json").write_text(json.dumps({"parts": {i["part"]: {
+          "synth": {"crw_crw_16x64_16_l11": {"ok": True, "version": "2023.1"}}, "sims": {}}}}))
+  toolsets.write(root)
   return root
 
 
@@ -150,6 +174,150 @@ class RerunTest(unittest.TestCase):
       code, summary, text = self._summary(root)
       self.assertEqual(code, 1)
       self.assertIn("case1: tool-error (rerun of a tool-error) couldn't read file again", text)
+
+  def test_a_rerun_is_judged_by_its_own_result_and_tool_version(self) -> None:
+    # Review of PR #9: the rerun of a tool-error was taken from rerun.json
+    # without its result file, so a rerun with another tool version passed.
+    item = {"step": "vivado", "job": "artix7", "part": "xc7a35tfgg484-2", "case": "case1",
+            "first_status": "tool-error", "first_problems": ["x"], "rerun_status": "pass", "rerun_problems": []}
+    result = root_file = None
+    for change, message in (({"tool_version": "2024.1"}, "tool version 2024.1, the campaign toolset has 2023.1"),
+                            ({"tool_version": "mixed: 2023.1, 2024.1"}, "tool version mixed: 2023.1, 2024.1"),
+                            ({"tool_version": ""}, "pass without a tool version"),
+                            ({"status": "fail", "problems": ["wrong"]}, "fail (rerun of a tool-error) wrong"),
+                            (None, "no result of the rerun")):
+      with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
+        root = _campaign(tmp, ["pass", "tool-error"], rerun_items=[item], rc={"vivado": 1})
+        root_file = root / "rerun" / "vs" / "artix7" / "case1" / "summary.json"
+        if change is None:
+          root_file.unlink()
+        else:
+          result = json.loads(root_file.read_text())["results"][0]
+          root_file.write_text(json.dumps({"results": [{**result, **change}]}))
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 1, text)
+        self.assertFalse(summary["steps"]["vivado"]["ok"])
+        self.assertTrue(any(message in f for f in summary["steps"]["vivado"]["failures"]),
+                        summary["steps"]["vivado"]["failures"])
+
+  def test_a_postsynth_rerun_of_another_vivado_fails(self) -> None:
+    item = {"step": "postsynth", "job": "postsynth", "part": "xc7a35tfgg484-2", "case": "crw_crw.1clk.16x64",
+            "first_status": "tool-error", "first_problems": ["transient"], "rerun_status": "pass",
+            "rerun_problems": []}
+    with tempfile.TemporaryDirectory() as tmp:
+      root = _campaign(tmp, ["pass"], ps_tool_error=True, rerun_items=[item], rc={"postsynth": 1})
+      ps = json.loads((root / "ps" / "results.json").read_text())
+      ps["rtl"] = {"ghdl": {"sim": GHDL_LINE, "results": {"crw_crw.1clk.16x64": {"verdict": "PASS"}}}}
+      (root / "ps" / "results.json").write_text(json.dumps(ps))
+      code, summary, text = self._summary(root)
+      self.assertEqual(code, 0, text)
+      path = root / "rerun" / "ps" / "xc7a35tfgg484-2" / "results.json"
+      data = json.loads(path.read_text())
+      data["parts"]["xc7a35tfgg484-2"]["synth"]["crw_crw_16x64_16_l11"]["version"] = "2024.1"
+      path.write_text(json.dumps(data))
+      code, summary, text = self._summary(root)
+      self.assertEqual(code, 1, text)
+      self.assertIn("xc7a35tfgg484-2 synthesis crw_crw_16x64_16_l11 (rerun): tool version 2024.1, the campaign "
+                    "toolset has 2023.1", summary["steps"]["postsynth"]["failures"])
+
+  def test_a_postsynth_simulation_of_another_simulator_fails(self) -> None:
+    # Review of PR #9: the summary checked only the Vivado of the syntheses,
+    # so a simulation with another GHDL or xsim, or without its version, passed.
+    part = "xc7a35tfgg484-2"
+    passed = {"crw_crw.1clk.16x64": {"verdict": "PASS"}}
+
+    def rtl_xsim(d: dict) -> None:
+      d["rtl"] = {"xsim": {"sim": "xsim 2024.1", "results": passed}}
+
+    def rerun_ghdl(d: dict) -> None:
+      d["parts"][part]["sims"] = {"ghdl": {"sim": "GHDL 5.0.1 (tarball) [Dunoon edition]", "results": passed}}
+
+    cases = (
+      (False, lambda d: d["parts"][part]["sims"]["ghdl"].update(sim="GHDL 5.0.1 (tarball) [Dunoon edition]"),
+       f"{part} ghdl: simulator GHDL 5.0.1 (tarball) [Dunoon edition], the campaign toolset has ghdl 6.0.0"),
+      (False, lambda d: d["parts"][part]["sims"]["ghdl"].pop("sim"),
+       f"{part} ghdl: simulator unknown, the campaign toolset has ghdl 6.0.0"),
+      (False, rtl_xsim, "RTL xsim: simulator xsim 2024.1, the campaign toolset has vivado 2023.1"),
+      (True, rerun_ghdl,
+       f"{part} (rerun) ghdl: simulator GHDL 5.0.1 (tarball) [Dunoon edition], the campaign toolset has ghdl 6.0.0"),
+    )
+    item = {"step": "postsynth", "job": "postsynth", "part": part, "case": "crw_crw.1clk.16x64",
+            "first_status": "tool-error", "first_problems": ["transient"], "rerun_status": "pass",
+            "rerun_problems": []}
+    for rerun_case, change, message in cases:
+      with self.subTest(message=message), tempfile.TemporaryDirectory() as tmp:
+        if rerun_case:
+          root = _campaign(tmp, ["pass"], ps_tool_error=True, rerun_items=[item], rc={"postsynth": 1})
+          ps = json.loads((root / "ps" / "results.json").read_text())
+          ps["rtl"] = {"ghdl": {"sim": GHDL_LINE, "results": passed}}
+          (root / "ps" / "results.json").write_text(json.dumps(ps))
+          path = root / "rerun" / "ps" / part / "results.json"
+        else:
+          root = _campaign(tmp, ["pass"])
+          path = root / "ps" / "results.json"
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 0, text)
+        data = json.loads(path.read_text())
+        change(data)
+        path.write_text(json.dumps(data))
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 1, text)
+        self.assertIn(message, summary["steps"]["postsynth"]["failures"])
+
+  def test_a_vunit_or_mutation_run_of_another_simulator_fails(self) -> None:
+    # Review of PR #9: the summary did not check the simulator of VUnit and
+    # mutation, so a run of another GHDL or Questa passed (publish.py refused it).
+    cases = (
+      ("vunit_ghdl", "vu/ghdl_6.0.0", "ghdl_GHDL_5.0.1_(tarball)_Dunoon_edition_",
+       "simulator ghdl_GHDL_5.0.1_(tarball)_Dunoon_edition_, the campaign toolset has ghdl 6.0.0"),
+      ("vunit_ghdl", "vu/ghdl_6.0.0", None, "simulator unknown, the campaign toolset has ghdl 6.0.0"),
+      ("vunit_questa", "vu/questa_2021.1", "modelsim_Questa_Sim-64_vsim_2025.2_Simulator",
+       "simulator modelsim_Questa_Sim-64_vsim_2025.2_Simulator, the campaign toolset has questa 2021.1"),
+      # Same version, another edition.
+      ("vunit_questa", "vu/questa_2021.1", "modelsim_Questa_Altera_Starter_FPGA_Edition-64_vsim_2021.1_Simulator",
+       "simulator modelsim_Questa_Altera_Starter_FPGA_Edition-64_vsim_2021.1_Simulator, the campaign toolset has "
+       "questa 2021.1"),
+      ("mutation", "mut/ghdl_6.0.0", "ghdl_GHDL_5.0.1_(tarball)_Dunoon_edition_",
+       "simulator ghdl_GHDL_5.0.1_(tarball)_Dunoon_edition_, the campaign toolset has ghdl 6.0.0"),
+      ("mutation", "mut/ghdl_6.0.0", None, "simulator unknown, the campaign toolset has ghdl 6.0.0"),
+    )
+    for step, sub, simulator, message in cases:
+      with self.subTest(step=step, simulator=simulator), tempfile.TemporaryDirectory() as tmp:
+        root = _campaign(tmp, ["pass"])
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 0, text)
+        path = root / sub / "results.json"
+        data = json.loads(path.read_text())
+        if simulator is None:
+          data.pop("simulator")
+        else:
+          data["simulator"] = simulator
+        path.write_text(json.dumps(data))
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 1, text)
+        self.assertFalse(summary["steps"][step]["ok"])
+        self.assertIn(message, summary["steps"][step]["failures"])
+
+  def test_provisional_results_are_not_a_pass(self) -> None:
+    # Review of PR #9: results compared with expected results not yet
+    # measured ([meta] basis) passed the campaign; only publish.py refused them.
+    record = {"file": "tools/vendor_synth/expected/amd/2024.1.toml", "sha256": "0" * 64, "basis": "copy"}
+    for statuses, header in ((["pass-provisional", "pass-provisional"], "# AMD campaign: PROVISIONAL"),
+                             (["pass-provisional", "fail"], "# AMD campaign: FAIL")):
+      with self.subTest(statuses=statuses), tempfile.TemporaryDirectory() as tmp:
+        root = _campaign(tmp, statuses, rerun_items=[], rc={"vivado": 1})
+        data = json.loads((root / "vs" / "summary.json").read_text())
+        for r in data["results"]:
+          r["expected"] = record
+        (root / "vs" / "summary.json").write_text(json.dumps(data))
+        code, summary, text = self._summary(root)
+        self.assertEqual(code, 1, text)
+        self.assertFalse(summary["ok"])
+        self.assertEqual(summary["provisional"], {"vivado": 1 if "fail" in statuses else 2})
+        self.assertTrue(text.startswith(header + "\n"), text[:200])
+        self.assertIn("compared with expected results not yet measured", text.split("## Pilot")[0])
+        self.assertIn("tools/vendor_synth/expected/amd/2024.1.toml", text.split("## Pilot")[0])
+        self.assertEqual(summary["steps"]["vivado"]["counts"]["pass-provisional"], 1 if "fail" in statuses else 2)
 
   def test_a_fail_stays_a_fail(self) -> None:
     with tempfile.TemporaryDirectory() as tmp:
@@ -241,15 +409,22 @@ class RerunTest(unittest.TestCase):
 
   def test_steps_match_the_campaign_script(self) -> None:
     script = (Path(rerun.ROOT_DIR) / "tools" / "campaign" / "run_amd.sh").read_text(encoding="utf-8")
-    for step, (sub, config, campaign) in rerun.SYNTH_STEPS.items():
+    variables = {"vivado": "N_VIVADO", "checks_vivado": "N_CHECKS_VIVADO", "checks_quartus": "N_CHECKS_QUARTUS"}
+    for step, (sub, config) in rerun.SYNTH_STEPS.items():
       line = next(l for l in script.splitlines() if l.startswith(f"step {step} "))
       following = script[script.index(line):].split("\n", 2)
       text = following[0] + following[1]
       self.assertIn(config, text, step)
-      self.assertIn(f"--campaign {campaign}", text, step)
+      self.assertIn(f'--campaign "${variables[step]}"', text, step)
+      self.assertIn(f"{variables[step]}=$(name {step})", script, step)
       self.assertIn(f'"$ROOT/{sub}"', text, step)
-    self.assertIn(f"--campaign {rerun.POSTSYNTH_CAMPAIGN}", script)
+    self.assertIn('--campaign "$N_POSTSYNTH"', script)
     self.assertIn("step rerun_tool_errors", script)
+    # No campaign name, and so no tool version, is written in the script.
+    code = "\n".join(l for l in script.splitlines() if not l.lstrip().startswith("#"))
+    self.assertNotRegex(code, r"--campaign [a-z]|run_vunit_campaign\.py [a-z]")
+    self.assertIn("tools.campaign.toolset detect", script)
+    self.assertIn('tools.campaign.toolset check "$TOOLSET"', script)
 
 
 if __name__ == "__main__":

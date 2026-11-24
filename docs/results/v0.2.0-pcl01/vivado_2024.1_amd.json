@@ -1,0 +1,2331 @@
+{
+ "step": "vivado",
+ "counts": {
+  "pass": 55
+ },
+ "total": 55,
+ "results": [
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "r_w_32x1024",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "fc881d355b8028bd60545fcab8e1504b854d3ce2fc10fc5f237dec1bfc468aea",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "r_w_32x1024_lat2",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "3b3acc2d9ae1523999b9c8715e1149b1f3450e0672938c8edca1a5eebe299ca7",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "r_w_16x64",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 16,
+    "g_ram_depth": 64,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 0.5,
+    "ramb36": 0.0,
+    "ramb18": 1.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "f5280ea2bad5e09849461a884219514d29827647c5cce80b28c064b5f0fe9ba6",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "r_w_32x1000",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1000,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "45a52553931e90975ff4b95d5de7210d339960a2fb8911494e3d9882169757e5",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "r_w_32x1536",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1536,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 2.0,
+    "ramb36": 2.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "0f50041e7a01a028ec6942ee683dffe57c67f56001e87a907fd3f8aa17da005b",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "cr_cw_32x1024",
+   "top": "lm_mem_ram_cr_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "0f88f8073432118dfa94981623ae1d6fe98b70b4ec591694b37acb5b40f04986",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "cr_cw_32x1024_lat2",
+   "top": "lm_mem_ram_cr_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "9ac4cf4b6d2c735565edf79c3563b916689b87389a47a0caaab975a24c684c1f",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "r_w_ratio_32to8",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "3337db44e4a31f852d4128cd364541851be45f8d5236823b89114cc0ff3c07fe",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "r_w_ratio_8to32",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "5453b27c4876c7538231eb7ddbcb4af6bd33aa23f5d1b6ffa93d7549eb606225",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "cr_cw_ratio_32to8",
+   "top": "lm_mem_ram_cr_cw_ratio",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "ccbdaa17e1d830334430f04632e2d9fbaf8cf9036f00b6219ceece0533e54b14",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "cr_cw_ratio_8to32",
+   "top": "lm_mem_ram_cr_cw_ratio",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "117084a0e95b7de7692bcefc0a2f96f2989682d8c325ceed5f4c7ed63aa59b7c",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_cr_32x1024",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "7ba7384c486eaac04a42f271e501b8e83a0792c63637f948cc1ac266da7e3340",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_cr_32x1024_lat2",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "5818bf8e19662ec0afd384662c270f4bd2d13410d4e8a35af77fad9b8dc174d9",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fifo_sync_32x16",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 49.0,
+    "luts_logic": 25.0,
+    "lutram": 24.0,
+    "registers": 47.0,
+    "bram_tiles": 0.0,
+    "ramb36": 0.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "12f93fd807d7aabf06a763f358b295f98dad606c651bcdb2f10b36eb709ab4ff",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fifo_sync_32x1024",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 1024
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 56.0,
+    "luts_logic": 56.0,
+    "lutram": 0.0,
+    "registers": 27.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "7036fa0710b87f1e9b634d5c0510262256f25c86940924f66d34b2bb9be44864",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fifo_async_32x16",
+   "top": "lm_mem_fifo_async",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 63.0,
+    "luts_logic": 39.0,
+    "lutram": 24.0,
+    "registers": 75.0,
+    "bram_tiles": 0.0,
+    "ramb36": 0.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "6324fab84af0beefdfafd9fd9f1c178cbf9abc32255ad0182f30a9dff4ea33c4",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fifo_async_32x1024",
+   "top": "lm_mem_fifo_async",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 1024
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 99.0,
+    "luts_logic": 99.0,
+    "lutram": 0.0,
+    "registers": 91.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "0554a94fb725bcfd411ec656f5f71653f7554a0fe6340bbd992608db2e507559",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_crw_32x1024",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "ede21da9e46a2f4682552400b31fa6d535d9050a81670c38920fa82a8b08af6d",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_crw_32x1024_lat2",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 2,
+    "g_ram_b_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "49c6255f3340d04415e83eb2ba4cf438d3d666ead986336e29c032b2ea51e288",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_crw_32to8",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "d1fc25d9743e7b82c17607a7afd6f36b0ba06dfa0dee74916d07848731a87236",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_crw_8to32",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "6206bb0b095ae409681327123cc5562055b378cebb74f9d2fb5d7e9fbeb9a7d4",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_crw_32x1000",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1000,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "730b98165e5a33a67d322a908d59d8c460c0017e82eb7ef0394007c2183250fa",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_crw_16x64",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 16,
+    "g_ram_a_depth": 64,
+    "g_ram_b_data_w": 16,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 0.5,
+    "ramb36": 0.0,
+    "ramb18": 1.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "82791a7c9ed9478d0204362295a4609dbd6a6710c4f4b7616bb27eeb49fcc07e",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "rw_rw_32x1024",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "5bbb97a09b9279cfbfb4f35b637dc067239450455678e55acc7ccaf6b80d971f",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "rw_rw_32x1024_lat2",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "e1677b58bc8a7fbd93cd5812259f1ceb6339057c71b44a64466e936cb1f1dd79",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-artix7",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "crw_cw_32x1024",
+   "top": "lm_mem_ram_crw_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": null
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "35de4952485dcd8033cd0b11d25bbcf193a4727ca019a7ec39e2c8c351ce7036",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "r_w_32x1024",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "a8e58e34fe4da0e126d9a8d1d720cc44910b60467590545847836bb013468ab8",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "r_w_32x1024_lat2",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "e7c7fbbea0c47a8036a5c2654de8f239de47237c345179465d824c9fd9ac706b",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "r_w_16x64",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 16,
+    "g_ram_depth": 64,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 21.0,
+    "luts_logic": 1.0,
+    "lutram": 20.0,
+    "registers": 16.0,
+    "bram_tiles": 0.0,
+    "ramb36": 0.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "f1617f8f5fe01a8c07108f3f42335568632bb3ab83a61b5977636dd03af99ce0",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "r_w_32x1000",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1000,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "7e20360882d60f4ae6a67d8025d35e584bab77a4f70de5f40a3161ea3a5ab6a8",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "r_w_32x1536",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1536,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 2.0,
+    "ramb36": 2.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "9a94fc28045c76f4e2d787164832ee248bf011b3a22f3d469782a76aac7a0bf2",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "cr_cw_32x1024",
+   "top": "lm_mem_ram_cr_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "944dc8f54bcf060367d8692da6b5a061db645d87f2d4854cc250b0005a387110",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "cr_cw_32x1024_lat2",
+   "top": "lm_mem_ram_cr_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "f13e2de18f5c0bf880b1868ca629f7e919aa06d1c8cfba470e04baea8df2d5c6",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "r_w_ratio_32to8",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "8b5a8aad8cee1db3f121dd42a228591b4331607a27c66363e92f18a1f44af7fe",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "r_w_ratio_8to32",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "f1b2b8a1c0616087e79c02f3b45d43af554d88784bd96bc55573a69eef1580e9",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "cr_cw_ratio_32to8",
+   "top": "lm_mem_ram_cr_cw_ratio",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "2d50b228505585893a2c8879696058ca4a378d217a357eb14ea116867b0e1bcc",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "cr_cw_ratio_8to32",
+   "top": "lm_mem_ram_cr_cw_ratio",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "75a864dd5d62831a38c7aeaab5c222ec8042a4d9554adafc38601e6a764c21d0",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_cr_32x1024",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "d14808d96c1a603be00e4999ab5dbe186166faf86a04f5916ecddf35cabb781a",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_cr_32x1024_lat2",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "6cea9ae4c9dfcf1f8ab601076c44652de434bf3221805c493847446337bc0547",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "fifo_sync_32x16",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 45.0,
+    "luts_logic": 25.0,
+    "lutram": 20.0,
+    "registers": 47.0,
+    "bram_tiles": 0.0,
+    "ramb36": 0.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "88dc09faeb82f67900eae2346b01510753369bcf48324031a743229c94031a82",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "fifo_sync_32x1024",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 1024
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 54.0,
+    "luts_logic": 54.0,
+    "lutram": 0.0,
+    "registers": 27.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "b57dfd86b8cf19af7dcbcfd006aa74d554016a915dab7d88c5889f24db090bc6",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "fifo_async_32x16",
+   "top": "lm_mem_fifo_async",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 56.0,
+    "luts_logic": 36.0,
+    "lutram": 20.0,
+    "registers": 75.0,
+    "bram_tiles": 0.0,
+    "ramb36": 0.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "8427ee2f812b046634044801c0e1488298fceee08e5ec65fac439e354bbe9939",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "fifo_async_32x1024",
+   "top": "lm_mem_fifo_async",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 1024
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 99.0,
+    "luts_logic": 99.0,
+    "lutram": 0.0,
+    "registers": 91.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "63306e313c685bc4d0bd5239d90466a64c72f15141b4349d910e7015bf59165c",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_crw_32x1024",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "911f4b6de6f66763c4ade08766d7f4ebadd09d61d4695bb7e1ef0f886f015923",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_crw_32x1024_lat2",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 2,
+    "g_ram_b_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "4b83346c5eb793dc03d4b3b5cb263f01218993f65241f14e5cebea0b538ea6d6",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_crw_32to8",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "58beb2fa831a461a6255482337d185277b7814aecf43661fededb3b7a0f08294",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_crw_8to32",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "74743ca995ba86abc7f123c71dd76c3c05edd8c4ad1df1f90f3ddd0ecb6e6df3",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_crw_32x1000",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1000,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "9a66c3e6ffbd35b76c6a91c33f368eb568636f53e40fc7f8786ff978653e6771",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_crw_16x64",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 16,
+    "g_ram_a_depth": 64,
+    "g_ram_b_data_w": 16,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 0.5,
+    "ramb36": 0.0,
+    "ramb18": 1.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "360c4d4b4d137ba1c47bc63771d693864acdbb554381b483b08319d554f71fc0",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "rw_rw_32x1024",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "545940c973949b2f7075512328307b649be347908793d37418f8430964a39043",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "rw_rw_32x1024_lat2",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 2
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "3732ccaa7e8359b65589783a73c36e114a3b0f40f5c49985bec4109b9f694769",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_cw_32x1024",
+   "top": "lm_mem_ram_crw_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 1.0,
+    "ramb36": 1.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "c0eb3b3f62eb8916f0418383f82e5b4d9ff95f8cabc7080aa5f39b80389a0158",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "r_w_36x4096",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 36,
+    "g_ram_depth": 4096,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 0.0,
+    "luts_logic": 0.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 0.0,
+    "ramb36": 0.0,
+    "ramb18": 0.0,
+    "uram": 1.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "6db1ae4680299be6a1fc573d470e87c658d84ea908aec991ef5cbaca7055f147",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "crw_cr_36x4096_cc",
+   "top": "lm_vs_vivado_kintexuplus_crw_cr_36x4096_cc",
+   "generics": {},
+   "status": "pass",
+   "metrics": {
+    "luts": 10.0,
+    "luts_logic": 10.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 4.0,
+    "ramb36": 4.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "2a0ea4fc70dc45e3d608210ad0652a0259480bc94cca98facdbb0a6294ee8703",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  },
+  {
+   "job": "vivado-kintexuplus",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "kintexuplus",
+   "part": "xcku3p-ffva676-2-e",
+   "case": "rw_rw_36x4096",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 36,
+    "g_ram_depth": 4096,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "luts": 12.0,
+    "luts_logic": 12.0,
+    "lutram": 0.0,
+    "registers": 0.0,
+    "bram_tiles": 4.0,
+    "ramb36": 4.0,
+    "ramb18": 0.0,
+    "uram": 0.0
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "5369a514ee6b8a5abb5c688ecb0a8dfa4949bf0c2195b433e1eff9ae84de66b0",
+    "basis": null
+   },
+   "commit": "2e95d7a0f6839785e0a7e6a41dcce546a170f603",
+   "sources_hash": "3562509022eaa9efdaa97a577241495f8d2d61446e3a49d5eb1718173a45179b",
+   "evaluated_on": "386e8d8fe046a12dc702b77665e226b72c67f846",
+   "archive": {
+    "archive": "vivado_2024.1_amd_20261113T085838Z.tar.xz",
+    "sha256": "9a0365fa2da856d08c2b13ba396ab075a0025e3439a1513999e7e62a984fc189",
+    "files": 390
+   }
+  }
+ ]
+}

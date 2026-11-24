@@ -50,11 +50,14 @@ jobs:
 
   python:
     # Windows too: the lock (msvcrt), the process-tree timeout (taskkill) and
-    # the cmd.exe launchers have Windows-only paths.
+    # the cmd.exe launchers have Windows-only paths. Python 3.11, the minimum
+    # of pyproject.toml, and 3.12: some standard library behaviour differs
+    # (shutil.which on Windows applies PATHEXT to a path only from 3.12).
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12"]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -64,7 +67,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
 
       - name: Run Python tests
         env:

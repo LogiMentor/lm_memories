@@ -22,6 +22,16 @@ from . import DEFAULT_MANIFEST, ManifestError, SourceFile, load
 GHDL = os.environ.get("GHDL", "ghdl")
 
 
+def ghdl_found(ghdl: str) -> bool:
+  """GHDL can be started: a name on PATH, or a path ("C:/msys64/ucrt64/bin/ghdl").
+
+  A path is searched in its own directory: before Python 3.12,
+  shutil.which applies PATHEXT on Windows only in a search, so a path
+  without .exe was not found although the process starts (ghdl.exe)."""
+  directory, name = os.path.split(ghdl)
+  return shutil.which(name, path=directory or None) is not None
+
+
 def _print_list(files: list[SourceFile], fmt: str) -> None:
   if fmt == "json":
     print(json.dumps([
@@ -89,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "list":
       _print_list(load(args.manifest).files(args.flow, args.tool), args.format)
       return 0
-    if shutil.which(GHDL) is None:
+    if not ghdl_found(GHDL):
       print(f"GHDL not found ({GHDL})", file=sys.stderr)
       return 2
     return check(args.flow, args.manifest)

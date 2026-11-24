@@ -4,7 +4,7 @@
 # Synthesis check cases (kind "entity"): the library entity itself is the
 # out-of-context top, with the generics below. Generics are written into the
 # tool script (never on a command line) and read back from the synthesis log.
-# Expected results per vendor are in expected/<vendor>.toml.
+# Expected results per vendor and tool version are in expected/<vendor>/<version>.toml.
 
 [[cases]]
 name = "r_w_32x1024"

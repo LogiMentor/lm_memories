@@ -1,7 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 LogiMentor Srl
 #
-# Expected Quartus results for the cases in ../cases.toml.
+# Expected Quartus 25.1std results for the cases in ../../cases.toml.
+#
+# Measured with Quartus Prime Lite 25.1std.0 Build 1129 on PCL01 (Linux),
+# campaign v0.2.0-pcl01 of 2026-11-13 on commit
+# 2e95d7a0f6839785e0a7e6a41dcce546a170f603 (sources of v0.2.0): archive
+# static_checks_quartus_25.1_20261113T091218Z.tar.xz (SHA-256
+# 0b2dce2a2d36abca5143cd3a41657b618985c2673cb1365d56b3e6d01309e3e4).
+# Every case gave the same result as Quartus 23.1std (11 static checks: the
+# same errors at the same lines, exit code 3).
+#
+# One file per Quartus release (tools/vendor_synth/check.py load_expected):
+# a run is compared with the file of the release in its log ("Info: Version
+# 23.1std.0 Build 991" -> 23.1std), and [meta] tool_version must name it.
 #
 # There is no validated Intel two-writer architecture yet, so the synth-intel
 # flow compiles the fallback (src/vendor/unsupported). Expected result for the
@@ -14,6 +26,9 @@
 # required as well.
 #
 # Device: 5CEBA4F23C7 (Cyclone V E).
+
+[meta]
+tool_version = "25.1std"
 
 [[expect]]
 case = "crw_crw_32x1024"

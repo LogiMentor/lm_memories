@@ -28,8 +28,9 @@ TREE = {
   "tools/vendor_synth/vivado_check.toml": b"vivado\n",
   "tools/vendor_synth/fallback_check.toml": b"fallback\n",
   "tools/vendor_synth/quartus_check.toml": b"quartus\n",
-  "tools/vendor_synth/expected/amd.toml": b"amd\n",
-  "tools/vendor_synth/expected/intel.toml": b"intel\n",
+  "tools/vendor_synth/expected/amd/2023.1.toml": b"amd\n",
+  "tools/vendor_synth/expected/amd/2024.1.toml": b"amd 2024.1\n",
+  "tools/vendor_synth/expected/intel/23.1std.toml": b"intel\n",
   "tools/campaign/pilot.toml": b"pilot\n",
 }
 
@@ -55,7 +56,7 @@ class DepsTest(unittest.TestCase):
   def test_changed_dependency_of_a_kept_step_refuses_the_resume(self) -> None:
     deps.record(self.root, read=reader(TREE), commit="c1")
     for path, kept in (("sim/vunit/lm_mem_tb_harness.vhd", ["vunit_ghdl", "vunit_questa", "mutation"]),
-                       ("tools/vendor_synth/expected/amd.toml", ["vivado"]),
+                       ("tools/vendor_synth/expected/amd/2024.1.toml", ["vivado"]),
                        ("src/core/lm_mem_ram_sdp.vhd", ["pilot", "vivado", "checks_quartus", "vunit_ghdl"])):
       problems = deps.check(self.root, ["checks_vivado", "postsynth"], read=reader({**TREE, path: b"changed\n"}))
       steps = {p.split(":")[0] for p in problems}

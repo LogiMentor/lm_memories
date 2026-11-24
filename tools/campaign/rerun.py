@@ -12,6 +12,9 @@ first run. A case that failed (status fail, a wrong result) never runs again.
 
 - vendor_synth steps (vs, fc, qc): every result with status "tool-error",
   one run per job and case, with the configuration of its step.
+
+The campaign name of each rerun is that of its step with "_rerun", from the
+toolset of the campaign root (logs/toolset.json, tools/campaign/toolset.py).
 - post-synthesis (ps): every synthesis recorded with tool_error, one run per
   part with those configurations.
 
@@ -29,15 +32,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tools.campaign import toolset
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
-# Work root of each vendor_synth step in tools/campaign/run_amd.sh, its
-# configuration and its campaign name.
+# Work root of each vendor_synth step in tools/campaign/run_amd.sh and its
+# configuration. The campaign names come from the toolset of the campaign
+# root (tools/campaign/toolset.py).
 SYNTH_STEPS = {
-  "vivado": ("vs", "tools/vendor_synth/vivado_check.toml", "vivado_2023.1_amd"),
-  "checks_vivado": ("fc", "tools/vendor_synth/fallback_check.toml", "static_checks_vivado_2023.1"),
-  "checks_quartus": ("qc", "tools/vendor_synth/quartus_check.toml", "static_checks_quartus_23.1"),
+  "vivado": ("vs", "tools/vendor_synth/vivado_check.toml"),
+  "checks_vivado": ("fc", "tools/vendor_synth/fallback_check.toml"),
+  "checks_quartus": ("qc", "tools/vendor_synth/quartus_check.toml"),
 }
-POSTSYNTH_CAMPAIGN = "postsynth_vivado_2023.1_amd"
 
 
 def _load(path: Path) -> dict | None:
@@ -54,7 +59,9 @@ def _safe(text: str) -> str:
 def tool_errors(root: Path) -> list[dict]:
   """Cases of the campaign that ended as tool-error, with what reruns them."""
   todo = []
-  for step, (sub, config, campaign) in SYNTH_STEPS.items():
+  campaigns = toolset.names(root)
+  for step, (sub, config) in SYNTH_STEPS.items():
+    campaign = campaigns[step]
     data = _load(root / sub / "summary.json")
     for r in (data or {}).get("results", []):
       if r.get("status") != "tool-error":
@@ -63,7 +70,8 @@ def tool_errors(root: Path) -> list[dict]:
       todo.append({"step": step, "job": r["job"], "part": r.get("part", ""), "case": r["case"],
                    "first_status": r["status"], "first_problems": r.get("problems", []), "work_root": str(work),
                    "command": [sys.executable, "-m", "tools.vendor_synth", "--config", config, "--job", r["job"],
-                               "--case", r["case"], "--campaign", f"{campaign}_rerun", "--work-root", str(work)]})
+                               "--case", r["case"], "--campaign", f"{campaign}_rerun", "--work-root", str(work),
+                               "--toolset", str(root / "logs" / toolset.TOOLSET_FILE)]})
   data = _load(root / "ps" / "results.json") or {}
   for part, pd in data.get("parts", {}).items():
     names = [name for name, s in pd.get("synth", {}).items() if s.get("tool_error")]
@@ -77,7 +85,7 @@ def tool_errors(root: Path) -> list[dict]:
                                                                   for p in pd["synth"][n].get("problems", [])],
                  "work_root": str(work),
                  "command": [sys.executable, "sim/scripts/run_postsynth.py", "--part", part, "--config", pattern,
-                             "--campaign", f"{POSTSYNTH_CAMPAIGN}_rerun", "--work-root", str(work)]})
+                             "--campaign", f"{campaigns['postsynth']}_rerun", "--work-root", str(work)]})
   return todo
 
 
@@ -144,7 +152,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
       options[current].append(arg)
   steps, fresh = options["--steps"], set(options["--fresh"])
-  todo = tool_errors(root)
+  try:
+    todo = tool_errors(root)
+  except toolset.ToolsetError as exc:
+    print(f"rerun: {exc}", file=sys.stderr)
+    return 2
   kept: list[dict] = []
   if steps:
     earlier = (_load(root / "rerun" / "rerun.json") or {}).get("items", [])

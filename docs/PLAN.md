@@ -1033,8 +1033,13 @@ the summary in `<campaign root>/summary.md`.
   expected stop passes only with "failed" for this attempt in the status
   file, the error of the check in the log (file and line without
   `-assert`, the message with it), and a non-zero exit code where it is
-  reliable (`vivado_exit_code_reliable`: Windows; elsewhere it is recorded,
-  not required). A pass needs "ok" there as well as exit code 0. Quartus has
+  reliable (`vivado_exit_code_reliable`: Windows, measured with Vivado
+  2023.1, and Linux, measured with Vivado 2024.1 by the pilot of 2026-11-13
+  on PCL01; elsewhere it is recorded, not required). The rule is per
+  operating system, not per Vivado version: the pilot of every campaign
+  measures it again (launcher check: exit code 0 for the passing case,
+  non-zero for every expected stop), and a campaign does not start if it
+  fails. A pass needs "ok" there as well as exit code 0. Quartus has
   no status file and keeps the exit-code requirement.
 - **Two writers on `vivado.log`.** Without `-log`, Vivado writes
   `vivado.log` in its working directory. `run_postsynth.py` captured the
@@ -1066,6 +1071,37 @@ the summary in `<campaign root>/summary.md`.
   of about a hundred runs will end some cases as `tool-error`; the
   exclusion of the work root and of the Vivado installation from the
   antivirus scan is the next thing to try.
+
+### 3.16 Campaigns on Linux with other tool versions (issue #8)
+
+The campaign tools now run on PCL01 (Linux) as well as on the Windows
+laptop: tool installations from the environment, tool versions detected
+once per campaign and used in the campaign names, expected synthesis results
+per tool version, one results directory per campaign.
+
+- **Acceptance campaign (2026-11-13, `2e95d7a`, sources of v0.2.0).**
+  Vivado 2024.1, xsim 2024.1, Quartus Prime Lite 25.1std, Questa Altera
+  Starter FPGA Edition 2025.2, GHDL 6.0.0. Every step passed: synthesis
+  55/55, static checks 28/28 (Vivado) and 11/11 (Quartus), post-synthesis
+  78/78, VUnit 54/54 on both simulators, mutation 14/14. Published in
+  `docs/results/v0.2.0-pcl01/`.
+- **Same results as 2023.1 and 23.1std.** The expected results of the new
+  versions started as copies of the old ones (`[meta] basis`). The campaign
+  found no difference in any metric of any case, nor in the errors of the
+  static checks or in the post-synthesis counts; the files were recorded as
+  measured (`386e8d8`) and the three synthesis steps evaluated again on the
+  archived logs, with no status change. So the comparison rule (a case
+  that differs is synthesized again on the v0.2.0 code with the same tool)
+  was not needed.
+- **No transient failure on Linux.** No run ended as tool-error and no
+  retry was needed, against 11 tool-errors and 59 retries in the laptop
+  campaign (section 3.15: unreadable files, "rt-undefined", silent stops).
+  The whole campaign took 1 h 23 min; from the end of the synthesis step to
+  the end of the reruns, 38 min against about 1 h 43 min on the laptop.
+- **Vivado's exit code on Linux** is reliable (0 on a completed run, 1 on
+  every expected stop), measured by the pilot (section 3.15).
+- **Baseline of #7.** This campaign is the "before" of the reset work on the
+  new tools.
 
 ## Appendix: how the reproduction was run
 

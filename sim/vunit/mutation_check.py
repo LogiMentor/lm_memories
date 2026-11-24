@@ -119,6 +119,29 @@ MUTATIONS = [
    "  signal s_rd_dat   : std_logic_vector(g_rd_data_w - 1 downto 0);",
    "  signal s_rd_dat   : std_logic_vector(g_rd_data_w - 1 downto 0) := (others => '0');",
    ["*sdp.1clk.32x1024.lat1*"]),
+  ("sdp: read reset ignored (the behaviour of v0.2.0 with the new port)", SDP,
+   "          if rd_rst_n_i = '0' then", "          if false then",
+   ["*r_w.32x1024.lat1.rst*", "*cr_cw.32x1024.lat1.rst*"]),
+  ("sdp: read reset acts with enb_i low", SDP,
+   "        if enb_i = '1' then\n          if rd_rst_n_i = '0' then",
+   "        if (enb_i = '1') or (rd_rst_n_i = '0') then\n          if rd_rst_n_i = '0' then",
+   ["*r_w.32x1024.lat1.rst*"]),
+  ("sdp: read reset active high", SDP,
+   "          if rd_rst_n_i = '0' then", "          if rd_rst_n_i = '1' then",
+   ["*sdp.1clk.32x1024.lat1.rst*"]),
+  ("sdp: latency 2 read reset clears only the output stage", SDP,
+   "            s_rd_dat   <= (others => '0');\n            s_rd_dat_p <= (others => '0');",
+   "            s_rd_dat_p <= (others => '0');",
+   ["*r_w.32x1024.lat2.rst*", "*cr_cw.32x1024.lat2.rst*"]),
+  ("tdp1w: port A read reset blocks the port A write", TDP1W,
+   "            s_data_rd_a_p <= s_data_rd_a;\n          end if;\n          if wen_a_i = '1' then\n"
+   "            s_mem(to_integer(unsigned(addr_a_i))) <= data_wr_a_i;\n          end if;",
+   "            s_data_rd_a_p <= s_data_rd_a;\n            if wen_a_i = '1' then\n"
+   "              s_mem(to_integer(unsigned(addr_a_i))) <= data_wr_a_i;\n            end if;\n          end if;",
+   ["*tdp1w.1clk.32x1024.lat11.rst*"]),
+  ("tdp1w: port B read reset ignored", TDP1W,
+   "          if rst_b_n_i = '0' then", "          if false then",
+   ["*crw_cr.2clk.32x1024.lat2.rst*"]),
 ]
 
 

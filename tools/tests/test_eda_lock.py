@@ -272,6 +272,14 @@ def _running(pid: int) -> bool:
   return bool(stat) and not stat.startswith("Z")
 
 
+def _running_with(args: str) -> list[int]:
+  """Process ids of the running processes whose command line is args (POSIX, through ps)."""
+  listing = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "stat=", "-o", "args="], capture_output=True,
+                           text=True).stdout
+  return [int(fields[0]) for fields in (line.split(None, 2) for line in listing.splitlines())
+          if len(fields) == 3 and fields[2].strip() == args and not fields[1].startswith("Z")]
+
+
 def _descendant(root: int, args: str, timeout_s: float = 30.0) -> int:
   """Process id of the descendant of root whose command line is args, once it runs (POSIX, through ps)."""
   deadline = time.monotonic() + timeout_s
@@ -391,18 +399,71 @@ class EdaLockSetupErrorTest(unittest.TestCase):
     self.assertEqual(list(self.dir.glob(LOCK_NAME + ".q.*")), [], "the ticket is released")
 
 
-@unittest.skipUnless(os.path.isdir("/proc/self"), "Linux /proc, to compare with ps")
-class EdaLockProcessTableTest(unittest.TestCase):
-  """The process table, from /proc and from ps (POSIX systems without /proc)."""
+LINUX = sys.platform.startswith("linux")
 
-  def test_both_sources_agree_on_this_process(self) -> None:
+
+@unittest.skipUnless(LINUX, "Linux /proc, pidfd and child subreaper")
+class EdaLockProcessTreeTest(unittest.TestCase):
+  """Review of PR #11: the process tree of the command, on Linux."""
+
+  def setUp(self) -> None:
+    self.tmp = tempfile.TemporaryDirectory()
+    self.lock = Path(self.tmp.name) / LOCK_NAME
+
+  def tearDown(self) -> None:
+    self.tmp.cleanup()
+
+  def test_process_table(self) -> None:
     me = os.getpid()
-    from_proc, from_ps = eda_lock._process_table(proc=True), eda_lock._process_table(proc=False)
-    for table in (from_proc, from_ps):
-      self.assertEqual(table[me][0], os.getppid())
-      self.assertTrue(table[me][1], "start time")
-      self.assertNotEqual(table[me][2], "Z")
-    self.assertIn(me, eda_lock._descendants([os.getppid()], from_ps))
+    table = eda_lock._process_table()
+    self.assertEqual(table[me][0], os.getppid())
+    self.assertTrue(table[me][1], "start time")
+    self.assertNotEqual(table[me][2], "Z")
+    self.assertIn(me, eda_lock._descendants([os.getppid()], table))
+
+  def _signal_only_the_same_process(self) -> None:
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+      start = eda_lock._stat(proc.pid)[1]
+      self.assertFalse(eda_lock._send_signal(proc.pid, start + "1", signal.SIGTERM), "another start time")
+      time.sleep(0.2)
+      self.assertIsNone(proc.poll())
+      self.assertTrue(eda_lock._send_signal(proc.pid, start, signal.SIGTERM))
+      self.assertEqual(proc.wait(timeout=10), -signal.SIGTERM)
+      self.assertFalse(eda_lock._send_signal(proc.pid, start, signal.SIGTERM), "an exited process")
+    finally:
+      if proc.poll() is None:
+        proc.kill()
+        proc.wait()
+
+  def test_signals_reach_only_the_same_process(self) -> None:
+    self._signal_only_the_same_process()
+
+  def test_signals_without_pidfd(self) -> None:
+    import errno
+    from unittest import mock
+    with mock.patch.object(os, "pidfd_open", side_effect=OSError(errno.ENOSYS, "not implemented"), create=True):
+      self._signal_only_the_same_process()
+
+  def test_orphans_never_take_the_exit_status_of_the_command(self) -> None:
+    # The adopted orphans are reaped by their own process id: the exit status of
+    # the command, and of another child of this process, stay with their owners.
+    me = os.getpid()
+    zombies = {pid for pid, (ppid, _, st) in eda_lock._process_table().items() if ppid == me and st == "Z"}
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.4); raise SystemExit(7)"])
+    try:
+      messages: list[str] = []
+      code = eda_lock.run(["sh", "-c", "(sleep 0.2 &); (sleep 0.1 &); sleep 0.8; exit 3"], lock_path=self.lock,
+                          log=messages.append, free_mb=lambda: 1e9)
+      self.assertEqual(code, 3, messages)
+      self.assertEqual(other.wait(timeout=30), 7, "another child of this process keeps its exit status")
+      left = {pid for pid, (ppid, _, st) in eda_lock._process_table().items() if ppid == me and st == "Z"}
+      self.assertEqual(left - zombies, set(), "the adopted orphans are reaped")
+      self.assertEqual(eda_lock._child_subreaper(0), 0, "the child-subreaper attribute is restored")
+    finally:
+      if other.poll() is None:
+        other.kill()
+        other.wait()
 
 
 class EdaLockCliTest(unittest.TestCase):
@@ -576,7 +637,7 @@ class EdaLockCliTest(unittest.TestCase):
     if pid is not None and _running(pid):
       os.kill(pid, signal.SIGKILL)  # a descendant of a command started by this test
 
-  @unittest.skipIf(os.name == "nt", "POSIX signals and process tree")
+  @unittest.skipUnless(LINUX, "Linux process tree")
   def test_sigterm_stops_the_descendants_before_the_lock_is_released(self) -> None:
     # Review of PR #11: SIGTERM reached only the shell; its sleep went on after the lock was released.
     cli = self._start("--", "sh", "-c", "sleep 47.3; :")
@@ -596,7 +657,23 @@ class EdaLockCliTest(unittest.TestCase):
     finally:
       self._stop(cli, second, pid=sleep_pid)
 
-  @unittest.skipIf(os.name == "nt", "POSIX signals and process tree")
+  @unittest.skipUnless(LINUX, "Linux process tree")
+  def test_processes_started_while_the_command_stops_are_stopped_too(self) -> None:
+    # Review of PR #11: a process started by a SIGTERM trap, whose parent then
+    # exited, was adopted by init and ran on after the lock was released.
+    cli = self._start("--", "sh", "-c", 'trap "sleep 47.5 & exit 0" TERM; sleep 47.6 & wait')
+    try:
+      _descendant(cli.pid, "sleep 47.6")
+      cli.send_signal(signal.SIGTERM)
+      self.assertEqual(cli.wait(timeout=30), 0, "the exit code of the trap")
+      self.assertEqual(_running_with("sleep 47.5"), [], "a process of the command outlived the command line")
+      self.assertTrue(self._released())
+    finally:
+      self._stop(cli)
+      for pid in _running_with("sleep 47.5") + _running_with("sleep 47.6"):
+        os.kill(pid, signal.SIGKILL)  # started by this test
+
+  @unittest.skipUnless(LINUX, "Linux process tree")
   def test_descendants_that_ignore_sigterm_receive_sigkill(self) -> None:
     cli = self._start("--kill-after", "1", "--", "sh", "-c", 'trap "" TERM; sleep 47.4; :')
     sleep_pid = None

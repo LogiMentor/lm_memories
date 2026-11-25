@@ -82,12 +82,13 @@ All notable changes to this project are documented here.
   not change its exit code. Timeouts and memory thresholds, from the
   options or the environment, must be finite numbers, not negative; the
   lock refuses anything else before it queues (`LockConfigError`).
-  SIGTERM and SIGHUP are relayed to the command and, on POSIX systems, to
-  all its descendants; those still running `--kill-after` seconds later
-  (default 30) receive SIGKILL, and the lock is released only then.
-  Processes left in the background by a command that exits by itself (such
-  as `jtagd`) and processes that leave the tree (`setsid`) are not waited
-  for. The file depends only on the Python standard library, so other
+  SIGTERM and SIGHUP are relayed to the command and, on Linux, to all its
+  descendants, which stay in the tree of the command line (a child
+  subreaper) and are signalled through a pidfd; those still running
+  `--kill-after` seconds later (default 30) receive SIGKILL, and the lock is
+  released only then. Processes left in the background by a command that
+  exits by itself (such as `jtagd`) are not waited for; on other POSIX
+  systems and on Windows the signals reach the command only. The file depends only on the Python standard library, so other
   repositories can keep an identical copy.
 
 ### Changed

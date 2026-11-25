@@ -297,15 +297,17 @@ or does not exist. An error while releasing the lock after the command does
 not change the command's exit code.
 
 SIGTERM and SIGHUP (a CI job cancelled, a terminal closed) are relayed to
-the command and, on Linux and other POSIX systems, to all its descendants:
-`vivado` on Linux is a shell script that starts the tool as a child, so
-signalling the command alone would release the lock while Vivado runs on.
-Processes still running `--kill-after` seconds later (default 30) receive
-SIGKILL; only then is the lock released. Limits: when the command exits by
-itself, processes it leaves in the background are not waited for (for
-example the JTAG server `jtagd` that the Quartus programming tools start);
-a process that detaches itself from the tree (`setsid`) is not found; on
-Windows the signals reach the command only.
+the command and, on Linux, to all its descendants: `vivado` on Linux is a
+shell script that starts the tool as a child, so signalling the command
+alone would release the lock while Vivado runs on. While the command runs,
+the lock command line is a child subreaper, so descendants whose parent
+exits stay in its process tree; processes are signalled through a pidfd,
+never by a process id that another process may have reused. Processes still
+running `--kill-after` seconds later (default 30) receive SIGKILL; only then
+is the lock released. Limits: when the command exits by itself, processes
+it leaves in the background are not waited for (for example the JTAG server
+`jtagd` that the Quartus programming tools start); on other POSIX systems
+and on Windows the signals reach the command only.
 `python3 tools/eda_lock.py --help` lists the options. The file depends only
 on the Python standard library, so other repositories keep an identical
 copy and queue on the same lock.

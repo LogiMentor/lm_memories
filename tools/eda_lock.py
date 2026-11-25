@@ -24,25 +24,30 @@ lock after COMMAND does not change its exit code. Messages go to stderr.
 The lock is released only after COMMAND has exited: the signals a terminal
 sends to its whole foreground process group (SIGINT, SIGQUIT; SIGBREAK on
 Windows) reach COMMAND directly and the command line ignores them. SIGTERM
-and SIGHUP are relayed to COMMAND and, on POSIX systems, to all its
-descendants: the command line takes the process tree of COMMAND when the
-signal arrives (from /proc, or from ps where there is no /proc), sends the
-signal to every process in it, follows the processes they start meanwhile,
-and sends SIGKILL to those still running --kill-after seconds later (default
-30). It releases the lock only when none of them is left (after SIGKILL it
-waits at most 10 s more, then names the survivors). The exit code stays
-that of COMMAND, 128 + N if it stopped only at the SIGKILL that followed
-signal N. A process is recognised by its id and start time, so a process
-that reuses an id is never signalled. A signal before COMMAND starts stops
-the wait, and COMMAND does not run. Limits:
+and SIGHUP are relayed to COMMAND and, on Linux, to all its descendants.
+While COMMAND runs, the command line is a child subreaper: a descendant
+whose parent exits is adopted by the command line instead of init, so it
+stays in its process tree (setsid and double forks included). When the
+signal arrives, the command line reads that tree from /proc, sends the
+signal to every process in it and to those that appear later, and sends
+SIGKILL to those still running --kill-after seconds later (default 30). It
+releases the lock only when none of them is left (after SIGKILL it waits at
+most 10 s more, then names the survivors). The exit code stays that of
+COMMAND, 128 + N if it stopped only at the SIGKILL that followed signal N.
+A process is recognised by its id and start time and signalled through a
+pidfd, so a process that reuses an id does not receive the signal; on
+kernels without pidfd (before 5.3) the identity is checked again just
+before kill, which leaves only a very short window. Adopted orphans are
+reaped by their own process id, never with waitpid(-1), which would take
+the exit status of COMMAND. A signal before COMMAND starts stops the wait,
+and COMMAND does not run. Limits:
 - when COMMAND exits by itself, the processes it leaves in the background
   are not waited for: the lock is released when COMMAND exits. For example
   the Quartus programming tools start the JTAG server jtagd, which keeps
   running after them;
-- a process that leaves the tree (setsid and a double fork, or a parent that
-  exits before the signal arrives) is no longer a descendant and does not
-  receive the signal;
-- on Windows the signals reach COMMAND only;
+- a descendant adopted by another subreaper below COMMAND, or that the
+  command line may not signal (another user), escapes;
+- on other POSIX systems and on Windows the signals reach COMMAND only;
 - a command line killed with SIGKILL cannot do any of this: the operating
   system releases the lock and COMMAND goes on without it.
 
@@ -50,7 +55,8 @@ the wait, and COMMAND does not run. Limits:
   Windows, flock elsewhere). The operating system releases it when the holder
   exits, also after a crash, so there is no stale-lock cleanup and no window
   where two waiters can both take it. The lock never terminates a process
-  (the command line only relays the signals it receives itself).
+  (the command line only relays the signals it receives itself, and
+  escalates them to SIGKILL after --kill-after).
 - The file holds JSON describing the holder (pid, host, user, purpose,
   command, start time); a waiting process prints it. The file itself is never
   deleted.
@@ -93,6 +99,7 @@ the wait, and COMMAND does not run. Limits:
 from __future__ import annotations
 
 import argparse
+import errno
 import getpass
 import json
 import math
@@ -491,35 +498,36 @@ _KILL_WAIT_S = 10.0
 _STOP_POLL_S = 0.1
 
 
-def _process_table(proc: bool | None = None) -> dict[int, tuple[int, str, str]]:
-  """Process id -> (parent process id, start time, state) of every process (POSIX).
+_PR_SET_CHILD_SUBREAPER = 36  # prctl options, linux/prctl.h
+_PR_GET_CHILD_SUBREAPER = 37
 
-  From /proc where it exists (Linux), from ps elsewhere; empty if neither can
-  be read. The start time tells a process from a later one that reuses its id."""
-  table: dict[int, tuple[int, str, str]] = {}
-  if proc is None:
-    proc = os.path.isdir("/proc/self")
-  if proc:
-    for entry in os.scandir("/proc"):
-      if not entry.name.isdigit():
-        continue
-      try:
-        with open(f"/proc/{entry.name}/stat", "rb") as handle:
-          stat = handle.read().decode("ascii", "replace")
-        fields = stat[stat.rindex(")") + 2:].split()  # the name, in brackets, may contain spaces
-        table[int(entry.name)] = (int(fields[1]), fields[19], fields[0])
-      except (OSError, ValueError, IndexError):
-        continue  # exited meanwhile
-    return table
+
+def _process_tree_supported() -> bool:
+  """The process tree of the command is handled on Linux, where /proc lists every process."""
+  return sys.platform.startswith("linux") and os.path.isdir("/proc/self")
+
+
+def _stat(pid: int) -> tuple[int, str, str] | None:
+  """(parent process id, start time, state) of process pid from /proc; None if it does not exist.
+
+  The start time, in clock ticks since boot, tells a process from a later one that reuses its id."""
   try:
-    listing = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid=", "-o", "stat=", "-o", "lstart="],
-                             capture_output=True, text=True, timeout=10).stdout
-  except (OSError, subprocess.SubprocessError):
-    return table
-  for line in listing.splitlines():
-    fields = line.split(None, 3)
-    if len(fields) == 4 and fields[0].isdigit() and fields[1].isdigit():
-      table[int(fields[0])] = (int(fields[1]), fields[3].strip(), fields[2][:1])
+    with open(f"/proc/{pid}/stat", "rb") as handle:
+      stat = handle.read().decode("ascii", "replace")
+    fields = stat[stat.rindex(")") + 2:].split()  # the name, in brackets, may contain spaces
+    return int(fields[1]), fields[19], fields[0]
+  except (OSError, ValueError, IndexError):
+    return None  # exited meanwhile
+
+
+def _process_table() -> dict[int, tuple[int, str, str]]:
+  """Process id -> (parent process id, start time, state) of every process, from /proc (Linux)."""
+  table: dict[int, tuple[int, str, str]] = {}
+  for entry in os.scandir("/proc"):
+    if entry.name.isdigit():
+      stat = _stat(int(entry.name))
+      if stat is not None:
+        table[int(entry.name)] = stat
   return table
 
 
@@ -542,6 +550,55 @@ def _descendants(roots: list[int], table: dict[int, tuple[int, str, str]]) -> di
         found[pid] = table[pid][1]
         todo.append(pid)
   return found
+
+
+def _send_signal(pid: int, start: str, signum: int) -> bool:
+  """Send signum to process pid if it is still the one that started at start; True if sent.
+
+  Through a pidfd where the kernel has one (Linux 5.3 or newer): the start time is checked after the
+  pidfd is opened, so the signal cannot reach a process that reused the id. Without a pidfd, the check
+  comes just before kill, which leaves only a very short window."""
+  pidfd = None
+  if hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"):
+    try:
+      pidfd = os.pidfd_open(pid)
+    except OSError as exc:
+      if exc.errno != errno.ENOSYS:
+        return False  # no such process
+  try:
+    stat = _stat(pid)
+    if stat is None or stat[1] != start or stat[2] == "Z":
+      return False
+    if pidfd is not None:
+      signal.pidfd_send_signal(pidfd, signum)
+    else:
+      os.kill(pid, signum)
+    return True
+  except OSError:
+    return False  # exited meanwhile, or not ours to signal
+  finally:
+    if pidfd is not None:
+      os.close(pidfd)
+
+
+def _child_subreaper(value: int) -> int | None:
+  """Set the child-subreaper attribute of this process (Linux) and return its previous value; None if not set.
+
+  A subreaper adopts the descendants whose parent exits, instead of init: the descendants of the command
+  stay in the process tree of the command line, where it finds them."""
+  try:
+    import ctypes
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    previous = ctypes.c_int(0)
+    zero = ctypes.c_ulong(0)
+    if libc.prctl(ctypes.c_int(_PR_GET_CHILD_SUBREAPER), ctypes.byref(previous), zero, zero, zero) != 0:
+      return None
+    if libc.prctl(ctypes.c_int(_PR_SET_CHILD_SUBREAPER), ctypes.c_ulong(value), zero, zero, zero) != 0:
+      return None
+    return previous.value
+  except (ImportError, OSError, AttributeError):
+    return None
 
 
 class _Relayed(Exception):
@@ -576,29 +633,52 @@ def run(
   The lock is released only after the command has exited, whatever happens:
   an error, a signal, an interruption. A signal before the command starts
   stops the wait and returns 128 + N; the command is then not started.
-  SIGTERM or SIGHUP while the command runs goes to the command and, on POSIX
-  systems, to all its descendants; those still running kill_after_s seconds
-  later receive SIGKILL, and only then is the lock released."""
+  SIGTERM or SIGHUP while the command runs goes to the command and, on Linux,
+  to all its descendants; those still running kill_after_s seconds later
+  receive SIGKILL, and only then is the lock released. On Linux this process
+  is a child subreaper while the command runs, and reaps only the orphans of
+  the command it adopted: call it from a process that does not start other
+  processes meanwhile, as the command line does."""
   signal_names = {getattr(signal, name): name for name in _TERMINAL_SIGNALS + _RELAYED_SIGNALS if hasattr(signal, name)}
   relayed = {getattr(signal, name) for name in _RELAYED_SIGNALS if hasattr(signal, name)}
-  # tree: process id -> start time of the descendants of the command, found
-  # when a relayed signal arrives and while they stop (POSIX).
-  state: dict = {"child": None, "starting": False, "pending": [], "signal": None, "tree": {}}
+  linux = _process_tree_supported()
+  me = os.getpid()
+  # tree: process id -> start time of the descendants of the command and of
+  # the orphans this process adopted from them (Linux). before: (id, start)
+  # of the children this process already had before the command.
+  state: dict = {"child": None, "starting": False, "pending": [], "signal": None, "tree": {}, "before": set()}
+
+  def scan(table: dict[int, tuple[int, str, str]]) -> dict[int, str]:
+    """The descendants of the command in table: our children since the command started, but the command
+    itself (adopted orphans), the processes they started, and those of the known tree still running."""
+    top = {pid: start for pid, (ppid, start, _) in table.items()
+           if ppid == me and (pid, start) not in state["before"]}
+    known = [pid for pid, start in state["tree"].items() if _alive(pid, start, table)]
+    found = {**top, **_descendants(list(top) + known, table)}
+    found.pop(state["child"].pid, None)  # signalled and reaped through its Popen
+    return found
+
+  def reap(table: dict[int, tuple[int, str, str]]) -> None:
+    """Reap the adopted orphans that have exited, each by its own process id: never waitpid(-1), which
+    would take the exit status of the command (or of another child of this process) from its owner."""
+    for pid, start in state["tree"].items():
+      entry = table.get(pid)
+      if entry is not None and entry[0] == me and entry[1] == start and entry[2] == "Z":
+        try:
+          os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+          pass
 
   def relay(signum: int) -> bool:
     """Send signum to the command and its descendants; True for the first relayed signal."""
     child = state["child"]
     if child.returncode is not None:
       return False  # the command has exited: its process id may be reused
-    if os.name != "nt":
+    if linux:
       table = _process_table()
-      state["tree"].update(_descendants([child.pid], table))  # before the signal: the tree is still linked
+      state["tree"].update(scan(table))  # before the signal, while the tree is linked
       for pid, start in list(state["tree"].items()):
-        if _alive(pid, start, table):
-          try:
-            os.kill(pid, signum)
-          except OSError:
-            pass  # exited meanwhile
+        _send_signal(pid, start, signum)
     child.send_signal(signum)
     first = state["signal"] is None
     if first:
@@ -625,27 +705,27 @@ def run(
     killed = False
     deadline = time.monotonic() + kill_after_s
     while True:
-      table = _process_table() if os.name != "nt" else {}
       running = child.poll() is None
+      table = _process_table() if linux else {}
+      if linux:
+        for pid, start in scan(table).items():
+          if tree.get(pid) != start:  # started or adopted since the signal: it gets the signal too
+            tree[pid] = start
+            _send_signal(pid, start, signal.SIGKILL if killed else state["signal"])
+        reap(table)
       alive = [pid for pid, start in tree.items() if _alive(pid, start, table)]
-      if table:
-        tree.update(_descendants(([child.pid] if running else []) + alive, table))  # started meanwhile
-        alive = [pid for pid, start in tree.items() if _alive(pid, start, table)]
       if not running and not alive:
         break
       if killed and time.monotonic() >= deadline:
         log(f"[eda-lock] still present {_KILL_WAIT_S:.0f} s after SIGKILL, lock released anyway: "
-            + ", ".join(str(pid) for pid in alive + ([child.pid] if running else [])))
+            + ", ".join(str(pid) for pid in ([child.pid] if running else []) + alive))
         break
       if not killed and time.monotonic() >= deadline:
         log(f"[eda-lock] SIGKILL to the processes still running {kill_after_s:g} s after "
             f"{signal_names.get(state['signal'], state['signal'])}: "
             + ", ".join(str(pid) for pid in ([child.pid] if running else []) + alive))
         for pid in alive:
-          try:
-            os.kill(pid, signal.SIGKILL)
-          except OSError:
-            pass
+          _send_signal(pid, tree[pid], signal.SIGKILL)
         if running:
           child.kill()
         killed = True
@@ -657,6 +737,7 @@ def run(
     return exit_code(returncode)
 
   outcome: int | None = None  # exit code, once the command has been started (or could not be)
+  subreaper: int | None = None  # previous child-subreaper attribute, to restore
   previous = {}
   for signum in signal_names:
     if signal.getsignal(signum) is signal.SIG_IGN:
@@ -667,6 +748,9 @@ def run(
     with heavy_tool_lock(purpose or Path(command[0]).name, timeout_s=timeout_s, lock_path=lock_path, log=log,
                          kind=kind, free_mb=free_mb):
       state["starting"] = True
+      if linux:
+        subreaper = _child_subreaper(1)
+        state["before"] = {(pid, start) for pid, (ppid, start, _) in _process_table().items() if ppid == me}
       try:
         child = subprocess.Popen(command)
       except FileNotFoundError as exc:
@@ -688,6 +772,10 @@ def run(
         except _Relayed:
           pass
         outcome = stop_tree() if state["signal"] is not None else exit_code(returncode)
+        if linux:  # orphans that exited after the command, or before it without a signal
+          table = _process_table()
+          state["tree"].update(scan(table))
+          reap(table)
     return outcome
   except _Interrupted as exc:
     log(f"[eda-lock] {signal_names.get(exc.signum, exc.signum)} before the command started: not started")
@@ -705,6 +793,8 @@ def run(
   finally:
     for signum, old in previous.items():
       signal.signal(signum, old)
+    if subreaper is not None:
+      _child_subreaper(subreaper)
 
 
 class _UsageError(Exception):

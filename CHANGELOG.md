@@ -7,6 +7,25 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-25
+
+Optional synchronous reset of the read output (issue #7, PR #16), the
+campaigns on Linux with other tool versions (issue #8, PR #9), and a command
+line for the EDA lock (issue #10, PR #11). No breaking change: instances of
+v0.2.0 keep their behaviour and, with Vivado 2024.1, their netlist; read
+**Migration** below before using the reset.
+
+**Validated vendors:** AMD Vivado 2024.1 on Artix-7 (`xc7a35tfgg484-2`) and
+Kintex UltraScale+ (`xcku3p-ffva676-2-e`): campaign
+[`docs/results/v0.3.0-pcl01/`](docs/results/v0.3.0-pcl01/README.md) on
+PCL01 (synthesis 92/92, static checks 30/30, post-synthesis 124/124, VUnit
+74/74 on GHDL 6.0.0 and Questa Starter 2025.2, mutation 20/20). Intel
+Quartus 25.1std (`5CEBA4F23C7`): static checks only (12/12); phase 4
+(issue #6) is still to come. Lattice and Microchip not verified. Known
+defect: on a common clock, `lm_mem_ram_r_w_ratio` with a read port
+narrower than the write port returns undefined data on a read during write
+on the AMD netlist (issue #15).
+
 ### Added
 
 - **Optional synchronous reset of the read output (issue #7).** New ports,
@@ -70,26 +89,27 @@ All notable changes to this project are documented here.
   another simulator (GHDL, or Questa of another version or edition).
 - **Command line of the EDA lock (issue #10).** `python3 tools/eda_lock.py
   [--kind synthesis|simulation] [--timeout SECONDS] [--kill-after SECONDS]
-  [--purpose TEXT] -- COMMAND [ARG...]` runs any command (a Tcl flow, a CI job) holding the
-  machine-wide lock. It waits for the lock and then for free memory, and
-  releases the lock only after the command has exited, also after an error
-  or an interruption. Exit code: the command's (128 + N if signal N stopped
-  it); 125 if the command did not run (lock or memory timeout, wrong
-  options, a malformed setting in the environment, a lock directory, lock
-  file or ticket that cannot be created or opened: `LockSetupError`, which
-  names the path and the error), 126 if it cannot be started, 127 if it
-  does not exist; an error while releasing the lock after the command does
-  not change its exit code. Timeouts and memory thresholds, from the
-  options or the environment, must be finite numbers, not negative; the
-  lock refuses anything else before it queues (`LockConfigError`).
-  SIGTERM and SIGHUP are relayed to the command and, on Linux, to all its
-  descendants, which stay in the tree of the command line (a child
-  subreaper) and are signalled through a pidfd; those still running
+  [--purpose TEXT] -- COMMAND [ARG...]` runs any command (a Tcl flow, a CI job)
+  holding the machine-wide lock. It waits for the lock and then for free memory,
+  and releases the lock only after the command has exited, also after an error
+  or an interruption. Exit code: the command's (128 + N if signal N stopped it);
+  125 if the command did not run (lock or memory timeout, wrong options, a
+  malformed setting in the environment, a lock directory, lock file or ticket
+  that cannot be created or opened: `LockSetupError`, which names the path and
+  the error), 126 if it cannot be started, 127 if it does not exist; an error
+  while releasing the lock after the command does not change its exit code.
+  Timeouts and memory thresholds, from the options or the environment, must be
+  finite numbers, not negative; the lock refuses anything else before it queues
+  (`LockConfigError`). SIGTERM and SIGHUP are relayed to the command and, on
+  Linux, to all its descendants, which stay in the tree of the command line (a
+  child subreaper) and are signalled through a pidfd; those still running
   `--kill-after` seconds later (default 30) receive SIGKILL, and the lock is
-  released only then. Processes left in the background by a command that
-  exits by itself (such as `jtagd`) are not waited for; on other POSIX
-  systems and on Windows the signals reach the command only. The file depends only on the Python standard library, so other
-  repositories can keep an identical copy.
+  released only then. Processes left in the background by a command that exits
+  by itself (such as `jtagd`) are not waited for; on other POSIX systems and on
+  Windows the signals reach the command only. The file depends only on the
+  Python standard library, so other repositories can keep an identical copy. The
+  campaign `v0.3.0-pcl01` ran on `e33c6d8`, before this command line: it changes
+  no RTL, manifest, harness, expected result or check.
 
 ### Changed
 

@@ -1198,8 +1198,10 @@ and behaviour) and on 2026-11-24 (enable generics, costs):
   simulation pairs each message with one of the harness. Six mutations of
   the reset are in `sim/vunit/mutation_check.py`, one of them the
   behaviour of v0.2.0 (reset ignored); all are detected.
-- The whole AMD campaign runs again before v0.3.0, because the cores
-  changed. Intel: phase 4 (issue #6).
+- The whole AMD campaign ran again on the merge of PR #16 (`e33c6d8`,
+  2026-11-25, `docs/results/v0.3.0-pcl01/`): every step passed, the cases
+  of v0.2.0 with the results of v0.2.0-pcl01, no tool-error. Intel: phase 4
+  (issue #6).
 
 
 ## Appendix: how the reproduction was run

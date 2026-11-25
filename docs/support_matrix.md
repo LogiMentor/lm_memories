@@ -15,6 +15,11 @@ Campaigns of the v0.2.0 code, with the same results on both:
   Starter FPGA Edition 2025.2, GHDL 6.0.0
   ([`docs/results/v0.2.0-pcl01/`](results/v0.2.0-pcl01/README.md)).
 
+Campaign of the v0.3.0 code (the read-output reset of issue #7), on PCL01
+with the same tool versions: every case of v0.2.0 gives the same results,
+and the cases of the reset pass
+([`docs/results/v0.3.0-pcl01/`](results/v0.3.0-pcl01/README.md)).
+
 Status values:
 
 - **simulated**: the VUnit harness (scoreboard, frozen reference model,

@@ -20,6 +20,7 @@ of the Windows laptop, stays in this directory.
 | --- | --- | --- | --- | --- | --- |
 | v0.2.0 on the laptop (issue #3) | `4d1380c`, resumed on `f971122` (sources of v0.2.0) | Windows 11 laptop | Vivado 2023.1, xsim 2023.1, Quartus Prime Lite 23.1std, Questa Sim-64 2021.1, GHDL 6.0.0 | all steps pass; 11 tool-errors, each passed when run again | this directory ([below](#campaign-v020-on-the-windows-laptop)) |
 | v0.2.0-pcl01 (issue #8) | `2e95d7a`, evaluated again on `386e8d8` (sources of v0.2.0) | PCL01, Linux | Vivado 2024.1, xsim 2024.1, Quartus Prime Lite 25.1std, Questa Altera Starter FPGA Edition 2025.2, GHDL 6.0.0 | all steps pass; no tool-error; same results as the laptop | [`v0.2.0-pcl01/`](v0.2.0-pcl01/README.md) |
+| v0.3.0-pcl01 (issue #7) | `e33c6d8` | PCL01, Linux | Vivado 2024.1, xsim 2024.1, Quartus Prime Lite 25.1std, Questa Altera Starter FPGA Edition 2025.2, GHDL 6.0.0 | all steps pass; no tool-error; the cases of v0.2.0 as in v0.2.0-pcl01 | [`v0.3.0-pcl01/`](v0.3.0-pcl01/README.md) |
 
 Results of different tool versions are never mixed: each campaign
 publishes the files of its own tool versions, and its synthesis results

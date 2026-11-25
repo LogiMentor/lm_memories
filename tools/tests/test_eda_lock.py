@@ -445,6 +445,31 @@ class EdaLockProcessTreeTest(unittest.TestCase):
     with mock.patch.object(os, "pidfd_open", side_effect=OSError(errno.ENOSYS, "not implemented"), create=True):
       self._signal_only_the_same_process()
 
+  def test_the_command_is_signalled_like_its_descendants(self) -> None:
+    # Review of PR #11: the command itself was signalled by process id alone (Popen.send_signal).
+    import threading
+    from unittest import mock
+    pid_file = Path(self.tmp.name) / "pid"
+
+    def sigterm_once_started() -> None:
+      deadline = time.monotonic() + 30
+      while time.monotonic() < deadline:
+        if pid_file.exists() and pid_file.read_text().strip():
+          os.kill(os.getpid(), signal.SIGTERM)  # handled by run(), which is running the command
+          return
+        time.sleep(0.02)
+
+    sender = threading.Thread(target=sigterm_once_started)
+    sender.start()
+    with mock.patch.object(eda_lock, "_send_signal", wraps=eda_lock._send_signal) as sent:
+      code = eda_lock.run(["sh", "-c", f"echo $$ > '{pid_file}'; exec sleep 30"], lock_path=self.lock,
+                          log=lambda m: None, free_mb=lambda: 1e9)
+    sender.join()
+    self.assertEqual(code, 128 + signal.SIGTERM)
+    pid = int(pid_file.read_text())
+    self.assertTrue([c for c in sent.call_args_list if c.args[0] == pid and c.args[2] == signal.SIGTERM],
+                    sent.call_args_list)
+
   def test_orphans_never_take_the_exit_status_of_the_command(self) -> None:
     # The adopted orphans are reaped by their own process id: the exit status of
     # the command, and of another child of this process, stay with their owners.

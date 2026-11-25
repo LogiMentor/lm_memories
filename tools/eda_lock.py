@@ -646,7 +646,21 @@ def run(
   # tree: process id -> start time of the descendants of the command and of
   # the orphans this process adopted from them (Linux). before: (id, start)
   # of the children this process already had before the command.
-  state: dict = {"child": None, "starting": False, "pending": [], "signal": None, "tree": {}, "before": set()}
+  state: dict = {"child": None, "child_start": None, "starting": False, "pending": [], "signal": None, "tree": {},
+                 "before": set()}
+
+  def signal_command(signum: int | None) -> None:
+    """Send signum to the command, None for SIGKILL (Popen.kill elsewhere than Linux). On Linux through
+    _send_signal, like its descendants, so that the signal cannot reach a process that reused the id of
+    the command once it has exited (Popen.send_signal leaves a short window)."""
+    child = state["child"]
+    if state["child_start"] is not None:
+      if child.returncode is None:
+        _send_signal(child.pid, state["child_start"], signal.SIGKILL if signum is None else signum)
+    elif signum is None:
+      child.kill()
+    else:
+      child.send_signal(signum)
 
   def scan(table: dict[int, tuple[int, str, str]]) -> dict[int, str]:
     """The descendants of the command in table: our children since the command started, but the command
@@ -679,7 +693,7 @@ def run(
       state["tree"].update(scan(table))  # before the signal, while the tree is linked
       for pid, start in list(state["tree"].items()):
         _send_signal(pid, start, signum)
-    child.send_signal(signum)
+    signal_command(signum)
     first = state["signal"] is None
     if first:
       state["signal"] = signum
@@ -727,7 +741,7 @@ def run(
         for pid in alive:
           _send_signal(pid, tree[pid], signal.SIGKILL)
         if running:
-          child.kill()
+          signal_command(None)
         killed = True
         deadline = time.monotonic() + _KILL_WAIT_S
       time.sleep(_STOP_POLL_S)
@@ -760,13 +774,15 @@ def run(
         log(f"[eda-lock] cannot run {command[0]}: {exc}")
         outcome = EXIT_CANNOT_RUN
       else:
+        if linux:  # the command cannot be reaped by anyone else yet: this is its start time
+          state["child_start"] = (_stat(child.pid) or (0, None, ""))[1]
         try:
           state["child"] = child  # from here a relayed signal may raise _Relayed
           for signum in state["pending"]:
             if signum in relayed:
               relay(signum)
             else:
-              child.send_signal(signum)
+              signal_command(signum)
           if state["signal"] is None:
             returncode = child.wait()
         except _Relayed:

@@ -16,8 +16,8 @@ import time
 import unittest
 from pathlib import Path
 
-from tools.eda_lock import (LOCK_DIR_ENV, LOCK_NAME, TOKEN_ENV, LockTimeout, MemoryTimeout, free_physical_mb,
-                            heavy_tool_lock, min_free_mb)
+from tools.eda_lock import (LOCK_DIR_ENV, LOCK_NAME, MEMORY_TIMEOUT_ENV, TIMEOUT_ENV, TOKEN_ENV, LockConfigError,
+                            LockTimeout, MemoryTimeout, free_physical_mb, heavy_tool_lock, min_free_mb)
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -258,6 +258,54 @@ time.sleep(60)
 """
 
 
+class EdaLockSettingsTest(unittest.TestCase):
+  """Review of PR #11: malformed settings are refused before the run queues."""
+
+  def setUp(self) -> None:
+    self.tmp = tempfile.TemporaryDirectory()
+    self.dir = Path(self.tmp.name)
+
+  def tearDown(self) -> None:
+    self.tmp.cleanup()
+
+  def _enter(self, **kwargs) -> None:
+    with heavy_tool_lock("settings", lock_path=self.dir / LOCK_NAME, log=lambda m: None, free_mb=lambda: 1e9,
+                         **kwargs):
+      self.fail("the block must not run")
+
+  def test_malformed_environment(self) -> None:
+    from unittest import mock
+    for env, kind in ((TIMEOUT_ENV, "synthesis"), (MEMORY_TIMEOUT_ENV, "synthesis"),
+                      ("LM_EDA_MIN_FREE_MB_SYNTH", "synthesis"), ("LM_EDA_MIN_FREE_MB_SIM", "simulation")):
+      for value in ("abc", "nan", "inf", "-1"):
+        with self.subTest(env=env, value=value), mock.patch.dict(os.environ, {env: value}):
+          with self.assertRaises(LockConfigError) as raised:
+            self._enter(kind=kind)
+          self.assertIn(f"{env}={value!r} is not valid", str(raised.exception))
+          self.assertEqual(list(self.dir.iterdir()), [], "refused before queuing: no lock or ticket file")
+
+  def test_non_finite_timeout_argument(self) -> None:
+    for value in (float("nan"), float("inf"), -1.0):
+      with self.subTest(value=value), self.assertRaises(LockConfigError):
+        self._enter(timeout_s=value)
+
+  def test_lock_directory_that_is_a_file(self) -> None:
+    from unittest import mock
+    a_file = self.dir / "not_a_directory"
+    a_file.write_text("")
+    with mock.patch.dict(os.environ, {LOCK_DIR_ENV: str(a_file)}):
+      with self.assertRaises(LockConfigError) as raised:
+        with heavy_tool_lock("settings", log=lambda m: None, free_mb=lambda: 1e9):
+          self.fail("the block must not run")
+    self.assertIn(f"{LOCK_DIR_ENV}=", str(raised.exception))
+
+  def test_valid_values_are_accepted(self) -> None:
+    from unittest import mock
+    with mock.patch.dict(os.environ, {TIMEOUT_ENV: "1.5", MEMORY_TIMEOUT_ENV: "0", "LM_EDA_MIN_FREE_MB_SYNTH": "0"}):
+      with heavy_tool_lock("settings", lock_path=self.dir / LOCK_NAME, log=lambda m: None, free_mb=lambda: 1e9):
+        pass
+
+
 class EdaLockCliTest(unittest.TestCase):
   """python3 tools/eda_lock.py [options] -- COMMAND: run as a script, as other repositories do."""
 
@@ -320,6 +368,34 @@ class EdaLockCliTest(unittest.TestCase):
         self.assertEqual(done.returncode, 125, done.stderr)
         self.assertIn("usage:", done.stderr)
         self.assertFalse(self.marker.exists())
+
+  def test_non_finite_timeout_is_a_wrong_option(self) -> None:
+    # Review of PR #11: --timeout NaN gave a deadline that is never reached.
+    for value in ("nan", "NaN", "inf", "-inf"):
+      with self.subTest(value=value):
+        done = self._cli(f"--timeout={value}", "--", sys.executable, "-c", MARK, str(self.marker))
+        self.assertEqual(done.returncode, 125, done.stderr)
+        self.assertIn("usage:", done.stderr)
+        self.assertIn("a finite number of seconds, not negative, is required", done.stderr)
+        self.assertFalse(self.marker.exists())
+
+  def test_malformed_settings_in_the_environment_do_not_run_the_command(self) -> None:
+    # Review of PR #11: LM_EDA_MEMORY_TIMEOUT=abc stopped with a traceback and exit code 1.
+    a_file = self.dir / "not_a_directory"
+    a_file.write_text("")
+    cases = [(kind, env, value) for kind, env in (("synthesis", TIMEOUT_ENV), ("synthesis", MEMORY_TIMEOUT_ENV),
+                                                  ("synthesis", "LM_EDA_MIN_FREE_MB_SYNTH"),
+                                                  ("simulation", "LM_EDA_MIN_FREE_MB_SIM"))
+             for value in ("abc", "nan", "inf", "-1")]
+    cases.append(("synthesis", LOCK_DIR_ENV, str(a_file)))
+    for kind, env, value in cases:
+      with self.subTest(env=env, value=value):
+        done = self._cli("--kind", kind, "--", sys.executable, "-c", MARK, str(self.marker), **{env: value})
+        self.assertEqual(done.returncode, 125, done.stderr)
+        self.assertIn(f"{env}={value!r} is not valid", done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
+        self.assertFalse(self.marker.exists())
+        self.assertEqual(list(self.dir.glob(LOCK_NAME + "*")), [], "refused before queuing")
 
   def test_lock_timeout_does_not_run_the_command(self) -> None:
     with heavy_tool_lock("holder", lock_path=self.lock, log=lambda m: None, free_mb=lambda: 1e9):

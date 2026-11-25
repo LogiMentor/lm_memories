@@ -17,8 +17,8 @@ Tcl flow or CI, the command line runs a command holding the lock:
 It waits for the lock and then for free memory (--kind, default synthesis),
 runs COMMAND, and releases the lock when COMMAND exits. Its exit code is
 that of COMMAND (128 + N if signal N stopped it); 125 if COMMAND did not run
-(wrong options, lock or memory timeout), 126 if it cannot be started, 127 if
-it does not exist. Messages go to stderr. The lock is released only after
+(wrong options, a malformed setting in the environment, lock or memory
+timeout), 126 if it cannot be started, 127 if it does not exist. Messages go to stderr. The lock is released only after
 COMMAND has exited: the signals a terminal sends to its whole foreground
 process group (SIGINT, SIGQUIT; SIGBREAK on Windows) reach COMMAND directly
 and the command line ignores them; SIGTERM and SIGHUP are relayed to COMMAND.
@@ -51,6 +51,10 @@ releases the lock and COMMAND goes on without it.
   keeps the lock, so the queue order is kept. Timeout: LM_EDA_MEMORY_TIMEOUT
   (seconds), default 4 hours. Where free memory cannot be read, it does not
   wait and says so.
+- Timeouts and thresholds, from an argument or from the environment, must be
+  finite numbers, not negative; LM_EDA_LOCK_DIR must not name an existing
+  file that is not a directory. Anything else raises LockConfigError (a
+  ValueError) before the run queues; the command line then exits with 125.
 - Child processes of the holder inherit LM_EDA_LOCK_TOKEN and do not wait
   for the lock their parent already holds.
 - Directory: LM_EDA_LOCK_DIR, else the system temporary directory. On
@@ -66,6 +70,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import math
 import os
 import signal
 import socket
@@ -109,6 +114,39 @@ class MemoryTimeout(TimeoutError):
   """Raised when the free memory stays below the threshold until the timeout."""
 
 
+class LockConfigError(ValueError):
+  """Raised when a setting of the lock (argument or environment) is malformed."""
+
+
+def _number(value: object, name: str, unit: str) -> float:
+  """value as a finite, non-negative number; LockConfigError naming name otherwise."""
+  try:
+    number = float(value)  # type: ignore[arg-type]
+  except (TypeError, ValueError):
+    number = math.nan
+  if not math.isfinite(number) or number < 0:
+    raise LockConfigError(f"[eda-lock] {name}={value!r} is not valid: a finite number of {unit}, not negative, "
+                          "is required")
+  return number
+
+
+def _env_number(env: str, default: float, unit: str) -> float:
+  value = os.environ.get(env)
+  return default if value is None else _number(value, env, unit)
+
+
+def lock_timeout_s(timeout_s: float | None = None) -> float:
+  """Timeout for the lock in seconds: the argument, else LM_EDA_LOCK_TIMEOUT, else the default."""
+  if timeout_s is not None:
+    return _number(timeout_s, "timeout", "seconds")
+  return _env_number(TIMEOUT_ENV, DEFAULT_TIMEOUT_S, "seconds")
+
+
+def memory_timeout_s() -> float:
+  """Timeout for free memory in seconds: LM_EDA_MEMORY_TIMEOUT, else the default."""
+  return _env_number(MEMORY_TIMEOUT_ENV, DEFAULT_TIMEOUT_S, "seconds")
+
+
 def free_physical_mb() -> float | None:
   """Free physical memory in MB, or None where it cannot be read."""
   if sys.platform == "win32":
@@ -144,7 +182,7 @@ def min_free_mb(kind: str) -> tuple[float, str]:
   if kind not in MIN_FREE_MB:
     raise ValueError(f"unknown kind of run '{kind}' (known: {', '.join(MIN_FREE_MB)})")
   env, default = MIN_FREE_MB[kind]
-  return float(os.environ.get(env, default)), env
+  return _env_number(env, default, "MB"), env
 
 
 def _wait_for_memory(
@@ -154,7 +192,7 @@ def _wait_for_memory(
   free_mb: Callable[[], float | None],
 ) -> None:
   need, env = min_free_mb(kind)
-  timeout_s = float(os.environ.get(MEMORY_TIMEOUT_ENV, DEFAULT_TIMEOUT_S))
+  timeout_s = memory_timeout_s()
   start = time.monotonic()
   last_report = None
   while True:
@@ -182,6 +220,8 @@ LOCK_DIR_ENV = "LM_EDA_LOCK_DIR"
 
 def default_lock_path() -> Path:
   directory = os.environ.get(LOCK_DIR_ENV)
+  if directory and os.path.exists(directory) and not os.path.isdir(directory):
+    raise LockConfigError(f"[eda-lock] {LOCK_DIR_ENV}={directory!r} is not valid: it exists and is not a directory")
   return Path(directory or tempfile.gettempdir()) / LOCK_NAME
 
 
@@ -295,7 +335,11 @@ def heavy_tool_lock(
   kind ("synthesis" or "simulation") selects the free-memory threshold that
   must be reached, with the lock held, before the block starts.
   """
-  min_free_mb(kind)  # reject an unknown kind before queuing
+  # Every setting is checked before queuing: a malformed one raises
+  # LockConfigError here, not after the wait.
+  min_free_mb(kind)
+  memory_timeout_s()
+  timeout_s = lock_timeout_s(timeout_s)
   path = lock_path or default_lock_path()
   inherited = os.environ.get(TOKEN_ENV)
   if inherited:
@@ -304,8 +348,6 @@ def heavy_tool_lock(
       yield path
       return
 
-  if timeout_s is None:
-    timeout_s = float(os.environ.get(TIMEOUT_ENV, DEFAULT_TIMEOUT_S))
   token = uuid.uuid4().hex
   info = {
     "token": token,
@@ -378,7 +420,7 @@ def _release_ticket(ticket: Path, fd: int) -> None:
 
 # Exit codes of the command line besides the exit code of the command, as GNU
 # env and timeout use them.
-EXIT_LOCK_FAILED = 125  # wrong options, lock or memory timeout: the command did not run
+EXIT_LOCK_FAILED = 125  # wrong options or settings, lock or memory timeout: the command did not run
 EXIT_CANNOT_RUN = 126  # the command exists but cannot be started
 EXIT_NOT_FOUND = 127  # no such command
 
@@ -456,7 +498,7 @@ def run(
   except _Interrupted as exc:
     log(f"[eda-lock] {signal_names.get(exc.signum, exc.signum)} before the command started: not started")
     return 128 + exc.signum
-  except (LockTimeout, MemoryTimeout) as exc:
+  except (LockTimeout, MemoryTimeout, LockConfigError) as exc:
     log(str(exc))
     return EXIT_LOCK_FAILED
   finally:
@@ -481,9 +523,11 @@ def main(argv: list[str] | None = None) -> int:
     usage="%(prog)s [--kind {" + ",".join(MIN_FREE_MB) + "}] [--timeout SECONDS] [--purpose TEXT] -- COMMAND [ARG...]",
     description="Run COMMAND holding the machine-wide EDA lock: wait for the lock, then for free memory, "
                 "run the command, release the lock when it exits. Exit code: that of the command (128 + N "
-                f"if signal N stopped it); {EXIT_LOCK_FAILED} if the command did not run (wrong options, lock "
-                f"or memory timeout), {EXIT_CANNOT_RUN} if it cannot be started, {EXIT_NOT_FOUND} if it "
-                "does not exist. Lock directory: LM_EDA_LOCK_DIR.")
+                f"if signal N stopped it); {EXIT_LOCK_FAILED} if the command did not run (wrong options, a "
+                "malformed setting in the environment, lock or memory timeout), "
+                f"{EXIT_CANNOT_RUN} if it cannot be started, {EXIT_NOT_FOUND} if it does not exist. Lock "
+                f"directory: LM_EDA_LOCK_DIR. Timeouts and thresholds ({TIMEOUT_ENV}, {MEMORY_TIMEOUT_ENV}, "
+                + ", ".join(env for env, _ in MIN_FREE_MB.values()) + ") must be finite numbers, not negative.")
   parser.add_argument("--kind", choices=list(MIN_FREE_MB), default="synthesis",
                       help="kind of run, selects the free-memory threshold (default: synthesis)")
   parser.add_argument("--timeout", type=float, metavar="SECONDS",
@@ -499,8 +543,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(options)
     if split == len(argv) or not command:
       raise _UsageError("give the command after --")
-    if args.timeout is not None and args.timeout < 0:
-      raise _UsageError("--timeout must not be negative")
+    if args.timeout is not None and not (math.isfinite(args.timeout) and args.timeout >= 0):
+      raise _UsageError(f"--timeout {args.timeout}: a finite number of seconds, not negative, is required")
   except _UsageError as exc:
     parser.print_usage(sys.stderr)
     log(f"eda_lock.py: {exc}")

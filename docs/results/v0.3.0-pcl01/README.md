@@ -24,7 +24,11 @@ pilot, the exit code of every step and every archive.
 
 - **Commit.** Every step ran on `e33c6d8`, with no resume: the sources,
   the manifest, the harness and the expected results are those of `main`
-  after PR #16.
+  after PR #16. Release 0.3.0 is tagged on a later commit of `main`, which
+  adds only the command line of the EDA lock (issue #10, PR #11:
+  `tools/eda_lock.py`, its tests and its documentation): no change to the
+  RTL, the manifest, the harness, the expected results or the checks, so
+  these results hold for the release.
 - **Pilot.** 11 of 11 checks passed at the first attempt (launcher exit
   codes, a generic changed in the Vivado script, the old code against the
   static checks).

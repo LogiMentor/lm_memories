@@ -258,6 +258,39 @@ signal.signal(signal.SIGTERM, stop)
 print("ready", flush=True)
 time.sleep(60)
 """
+# Writes "overlap" to argv[2] if process argv[1] still runs, "after" otherwise.
+CHECK_GONE = r"""
+import subprocess, sys
+stat = subprocess.run(["ps", "-o", "stat=", "-p", sys.argv[1]], capture_output=True, text=True).stdout.strip()
+open(sys.argv[2], "w").write("overlap" if stat and not stat.startswith("Z") else "after")
+"""
+
+
+def _running(pid: int) -> bool:
+  """True if process pid exists and is not a zombie (POSIX, through ps)."""
+  stat = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+  return bool(stat) and not stat.startswith("Z")
+
+
+def _descendant(root: int, args: str, timeout_s: float = 30.0) -> int:
+  """Process id of the descendant of root whose command line is args, once it runs (POSIX, through ps)."""
+  deadline = time.monotonic() + timeout_s
+  while time.monotonic() < deadline:
+    listing = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid=", "-o", "args="], capture_output=True,
+                             text=True).stdout
+    parent, command = {}, {}
+    for line in listing.splitlines():
+      fields = line.split(None, 2)
+      if len(fields) == 3:
+        parent[int(fields[0])], command[int(fields[0])] = int(fields[1]), fields[2].strip()
+    for pid, line in command.items():
+      ancestor = parent.get(pid)
+      while ancestor not in (None, 0, 1, root):
+        ancestor = parent.get(ancestor)
+      if line == args and ancestor == root:
+        return pid
+    time.sleep(0.05)
+  raise AssertionError(f"no descendant '{args}' of process {root}")
 
 
 class EdaLockSettingsTest(unittest.TestCase):
@@ -358,6 +391,20 @@ class EdaLockSetupErrorTest(unittest.TestCase):
     self.assertEqual(list(self.dir.glob(LOCK_NAME + ".q.*")), [], "the ticket is released")
 
 
+@unittest.skipUnless(os.path.isdir("/proc/self"), "Linux /proc, to compare with ps")
+class EdaLockProcessTableTest(unittest.TestCase):
+  """The process table, from /proc and from ps (POSIX systems without /proc)."""
+
+  def test_both_sources_agree_on_this_process(self) -> None:
+    me = os.getpid()
+    from_proc, from_ps = eda_lock._process_table(proc=True), eda_lock._process_table(proc=False)
+    for table in (from_proc, from_ps):
+      self.assertEqual(table[me][0], os.getppid())
+      self.assertTrue(table[me][1], "start time")
+      self.assertNotEqual(table[me][2], "Z")
+    self.assertIn(me, eda_lock._descendants([os.getppid()], from_ps))
+
+
 class EdaLockCliTest(unittest.TestCase):
   """python3 tools/eda_lock.py [options] -- COMMAND: run as a script, as other repositories do."""
 
@@ -417,7 +464,8 @@ class EdaLockCliTest(unittest.TestCase):
   def test_wrong_options_do_not_run_the_command(self) -> None:
     command = ["--", sys.executable, "-c", MARK, str(self.marker)]
     for args in ([sys.executable, "-c", MARK, str(self.marker)], ["--"], ["--kind", "place", *command],
-                 ["--timeout", "-1", *command], ["--timeout", "x", *command], ["--other", *command]):
+                 ["--timeout", "-1", *command], ["--timeout", "x", *command], ["--other", *command],
+                 ["--kill-after", "-1", *command], ["--kill-after=nan", *command], ["--kill-after=inf", *command]):
       with self.subTest(args=args[:3]):
         done = self._cli(*args)
         self.assertEqual(done.returncode, 125, done.stderr)
@@ -518,6 +566,52 @@ class EdaLockCliTest(unittest.TestCase):
       cli.communicate()
     self.assertEqual(self.marker.read_text(), "term")
     self.assertTrue(self._released())
+
+  def _stop(self, *procs: subprocess.Popen | None, pid: int | None = None) -> None:
+    for proc in procs:
+      if proc is not None:
+        if proc.poll() is None:
+          proc.kill()
+        proc.communicate()
+    if pid is not None and _running(pid):
+      os.kill(pid, signal.SIGKILL)  # a descendant of a command started by this test
+
+  @unittest.skipIf(os.name == "nt", "POSIX signals and process tree")
+  def test_sigterm_stops_the_descendants_before_the_lock_is_released(self) -> None:
+    # Review of PR #11: SIGTERM reached only the shell; its sleep went on after the lock was released.
+    cli = self._start("--", "sh", "-c", "sleep 47.3; :")
+    second = sleep_pid = None
+    try:
+      sleep_pid = _descendant(cli.pid, "sleep 47.3")
+      second = self._start("--timeout", "60", "--", sys.executable, "-c", CHECK_GONE, str(sleep_pid),
+                           str(self.marker))
+      deadline = time.monotonic() + 30
+      while not list(self.dir.glob(f"{LOCK_NAME}.q.*")) and time.monotonic() < deadline:
+        time.sleep(0.05)  # the second command line is queued (its ticket exists)
+      cli.send_signal(signal.SIGTERM)
+      self.assertEqual(cli.wait(timeout=30), 128 + signal.SIGTERM)
+      self.assertFalse(_running(sleep_pid), "a descendant of the command outlived the command line")
+      self.assertEqual(second.wait(timeout=30), 0)
+      self.assertEqual(self.marker.read_text(), "after", "the second run took the lock while the descendant ran")
+    finally:
+      self._stop(cli, second, pid=sleep_pid)
+
+  @unittest.skipIf(os.name == "nt", "POSIX signals and process tree")
+  def test_descendants_that_ignore_sigterm_receive_sigkill(self) -> None:
+    cli = self._start("--kill-after", "1", "--", "sh", "-c", 'trap "" TERM; sleep 47.4; :')
+    sleep_pid = None
+    try:
+      sleep_pid = _descendant(cli.pid, "sleep 47.4")
+      started = time.monotonic()
+      cli.send_signal(signal.SIGTERM)
+      self.assertEqual(cli.wait(timeout=30), 128 + signal.SIGTERM, "the exit code tells the relayed signal")
+      self.assertGreaterEqual(time.monotonic() - started, 1.0)
+      _, err = cli.communicate()
+      self.assertIn("SIGKILL to the processes still running 1 s after SIGTERM", err)
+      self.assertFalse(_running(sleep_pid))
+      self.assertTrue(self._released())
+    finally:
+      self._stop(cli, pid=sleep_pid)
 
   @unittest.skipIf(os.name == "nt", "POSIX signals")
   def test_a_signal_while_waiting_stops_the_wait(self) -> None:

@@ -440,10 +440,18 @@ class EdaLockProcessTreeTest(unittest.TestCase):
     self._signal_only_the_same_process()
 
   def test_signals_without_pidfd(self) -> None:
+    # Review of PR #11: a pidfd that cannot be opened for another reason than
+    # ENOSYS (a seccomp filter, no free descriptor) skipped the signal.
     import errno
     from unittest import mock
-    with mock.patch.object(os, "pidfd_open", side_effect=OSError(errno.ENOSYS, "not implemented"), create=True):
-      self._signal_only_the_same_process()
+    for error in (errno.ENOSYS, errno.EPERM, errno.EMFILE):
+      with self.subTest(pidfd_open=errno.errorcode[error]):
+        with mock.patch.object(os, "pidfd_open", side_effect=OSError(error, os.strerror(error)), create=True):
+          self._signal_only_the_same_process()
+    with self.subTest(pidfd_send_signal="EPERM"):
+      with mock.patch.object(signal, "pidfd_send_signal", side_effect=PermissionError(errno.EPERM, "seccomp"),
+                             create=True):
+        self._signal_only_the_same_process()
 
   def test_the_command_is_signalled_like_its_descendants(self) -> None:
     # Review of PR #11: the command itself was signalled by process id alone (Popen.send_signal).

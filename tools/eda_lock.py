@@ -35,9 +35,10 @@ releases the lock only when none of them is left (after SIGKILL it waits at
 most 10 s more, then names the survivors). The exit code stays that of
 COMMAND, 128 + N if it stopped only at the SIGKILL that followed signal N.
 A process is recognised by its id and start time and signalled through a
-pidfd, so a process that reuses an id does not receive the signal; on
-kernels without pidfd (before 5.3) the identity is checked again just
-before kill, which leaves only a very short window. Adopted orphans are
+pidfd, so a process that reuses an id does not receive the signal; where a
+pidfd cannot be opened or used (kernels before 5.3, a seccomp filter, no
+free descriptor) the identity is checked again just before kill, which
+leaves only a very short window. Adopted orphans are
 reaped by their own process id, never with waitpid(-1), which would take
 the exit status of COMMAND. A signal before COMMAND starts stops the wait,
 and COMMAND does not run. Limits:
@@ -559,27 +560,40 @@ def _descendants(roots: list[int], table: dict[int, tuple[int, str, str]]) -> di
 def _send_signal(pid: int, start: str, signum: int) -> bool:
   """Send signum to process pid if it is still the one that started at start; True if sent.
 
-  Through a pidfd where the kernel has one (Linux 5.3 or newer): the start time is checked after the
-  pidfd is opened, so the signal cannot reach a process that reused the id. Without a pidfd, the check
-  comes just before kill, which leaves only a very short window."""
+  Through a pidfd where one can be opened (Linux 5.3 or newer): the start time is checked after the
+  pidfd is opened, so the signal cannot reach a process that reused the id. Where it cannot be opened
+  or used (no pidfd in the kernel, a seccomp filter, no free descriptor), the check comes again just
+  before kill, which leaves only a very short window: a failure of the pidfd never skips the signal."""
+
+  def same() -> bool:
+    stat = _stat(pid)
+    return stat is not None and stat[1] == start and stat[2] != "Z"
+
   pidfd = None
   if hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"):
     try:
       pidfd = os.pidfd_open(pid)
-    except OSError as exc:
-      if exc.errno != errno.ENOSYS:
-        return False  # no such process
+    except ProcessLookupError:
+      return False  # no such process
+    except OSError:
+      pidfd = None  # ENOSYS, EPERM from a seccomp filter, EMFILE...: kill below
   try:
-    stat = _stat(pid)
-    if stat is None or stat[1] != start or stat[2] == "Z":
-      return False
     if pidfd is not None:
-      signal.pidfd_send_signal(pidfd, signum)
-    else:
-      os.kill(pid, signum)
+      if not same():
+        return False
+      try:
+        signal.pidfd_send_signal(pidfd, signum)
+        return True
+      except ProcessLookupError:
+        return False  # exited meanwhile
+      except OSError:
+        pass  # refused through the pidfd (a seccomp filter): kill below
+    if not same():
+      return False
+    os.kill(pid, signum)
     return True
   except OSError:
-    return False  # exited meanwhile, or not ours to signal
+    return False  # exited meanwhile, or not ours to signal (another user)
   finally:
     if pidfd is not None:
       os.close(pidfd)

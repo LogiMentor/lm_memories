@@ -1,0 +1,1529 @@
+{
+ "step": "checks_vivado",
+ "counts": {
+  "pass": 30
+ },
+ "total": 30,
+ "results": [
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_crw_crw_32x1024",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "098d1daa846f98838dec48daf465aa7cea01661678fb6c7067aabf49b398d5fc",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_rw_rw_32x1024",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_rw_rw' [src/generic/lm_mem_ram_rw_rw.vhd:41]"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "4684bcdf4f2fde7b4b6e500419053a4ef39ff819f359d804d80d7db7ca3aa14d",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_crw_cw_32x1024",
+   "top": "lm_mem_ram_crw_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_cw' [src/generic/lm_mem_ram_crw_cw.vhd:41]"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "32b4dcf66258e2f4673071762fa8146dabb0af274bc9fe47550910b1037a2b2b",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_latency3",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:107]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:107]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:89]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w' [src/generic/lm_mem_ram_r_w.vhd:61]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:107",
+     "src/fifo/lm_mem_fifo.vhd:71"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "ec51f3c6e1646d36dadaa41b1c93e21bd761549c17ae20bb4fad5acb2c985c2d",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_ratio_24to8",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 24,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:108]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:108]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:89]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_ratio' [src/generic/lm_mem_ram_r_w_ratio.vhd:67]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:108"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "72e95dfed5196fa1cb4c6ee794e195767fb03bbae557f6bc1dbe9ea39dce723f",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_crw_cr_latency3",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_tdp1w.vhd:99]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_tdp1w.vhd:99]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_tdp1w' [src/core/lm_mem_ram_tdp1w.vhd:90]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_cr' [src/generic/lm_mem_ram_crw_cr.vhd:69]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_tdp1w.vhd:99",
+     "src/generic/lm_mem_ram_r_w_ratio.vhd:72",
+     "src/generic/lm_mem_ram_cr_cw_ratio.vhd:73"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "d026e474d4527018ea768dec5d460ed5eb2f9a587605a79aad0eb585f7fb9920",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_fifo_sync_depth24",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 24
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/fifo/lm_mem_fifo.vhd:70]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/fifo/lm_mem_fifo.vhd:70]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [src/fifo/lm_mem_fifo.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo_sync' [src/fifo/lm_mem_fifo_sync.vhd:45]"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:70"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "31ce163d426324eb855ae6c97597b43bb7dc4fb45a06c7d8ab96a886244354eb",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_ccd_resync_levels1",
+   "top": "lm_mem_ccd_resync",
+   "generics": {
+    "g_meta_levels": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/common/lm_mem_ccd_resync.vhd:36]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/common/lm_mem_ccd_resync.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ccd_resync' [src/common/lm_mem_ccd_resync.vhd:31]"
+    ],
+    "check_lines": [
+     "src/common/lm_mem_ccd_resync.vhd:36"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "1abc3a254f687e5d5a6cbc8ec69daace6335794d09a5f999fb3a5b8372ccd65a",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_fifo_almost_full_0",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16,
+    "g_almost_full_limit": 0
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/fifo/lm_mem_fifo.vhd:89]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/fifo/lm_mem_fifo.vhd:89]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [src/fifo/lm_mem_fifo.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo_sync' [src/fifo/lm_mem_fifo_sync.vhd:45]"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:89"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "34c2891a1e299434081d23d00ce208518e7d50bfcc275a7e89ee82697d42d00c",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_fifo_almost_empty_15",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16,
+    "g_almost_empty_limit": 15
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/fifo/lm_mem_fifo.vhd:88]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/fifo/lm_mem_fifo.vhd:88]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [src/fifo/lm_mem_fifo.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo_sync' [src/fifo/lm_mem_fifo_sync.vhd:45]"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:88"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "7a6ad48c92115aea0c6ca30b30c0678e33cfdcd83c908c47645aa32222171c6b",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_infer_latency3",
+   "top": "lm_mem_ram_r_w_infer",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/inference/lm_mem_ram_r_w_infer.vhd:50]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/inference/lm_mem_ram_r_w_infer.vhd:50]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_infer' [src/inference/lm_mem_ram_r_w_infer.vhd:43]"
+    ],
+    "check_lines": [
+     "src/inference/lm_mem_ram_r_w_infer.vhd:50"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "2c0f2784d3f88f42b566272bb94af11d2a8a68858a7a6a25e9f2384fb5fde449",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_infer_no_vendor",
+   "top": "lm_mem_ram_r_w_infer",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_vendor": ""
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/inference/lm_mem_ram_r_w_infer.vhd:51]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/inference/lm_mem_ram_r_w_infer.vhd:51]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_infer' [src/inference/lm_mem_ram_r_w_infer.vhd:43]"
+    ],
+    "check_lines": [
+     "src/inference/lm_mem_ram_r_w_infer.vhd:51"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "7e7dfa50f1fbab4dec2718d0cabf1461d97dc28f8d40cdc146588ece25cc79e6",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_xilinx_prim_no_family",
+   "top": "lm_mem_xilinx_ram_r_w_prim",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_family": ""
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd:45]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd:45]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_xilinx_ram_r_w_prim' [src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd:40]"
+    ],
+    "check_lines": [
+     "src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd:45",
+     "src/primitives/intel/lm_mem_intel_ram_r_w_prim.vhd:45",
+     "src/primitives/lattice/lm_mem_lattice_ram_r_w_prim.vhd:45",
+     "src/primitives/microchip/lm_mem_microchip_ram_r_w_prim.vhd:45"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "e482033d29402857b3fade2157e03d6b484f3a2e2010551d547d15798e008924",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_ratio_8to32_rst",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32,
+    "g_ram_b_rst_en": true
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:111]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/core/lm_mem_ram_sdp.vhd:111]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:89]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_ratio' [src/generic/lm_mem_ram_r_w_ratio.vhd:67]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:111"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "19f557ba43e85a2e278c2d54ac69a5d542adface708c09fb0c03dfdcbb8a9cc3",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_crw_crw_32x1024",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "27b1e526b72e08f79824d2c05ffdd35949a0cd21ce18bd331ed0ba9c97f0de78",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_rw_rw_32x1024",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_rw_rw' [src/generic/lm_mem_ram_rw_rw.vhd:41]"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "5d8162cce32fe209aef4cecade34ab7b3974cc338e8b1bb63d7f36e76eb662fe",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "fallback_crw_cw_32x1024",
+   "top": "lm_mem_ram_crw_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:30]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_cw' [src/generic/lm_mem_ram_crw_cw.vhd:41]"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "80356f3d7e43f4b8a5952f3c894d40f3ed5f567fe20465528c5297f5c81cecd8",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_latency3",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: read latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: read latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/core/lm_mem_ram_sdp.vhd:107]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:89]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w' [src/generic/lm_mem_ram_r_w.vhd:61]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:107",
+     "src/fifo/lm_mem_fifo.vhd:71"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "39cbb6cc0d6cea8eda81260263b81e662395bf896015d09816bbca87417405ad",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_ratio_24to8",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 24,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: port widths must have a power-of-two ratio\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: port widths must have a power-of-two ratio\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/core/lm_mem_ram_sdp.vhd:108]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:89]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_ratio' [src/generic/lm_mem_ram_r_w_ratio.vhd:67]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:108"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "8f6d5187d5a41d8897e0546e24e4fead5fe7383283c5967744aa3d10af4111a3",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_crw_cr_latency3",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_tdp1w: port A latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_tdp1w: port A latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/core/lm_mem_ram_tdp1w.vhd:99]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_tdp1w' [src/core/lm_mem_ram_tdp1w.vhd:90]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_cr' [src/generic/lm_mem_ram_crw_cr.vhd:69]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_tdp1w.vhd:99",
+     "src/generic/lm_mem_ram_r_w_ratio.vhd:72",
+     "src/generic/lm_mem_ram_cr_cw_ratio.vhd:73"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "2be98ec5bc6279da878f535dd673858a3ca3643fac536d25f3f41afe63676665",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_fifo_sync_depth24",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 24
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_fifo: g_wr_depth must be a power of two\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_fifo: g_wr_depth must be a power of two\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/fifo/lm_mem_fifo.vhd:70]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [src/fifo/lm_mem_fifo.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo_sync' [src/fifo/lm_mem_fifo_sync.vhd:45]"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:70"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "6d9850d1aa79e042244da8f04c3f9924b8b4a06429dafaa3bd54651af0c3a3ce",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_ccd_resync_levels1",
+   "top": "lm_mem_ccd_resync",
+   "generics": {
+    "g_meta_levels": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ccd_resync: g_meta_levels must be at least 2\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ccd_resync: g_meta_levels must be at least 2\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/common/lm_mem_ccd_resync.vhd:36]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ccd_resync' [src/common/lm_mem_ccd_resync.vhd:31]"
+    ],
+    "check_lines": [
+     "src/common/lm_mem_ccd_resync.vhd:36"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "7e150131c4f388cfe15a16773020b74f4648f7942a71425779b35076306b743e",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_fifo_almost_full_0",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16,
+    "g_almost_full_limit": 0
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/fifo/lm_mem_fifo.vhd:89]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [src/fifo/lm_mem_fifo.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo_sync' [src/fifo/lm_mem_fifo_sync.vhd:45]"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:89"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "2f461fc805f242a336a5528d9be8bab182e35ca6a1f2fb37ec18538a41921c7c",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_fifo_almost_empty_15",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16,
+    "g_almost_empty_limit": 15
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_fifo: g_almost_empty_limit must be in 0 to read depth - 2\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_fifo: g_almost_empty_limit must be in 0 to read depth - 2\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/fifo/lm_mem_fifo.vhd:88]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo' [src/fifo/lm_mem_fifo.vhd:53]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_fifo_sync' [src/fifo/lm_mem_fifo_sync.vhd:45]"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:88"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "0c8855a1840d960e3af6a0c40e34102a92e90a9a42d5799f29fa0c357380739d",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_infer_latency3",
+   "top": "lm_mem_ram_r_w_infer",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_r_w_infer: latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_r_w_infer: latency must be 1 or 2\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/inference/lm_mem_ram_r_w_infer.vhd:50]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_infer' [src/inference/lm_mem_ram_r_w_infer.vhd:43]"
+    ],
+    "check_lines": [
+     "src/inference/lm_mem_ram_r_w_infer.vhd:50"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "9ffde634650811d59e94a28b1a696131ada3930d55d19ee0503836015a370eb4",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_infer_no_vendor",
+   "top": "lm_mem_ram_r_w_infer",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_vendor": ""
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_r_w_infer: vendor, family, and tool strings must be set\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_r_w_infer: vendor, family, and tool strings must be set\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/inference/lm_mem_ram_r_w_infer.vhd:51]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_infer' [src/inference/lm_mem_ram_r_w_infer.vhd:43]"
+    ],
+    "check_lines": [
+     "src/inference/lm_mem_ram_r_w_infer.vhd:51"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "08d2a8290340435197d771f6884d7acda634158af8132cf8cf28b07548ecbccb",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_xilinx_prim_no_family",
+   "top": "lm_mem_xilinx_ram_r_w_prim",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_family": ""
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_xilinx_ram_r_w_prim: family and primitive must be set\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_xilinx_ram_r_w_prim: family and primitive must be set\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd:45]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_xilinx_ram_r_w_prim' [src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd:40]"
+    ],
+    "check_lines": [
+     "src/primitives/xilinx/lm_mem_xilinx_ram_r_w_prim.vhd:45",
+     "src/primitives/intel/lm_mem_intel_ram_r_w_prim.vhd:45",
+     "src/primitives/lattice/lm_mem_lattice_ram_r_w_prim.vhd:45",
+     "src/primitives/microchip/lm_mem_microchip_ram_r_w_prim.vhd:45"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "1d6d8f68adc6bae8ee00e29ac642c358bd6ceb78f675b25f1d2e639fdad90503",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-checks-assert",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_r_w_ratio_8to32_rst",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32,
+    "g_ram_b_rst_en": true
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port\" [src/common/lm_mem_pkg.vhd:101]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-63] RTL assertion: \"lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port\" [src/common/lm_mem_pkg.vhd:101]",
+     "ERROR: [Synth 8-421] mismatched array sizes in rhs and lhs of assignment [src/core/lm_mem_ram_sdp.vhd:111]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_sdp' [src/core/lm_mem_ram_sdp.vhd:89]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_r_w_ratio' [src/generic/lm_mem_ram_r_w_ratio.vhd:67]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:111"
+    ],
+    "mode": "vivado -assert",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "0e5f9d3b5f2569bcbde0e8a4ce050d32e7cf2ceebf58105a0ba136d40f90e356",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-amd-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_crw_crw_latency3",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:54]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:54]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:36]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_tdp1w.vhd:100",
+     "src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:54"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "c726504b39cec4dc30fed5212a0bd1984ff6e6a78f8cded59970cb3ffcf38601",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  },
+  {
+   "job": "vivado-artix7-amd-checks",
+   "tool": "vivado",
+   "tool_version": "2024.1",
+   "vendor": "amd",
+   "family": "artix7",
+   "part": "xc7a35tfgg484-2",
+   "case": "bad_crw_crw_ratio_24to8",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 24,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:55]"
+    ],
+    "errors": [
+     "ERROR: [Synth 8-11323] assigned value '1' out of range [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:55]",
+     "ERROR: [Synth 8-285] failed synthesizing module 'lm_mem_ram_crw_crw' [src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:36]"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:108",
+     "src/vendor/amd/lm_mem_ram_crw_crw_rtl.vhd:55"
+    ],
+    "mode": "vivado",
+    "status_outcome": "failed",
+    "exit_code": 1,
+    "exit_code_required": true
+   },
+   "critical_warnings": 0,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/amd/2024.1.toml",
+    "sha256": "7ec701f83d0f0e8487147eff7e41ec40b38de97da579c343267fa1bf14572f75",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "dd81f52790aa334e6833d479353afb483e129a259b14ab9c611e9d6e1d50649c",
+   "archive": {
+    "archive": "static_checks_vivado_2024.1_20261125T091455Z.tar.xz",
+    "sha256": "d6e11830060b1af079e157b541088c0a11efc3738112c65ad7a00f4a93ff694b",
+    "files": 154
+   }
+  }
+ ]
+}

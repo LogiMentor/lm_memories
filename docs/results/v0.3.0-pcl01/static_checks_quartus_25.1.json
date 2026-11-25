@@ -1,0 +1,636 @@
+{
+ "step": "checks_quartus",
+ "counts": {
+  "pass": 12
+ },
+ "total": 12,
+ "results": [
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "crw_crw_32x1024",
+   "top": "lm_mem_ram_crw_crw",
+   "generics": {
+    "g_ram_a_data_w": 32,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 32,
+    "g_ram_a_latency": 1,
+    "g_ram_b_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" File: src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd Line: 36"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" File: src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd Line: 36",
+     "Error (12153): Can't elaborate top-level user hierarchy",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/crw_crw_32x1024/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "4bfe04ccd8a339e5ceae083cdd5af3bb8e846d352dce38ecfae6520ef88e30c6",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "rw_rw_32x1024",
+   "top": "lm_mem_ram_rw_rw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" File: src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd Line: 36"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" File: src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd Line: 36",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_crw_crw:inst_mem\" File: src/generic/lm_mem_ram_rw_rw.vhd Line: 43",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/rw_rw_32x1024/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "56216c3e3b21dcd1418e024db9174b2b90456e289c83c60cbc35447ae8300538",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "crw_cw_32x1024",
+   "top": "lm_mem_ram_crw_cw",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" File: src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd Line: 36"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_crw_crw: no validated two-writer RAM architecture for this tool. lm_memories supports lm_mem_ram_crw_crw, lm_mem_ram_rw_rw and lm_mem_ram_crw_cw only with AMD Vivado so far (manifests/lm_memories.toml, flow synth-amd).\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_crw_crw_rtl.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" File: src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd Line: 36",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_crw_crw:inst_mem\" File: src/generic/lm_mem_ram_crw_cw.vhd Line: 43",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/crw_cw_32x1024/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/vendor/unsupported/lm_mem_ram_crw_crw_rtl.vhd:36"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "2ddf20fd2300cadb7bf06e4d0400d9b70bafa7724218c4a876e7fade4da6eedb",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_r_w_latency3",
+   "top": "lm_mem_ram_r_w",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: read latency must be 1 or 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(107):  failed to elaborate call to subprogram \"f_static_check\" File: src/core/lm_mem_ram_sdp.vhd Line: 107"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: read latency must be 1 or 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(107):  failed to elaborate call to subprogram \"f_static_check\" File: src/core/lm_mem_ram_sdp.vhd Line: 107",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_sdp:inst_mem\" File: src/generic/lm_mem_ram_r_w.vhd Line: 63",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_r_w_latency3/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:107",
+     "src/fifo/lm_mem_fifo.vhd:71"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "c9ce90f90d1fa004047ceae219f54a2b06a73ee89c0220ed46942f5ac22ebbc4",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_r_w_ratio_24to8",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 24,
+    "g_ram_a_depth": 1024,
+    "g_ram_b_data_w": 8
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: port widths must have a power-of-two ratio\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(108):  failed to elaborate call to subprogram \"f_static_check\" File: src/core/lm_mem_ram_sdp.vhd Line: 108"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: port widths must have a power-of-two ratio\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(108):  failed to elaborate call to subprogram \"f_static_check\" File: src/core/lm_mem_ram_sdp.vhd Line: 108",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_sdp:inst_mem\" File: src/generic/lm_mem_ram_r_w_ratio.vhd Line: 74",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_r_w_ratio_24to8/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:108"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "f222cdc51ffb57ef2ac56e51ce841554129fd9f090ed87f9aeb2f87859052d10",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_crw_cr_latency3",
+   "top": "lm_mem_ram_crw_cr",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_tdp1w: port A latency must be 1 or 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_tdp1w.vhd(99):  failed to elaborate call to subprogram \"f_static_check\" File: src/core/lm_mem_ram_tdp1w.vhd Line: 99"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_tdp1w: port A latency must be 1 or 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_tdp1w.vhd(99):  failed to elaborate call to subprogram \"f_static_check\" File: src/core/lm_mem_ram_tdp1w.vhd Line: 99",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_tdp1w:inst_mem\" File: src/generic/lm_mem_ram_crw_cr.vhd Line: 71",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_crw_cr_latency3/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_tdp1w.vhd:99",
+     "src/generic/lm_mem_ram_r_w_ratio.vhd:72",
+     "src/generic/lm_mem_ram_cr_cw_ratio.vhd:73"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "a0df428aa77e321c5fa3761f5a97ceff810a3375115e93b77e11329e2779d677",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_fifo_sync_depth24",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 24
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_fifo: g_wr_depth must be a power of two\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_fifo.vhd(70):  failed to elaborate call to subprogram \"f_static_check\" File: src/fifo/lm_mem_fifo.vhd Line: 70"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_fifo: g_wr_depth must be a power of two\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_fifo.vhd(70):  failed to elaborate call to subprogram \"f_static_check\" File: src/fifo/lm_mem_fifo.vhd Line: 70",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_fifo:inst_fifo\" File: src/fifo/lm_mem_fifo_sync.vhd Line: 47",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_fifo_sync_depth24/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:70"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "9a098c8344196c0c7a2e45f1e072b58299fae7b9d33b3a4fc944c2d4cd1b15c4",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_ccd_resync_levels1",
+   "top": "lm_mem_ccd_resync",
+   "generics": {
+    "g_meta_levels": 1
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ccd_resync: g_meta_levels must be at least 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ccd_resync.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" File: src/common/lm_mem_ccd_resync.vhd Line: 36"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ccd_resync: g_meta_levels must be at least 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ccd_resync.vhd(36):  failed to elaborate call to subprogram \"f_static_check\" File: src/common/lm_mem_ccd_resync.vhd Line: 36",
+     "Error (12153): Can't elaborate top-level user hierarchy",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_ccd_resync_levels1/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/common/lm_mem_ccd_resync.vhd:36"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "1662d40e42dc6fc7c421654a3f0c2c35ff4e282dbdaa225d501aeea0728ea6f3",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_fifo_almost_full_0",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16,
+    "g_almost_full_limit": 0
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_fifo.vhd(89):  failed to elaborate call to subprogram \"f_static_check\" File: src/fifo/lm_mem_fifo.vhd Line: 89"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_fifo: g_almost_full_limit must be in 1 to g_wr_depth\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_fifo.vhd(89):  failed to elaborate call to subprogram \"f_static_check\" File: src/fifo/lm_mem_fifo.vhd Line: 89",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_fifo:inst_fifo\" File: src/fifo/lm_mem_fifo_sync.vhd Line: 47",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_fifo_almost_full_0/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:89"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "fa0b3ff14a0f75ba1bffbfcd0fa0ae9195f31942477877dee7d57a5bf51ec237",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_fifo_almost_empty_15",
+   "top": "lm_mem_fifo_sync",
+   "generics": {
+    "g_data_w": 32,
+    "g_depth": 16,
+    "g_almost_empty_limit": 15
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_fifo: g_almost_empty_limit must be in 0 to read depth - 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_fifo.vhd(88):  failed to elaborate call to subprogram \"f_static_check\" File: src/fifo/lm_mem_fifo.vhd Line: 88"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_fifo: g_almost_empty_limit must be in 0 to read depth - 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_fifo.vhd(88):  failed to elaborate call to subprogram \"f_static_check\" File: src/fifo/lm_mem_fifo.vhd Line: 88",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_fifo:inst_fifo\" File: src/fifo/lm_mem_fifo_sync.vhd Line: 47",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_fifo_almost_empty_15/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/fifo/lm_mem_fifo.vhd:88"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "6fb8fbb9b0bcb83fe2904793b950f31ef50997d96e7a4e783e354e7472300003",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_r_w_infer_latency3",
+   "top": "lm_mem_ram_r_w_infer",
+   "generics": {
+    "g_ram_data_w": 32,
+    "g_ram_depth": 1024,
+    "g_ram_latency": 3
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_r_w_infer: latency must be 1 or 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_r_w_infer.vhd(50):  failed to elaborate call to subprogram \"f_static_check\" File: src/inference/lm_mem_ram_r_w_infer.vhd Line: 50"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_r_w_infer: latency must be 1 or 2\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_r_w_infer.vhd(50):  failed to elaborate call to subprogram \"f_static_check\" File: src/inference/lm_mem_ram_r_w_infer.vhd Line: 50",
+     "Error (12153): Can't elaborate top-level user hierarchy",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_r_w_infer_latency3/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/inference/lm_mem_ram_r_w_infer.vhd:50"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "952599540d07f924ae005b6efa68c01abf2113f034b36e108cdba5ef408822ab",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  },
+  {
+   "job": "quartus-cyclonev",
+   "tool": "quartus",
+   "tool_version": "25.1std.0 Build 1129",
+   "vendor": "intel",
+   "family": "Cyclone V",
+   "part": "5CEBA4F23C7",
+   "case": "bad_r_w_ratio_8to32_rst",
+   "top": "lm_mem_ram_r_w_ratio",
+   "generics": {
+    "g_ram_a_data_w": 8,
+    "g_ram_a_depth": 4096,
+    "g_ram_b_data_w": 32,
+    "g_ram_b_rst_en": true
+   },
+   "status": "pass",
+   "metrics": {
+    "stopped": true,
+    "elaborated": true,
+    "fallback_messages": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(111):  failed to elaborate call to subprogram \"f_static_check\" File: src/core/lm_mem_ram_sdp.vhd Line: 111"
+    ],
+    "errors": [
+     "Error (10652): VHDL Assertion Statement at lm_mem_pkg.vhd(101): assertion is false - report \"lm_mem_ram_sdp: the read-output reset (g_rd_rst_en) is not supported with a read port wider than the write port\" (FAILURE or ERROR) File: src/common/lm_mem_pkg.vhd Line: 101",
+     "Error (10657): VHDL Subprogram error at lm_mem_ram_sdp.vhd(111):  failed to elaborate call to subprogram \"f_static_check\" File: src/core/lm_mem_ram_sdp.vhd Line: 111",
+     "Error (12152): Can't elaborate user hierarchy \"lm_mem_ram_sdp:inst_mem\" File: src/generic/lm_mem_ram_r_w_ratio.vhd Line: 74",
+     "Error (23031): Evaluation of Tcl script <campaign>/qc/quartus_cyclonev/bad_r_w_ratio_8to32_rst/run_quartus.tcl unsuccessful"
+    ],
+    "check_lines": [
+     "src/core/lm_mem_ram_sdp.vhd:111"
+    ],
+    "mode": "quartus",
+    "status_outcome": null,
+    "exit_code": 3,
+    "exit_code_required": true
+   },
+   "critical_warnings": null,
+   "retries": 0,
+   "problems": [],
+   "expected": {
+    "file": "tools/vendor_synth/expected/intel/25.1std.toml",
+    "sha256": "175ec1e4c70b1c6371f4a1efc2b3d2365015c20bf6f1d158aec1ea7e5bf25374",
+    "basis": null
+   },
+   "commit": "e33c6d86b79b391ec401548b13d3978856084e85",
+   "sources_hash": "2f360ebd932d3253526a784c36053fd45784915f5d7df81cb9ec4951b2db1526",
+   "archive": {
+    "archive": "static_checks_quartus_25.1_20261125T091634Z.tar.xz",
+    "sha256": "e95d91531a14f3ba0e0d55f3ab82535b21b58b75ec3507b3796787d8d989791c",
+    "files": 226
+   }
+  }
+ ]
+}

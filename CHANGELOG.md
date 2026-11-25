@@ -9,6 +9,42 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- **Optional synchronous reset of the read output (issue #7).** New ports,
+  last in the port list, active low, default `'1'` (inactive):
+  - `rd_rst_n_i` on `lm_mem_ram_sdp`, `lm_mem_ram_r_w`, `lm_mem_ram_cr_cw`,
+    `lm_mem_ram_r_w_ratio` and `lm_mem_ram_cr_cw_ratio`, in the read clock
+    domain;
+  - `rst_a_n_i` and `rst_b_n_i` on `lm_mem_ram_tdp1w` and
+    `lm_mem_ram_crw_cr`, one per read output, each in the clock domain of
+    its port.
+
+  Each reset is enabled by a generic, default `false`: `g_rd_rst_en`
+  (`lm_mem_ram_sdp`), `g_a_rst_en` and `g_b_rst_en` (`lm_mem_ram_tdp1w`),
+  `g_ram_rst_en` (`lm_mem_ram_r_w`, `lm_mem_ram_cr_cw`), `g_ram_b_rst_en`
+  (`lm_mem_ram_r_w_ratio`, `lm_mem_ram_cr_cw_ratio`), `g_ram_a_rst_en` and
+  `g_ram_b_rst_en` (`lm_mem_ram_crw_cr`). Disabled, the port is the one of
+  v0.2.0: Vivado 2024.1 gives the same netlist as v0.2.0 for every case of
+  v0.2.0, and a reset input driven low is ignored, with a simulation
+  warning.
+
+  Enabled, a reset acts **only while the enable of its port is high**
+  (`enb_i`, or `ena_i` for port A), as the output reset of the 7-series
+  block RAM; with the enable low it has no effect and the output holds its
+  value. With latency 1 it clears the output register (block RAM `RSTRAM`
+  on AMD). With latency 2 it clears both stages (`RSTRAM` and `RSTREG`):
+  the output stays zero until a read made after the reset reaches it. The
+  read of a reset cycle is discarded; the storage is never reset, and a
+  write in a reset cycle is done. A read port wider than the write port
+  with the reset enabled stops elaboration (static check): Vivado would
+  replicate the memory. The two-writer RAMs (`lm_mem_ram_crw_crw`,
+  `lm_mem_ram_rw_rw`, `lm_mem_ram_crw_cw`) and the FIFOs have no
+  read-output reset.
+
+  Cost with Vivado 2024.1 (Artix-7, Kintex UltraScale+): one LUT per reset
+  port ("enable AND NOT reset" on the reset pins of the memory), same
+  memory, no extra flip-flop; with the port A reset of `lm_mem_ram_crw_cr`,
+  one more LUT ("ena_i AND wen_a_i" on the write enable of the block RAM).
+
 - **Campaign on Linux with other tool versions (issue #8).** The v0.2.0
   code was verified on PCL01 (Linux) with Vivado 2024.1 and xsim 2024.1,
   Quartus Prime Lite 25.1std, Questa Altera Starter FPGA Edition 2025.2 and
@@ -63,6 +99,47 @@ All notable changes to this project are documented here.
   `GHDL` (or `VUNIT_GHDL_PATH`), or put `ghdl` on `PATH`, as for
   `LM_VIVADO_DIR`, `LM_QUARTUS_DIR` and `VUNIT_MODELSIM_PATH`
   (`tools/vendor_synth/local.example.toml`).
+
+- **Read outputs before the first read:** still undefined until the first
+  enabled read reaches them, unless a read-output reset is applied with the
+  enable high: then they are zero from that cycle.
+- **Read during write on `lm_mem_ram_r_w_ratio` (issue #15):** the old
+  data on a read of the address written in the same cycle is no longer
+  documented as verified on the AMD netlist. With a read port narrower than
+  the write port it is a known defect: Vivado 2024.1 builds a RAMB18 in
+  `WRITE_FIRST` (7-series) or `NO_CHANGE` (UltraScale+) mode, and the
+  netlist returns undefined data. `lm_mem_ram_r_w` is not affected.
+
+### Fixed
+
+- **Strict VHDL-93 (issue #12).** `src/common/lm_mem_pkg.vhd` did not
+  analyse with GHDL `--std=93` (a loop bound in `f_gray2bin` that VHDL-93
+  does not allow), and with it every library source failed; `--std=93c`
+  accepted it. The file sets with `check = "ghdl-93-08"` are now checked
+  with `--std=93` instead of `--std=93c` (`python -m tools.manifest check`,
+  CI).
+
+### Migration
+
+Instances that do not use the reset need no change:
+- named association: the new generics and ports take their defaults
+  (`false`, `'1'`);
+- positional association: the new generics and ports are last, after the
+  existing ones;
+- a component declaration of your own without the new generics and ports
+  (written for v0.2.0) still binds to the entity by default binding, and
+  they take their defaults. Checked with
+  `sim/tb/tb_lm_mem_component_compat.vhd`: GHDL 6.0.0 prints a warning for
+  each such port, `port "rd_rst_n_i" of entity "..." is not bound
+  [-Wbinding]`; Questa Sim 2021.1 (`-93`, `-2008`, on the Windows laptop)
+  printed none. Vivado 2024.1 synthesizes such a component as the entity of
+  v0.2.0.
+
+To use the reset, set its generic to `true`, add the port to your component
+declaration and connect it. It is not a reset of the memory content, and
+with the enable low it does nothing: a design that must see zero on the
+output after its reset keeps the read enable high during that reset.
+
 
 ## [0.2.0] - 2026-11-05
 

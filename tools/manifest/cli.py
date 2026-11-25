@@ -20,6 +20,8 @@ from pathlib import Path
 from . import DEFAULT_MANIFEST, ManifestError, SourceFile, load
 
 GHDL = os.environ.get("GHDL", "ghdl")
+# Strict VHDL-93: --std=93c relaxes some of its rules (issue #12).
+STD93_FLAGS = ["--std=93"]
 
 
 def ghdl_found(ghdl: str) -> bool:
@@ -71,11 +73,11 @@ def check(flow_names: list[str], manifest_path: Path) -> int:
       w08 = Path(tmp) / "std08"
       w93.mkdir()
       w08.mkdir()
-      failures += _analyze(std93, ["--std=93c"], w93)
+      failures += _analyze(std93, STD93_FLAGS, w93)
       for f in std08:
         flags = ["--std=08", "-frelaxed"] if f.check == "ghdl-relaxed" else ["--std=08"]
         failures += _analyze([f], flags, w08)
-    print(f"flow {flow}: {len(std93)} files checked as 93c, {len(std08)} as 08"
+    print(f"flow {flow}: {len(std93)} files checked as 93, {len(std08)} as 08"
           + (f"; not checked by GHDL: {', '.join(skipped)}" if skipped else ""))
   for failure in failures:
     print(f"FAIL {failure}", file=sys.stderr)

@@ -17,6 +17,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("run_postsynth", ROOT_DIR / "sim" / "scripts" / "run_postsynth.py")
 ps = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ps)
+import configs  # noqa: E402  (sim/vunit, on sys.path through run_postsynth.py)
 
 COUNTS = " ".join(f"{k}={0 if k == 'errors' else 5}" for k in ps.REQUIRED_COUNTS)
 HARNESS = f"lm_mem_tb_harness lm_mem_ram_crw_crw [GHDL_6.0.0]: {COUNTS}\n"
@@ -380,6 +381,19 @@ class SelectionTest(unittest.TestCase):
     # Review of PR #4: 36x4096 on Artix-7 ran the RTL only and exited 0.
     with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()):
       code = ps.main(["--part", "xc7a35tfgg484-2", "--config", "36x4096", "--work-root", tmp])
+    self.assertEqual(code, 2)
+
+  def test_excluded_configurations_are_not_synthesized(self) -> None:
+    # Issue #15: r_w_ratio with a narrower read port reads undefined data on a
+    # read during write on the AMD netlist; kept out on purpose, with the reason.
+    names = {name for name, _ in ps.RAM_CONFIGS}
+    self.assertEqual(set(configs.POSTSYNTH_EXCLUDED), {"r_w_ratio.32to8.rst", "r_w_ratio.32to8.lat2.rst"})
+    for name, reason in configs.POSTSYNTH_EXCLUDED.items():
+      self.assertIn(name, names)
+      self.assertNotIn(name, ps.POSTSYNTH_PARTS)
+      self.assertIn("issue #", reason)
+    with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()):
+      code = ps.main(["--part", "xc7a35tfgg484-2", "--config", r"^r_w_ratio\.32to8(\.lat2)?\.rst$", "--work-root", tmp])
     self.assertEqual(code, 2)
 
 

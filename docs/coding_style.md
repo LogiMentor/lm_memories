@@ -63,6 +63,17 @@ This file is the VHDL coding style reference for `lm_memories`.
 - Clearly document clock-domain crossing assumptions.
 - Synchronize single-bit clock-domain crossings and use proper handshakes or
   FIFOs for multi-bit crossings.
+- A generic never selects a model of an entity: the file manifest selects the
+  architecture (no configurations, no `translate_off/on` around behaviour,
+  no `if ... generate` on a generic to choose the model).
+  Exception: an optional function of a port that a boolean generic enables
+  (the read-output reset, issue #7) selects between two processes with two
+  separate `if ... generate` blocks, one per value of the generic
+  (`gen_rd : if not g_rd_rst_en generate` and
+  `gen_rd_rst : if g_rd_rst_en generate`). No `else generate`, `elsif
+  generate` or `case generate`: they are VHDL-2008, and the sources must
+  analyse as VHDL-93. The block without the function keeps the process of
+  the previous release unchanged.
 
 ## Testbenches
 

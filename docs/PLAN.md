@@ -281,8 +281,8 @@ filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "fifo", "infere
 ### 3.4 Conservative VHDL
 
 - Every file under `src/core/`, `src/generic/` and `src/sim/` must analyze
-  with GHDL `--std=93c` **and** `--std=08`. CI checks this. The current code
-  already passes both.
+  with GHDL `--std=93` **and** `--std=08`. CI checks this. The current code
+  passes both (strict `--std=93` instead of `--std=93c` since issue #12).
 - Not allowed in those directories: `process(all)`, `else`/`elsif` and `case`
   generate, `std.env`, `to_hstring`, unconstrained element types, generic types
   and packages, protected types, `??` and matching operators, sequential
@@ -293,7 +293,7 @@ filesets = ["common", "core", "crw_crw_unsupported", "wrappers", "fifo", "infere
 
   | `check` value | Meaning | Used for |
   | --- | --- | --- |
-  | `ghdl-93-08` | GHDL analysis in `--std=93c` and `--std=08` | `src/vendor/unsupported/` (fallback architecture) |
+  | `ghdl-93-08` | GHDL analysis in `--std=93` and `--std=08` | `src/vendor/unsupported/` (fallback architecture) |
   | `ghdl-relaxed` | GHDL analysis with `--std=08 -frelaxed` (warnings allowed) | vendor files that GHDL can parse |
   | `target-tool` | Analysis and synthesis only with the tool in `tools = [...]`, plus post-synthesis simulation of the netlist | `src/vendor/amd/` (UG901 template with a plain `shared variable`) |
 
@@ -313,23 +313,33 @@ Defined behaviour (checked):
 - Common-clock simple dual port (`lm_mem_ram_r_w`, `lm_mem_ram_r_w_ratio`):
   a read of the address being written in the same cycle returns the old data,
   **guaranteed only where verified for the vendor**: AMD (RTL and netlist,
-  block RAM and URAM). Intel is checked in phase 4: Quartus 23.1 infers
-  `lm_mem_ram_r_w` 32 x 1024 on Cyclone V as a dual-clock RAM and warns
-  that its read-during-write behaviour is undefined (`Warning (276027)`).
-  Lattice and Microchip: not verified. The status per vendor is in
+  block RAM and URAM) for `lm_mem_ram_r_w`. For `lm_mem_ram_r_w_ratio` the
+  netlist is not verified, and with a read port narrower than the write port
+  it is a known defect
+  ([issue #15](https://github.com/LogiMentor/lm_memories/issues/15)):
+  Vivado 2024.1 builds a RAMB18 in simple dual-port mode, `WRITE_FIRST` on
+  7-series and `NO_CHANGE` on UltraScale+, and the post-synthesis simulation
+  returns undefined data on such a read (2026-11-24, with and without the
+  read-output reset); those configurations are kept out of the
+  post-synthesis simulation (`POSTSYNTH_EXCLUDED` in
+  `sim/vunit/configs.py`). Intel is checked in phase 4: Quartus 23.1 infers
+  `lm_mem_ram_r_w` 32 x 1024 on Cyclone V as a dual-clock RAM and warns that
+  its read-during-write behaviour is undefined (`Warning (276027)`). Lattice
+  and Microchip: not verified. The status per vendor is in
   `docs/support_matrix.md`.
 - Enable gating: `ena_i` gates the port A read and write; `enb_i` gates port
   B. Both output stages hold their value while disabled.
 - Latency 1 and 2.
-- Initial content is zero, and there is no reset.
+- Initial content is zero, and the storage has no reset.
 - Read outputs have no initial value: they are undefined until the first
   enabled read reaches them (with latency 2, until the second enabled read
-  of that port), as in the frozen reference model. Every RTL architecture
-  leaves its output registers without an initial value; the simulation model
-  of `lm_mem_ram_crw_crw` drives 'X'. The harness checks that each read
-  output is 'U' or 'X' until then, in RTL simulation only: a netlist powers
-  up with defined values (block RAM output latches at 0), so the
-  post-synthesis runs do not compare that phase.
+  of that port), as in the frozen reference model, or until a read-output
+  reset applied with the enable high clears them (section 3.17). Every RTL
+  architecture leaves its output registers without an initial value; the
+  simulation model of `lm_mem_ram_crw_crw` drives 'X'. The harness checks
+  that each read output is 'U' or 'X' until then, in RTL simulation only: a
+  netlist powers up with defined values (block RAM output latches at 0), so
+  the post-synthesis runs do not compare that phase.
 - Mixed width: the lower narrow address holds the lower bits of the wide word.
 - `g_init_file /= ""` is rejected.
 
@@ -544,6 +554,10 @@ Each phase ends with a report and waits for confirmation.
 4. Other vendors, for installed tools only: Quartus and Diamond back ends,
    portable cores, two-writer architectures only where synthesis and
    post-synthesis both pass.
+   Issue #6. The read-output reset of v0.3.0 (section 3.17) is part of it:
+   its semantics (only with the enable high; latency 2 clears both stages)
+   must be verified on M10K (Cyclone V) and M9K (MAX 10), by synthesis and
+   by post-synthesis simulation, with its cost measured there.
 5. Vendor examples, README (approaches, "which one to use", status table
    generated by the scripts).
 
@@ -1110,6 +1124,81 @@ per tool version, one results directory per campaign.
   every expected stop), measured by the pilot (section 3.15).
 - **Baseline of #7.** This campaign is the "before" of the reset work on the
   new tools.
+
+### 3.17 Read-output reset (issue #7, v0.3.0)
+
+Requested by a downstream project. Decisions approved on 2026-11-06 (ports
+and behaviour) and on 2026-11-24 (enable generics, costs):
+
+- Ports last in the port list, default `'1'`, active low (`_n_i`), named
+  after the read port: `rd_rst_n_i` on `lm_mem_ram_sdp` and on the simple
+  dual-port wrappers (`lm_mem_ram_r_w`, `lm_mem_ram_cr_cw`,
+  `lm_mem_ram_r_w_ratio`, `lm_mem_ram_cr_cw_ratio`); `rst_a_n_i` and
+  `rst_b_n_i` on `lm_mem_ram_tdp1w` and `lm_mem_ram_crw_cr`. Not on the
+  two-writer RAMs (`lm_mem_ram_crw_crw`, `lm_mem_ram_rw_rw`,
+  `lm_mem_ram_crw_cw`), which the request does not need, nor on the FIFOs.
+- Each reset is enabled by a generic, default `false` (`g_rd_rst_en`;
+  `g_a_rst_en`, `g_b_rst_en`; on the wrappers `g_ram_rst_en`,
+  `g_ram_a_rst_en`, `g_ram_b_rst_en`). Without it the port process is the
+  one of v0.2.0, in a separate `if ... generate` (the exception in
+  `docs/coding_style.md`): Vivado infers the memory inside the core before
+  it propagates the constants of the instance, so a reset port that is
+  only unconnected would still change the inferred memory. A reset input
+  driven low while disabled is ignored, with a simulation warning. With
+  every reset generic at its default, Vivado 2024.1 gives the same netlist
+  as v0.2.0 for the 55 cases of `vivado_check.toml` of v0.2.0, on Artix-7
+  and Kintex UltraScale+ (cell types, properties and connections compared,
+  names aside; 2026-11-24).
+- Synchronous, effective only while the enable of the port is high, as the
+  7-series block RAM output reset. Latency 1 clears the output register
+  (`RSTRAM`); latency 2 clears both stages (`RSTRAM` and `RSTREG`), so the
+  output stays zero until a read made after the reset reaches it. The
+  storage is never reset; a write in a reset cycle is done.
+- A read port wider than the write port with the reset enabled stops
+  elaboration (`f_static_check`, case `bad_r_w_ratio_8to32_rst`): Vivado
+  2023.1 and 2024.1 replicate the memory then (4 RAMB36 instead of 1 for
+  8 x 4096 written, 32 bits read).
+- Cost, measured with Vivado 2024.1 on both parts (`tools/vendor_synth`,
+  exact `luts_logic` and `registers`): one LUT2 "enable AND NOT reset" per
+  reset port on the reset pins of the memory (block RAM `RSTRAM`/`RSTREG`,
+  URAM `RST`, the R pins of the output flip-flops of distributed RAM); same
+  memory, no extra flip-flop. A reset independent of the enable was tried
+  and rejected: Vivado then needs an inverter on the reset pins and a LUT
+  on the enable pin of the memory (two LUTs per port).
+- With the port A reset of `lm_mem_ram_tdp1w` (`lm_mem_ram_crw_cr`),
+  Vivado also drives the write enable of the block RAM with "ena_i AND
+  wen_a_i" instead of `wen_a_i`: one more LUT, redundant because the
+  memory writes only with `ena_i` high. It appears whenever the reset of
+  the first stage (`RSTRAM`) is on the port that writes; neither a
+  separate write process nor a reset written as a final assignment removes
+  it, and the UG901 templates never reset the first stage. Accepted as a
+  documented cost (3 LUTs for `lm_mem_ram_crw_cr` with both resets on
+  Artix-7, 2 on UltraScale+, where two LUT2 share a LUT6).
+  `check_reset_pins` accepts that LUT only where the expected results
+  declare it (`write_enable_luts`), and no other LUT on a block memory pin.
+- Compatibility: a component declaration without the new generics and
+  ports (written for v0.2.0) still binds, taking the defaults. Checked by
+  `sim/tb/tb_lm_mem_component_compat.vhd` with GHDL 6.0.0 (`--std=08`;
+  GHDL warns "port ... is not bound", `-Wbinding`) and, on the laptop, with
+  Questa 2021.1 (`-93`, `-2008`, no warning); synthesized with Vivado
+  2024.1 by the cases `*_v020_component`, with the results of the entity.
+- Verification: the harness drives the reset of every read port of the
+  configurations named `*.rst` (`sim/vunit/configs.py`, 20 configurations):
+  a reset with the enable low in the first idle cycle (the output must stay
+  undefined), a reset with the enable high before the first read (the
+  output must become zero), and random resets (6 % of the cycles) during
+  the traffic, for latency 1 and 2, one and two clocks and mixed width. A
+  port with a reset fails without a reset before the first read, during
+  reads, with the enable low, a zero check, and (latency 2) a read
+  discarded from the first stage. The reads discarded by a reset are still
+  checked for collisions with the other port, as the memory performs them:
+  the UNISIM models report those collisions, and the post-synthesis
+  simulation pairs each message with one of the harness. Six mutations of
+  the reset are in `sim/vunit/mutation_check.py`, one of them the
+  behaviour of v0.2.0 (reset ignored); all are detected.
+- The whole AMD campaign runs again before v0.3.0, because the cores
+  changed. Intel: phase 4 (issue #6).
+
 
 ## Appendix: how the reproduction was run
 

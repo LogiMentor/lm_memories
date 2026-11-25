@@ -153,15 +153,19 @@ class CheckParsingTest(unittest.TestCase):
   def test_fifo_logic_regression_fails(self) -> None:
     # Review of PR #4: the FIFO cases had no LUT ceiling, so 1000000 LUTs passed.
     log = {"critical_warnings": 0, "message_ids": {}, "limited_messages": []}
+    # FIFO cases per version: six of v0.2.0, plus with Vivado 2024.1 the two
+    # with a read port wider than the write port (issue #7).
+    fifo_cases = {"2023.1": 6, "2024.1": 8}
     for version in expected_versions("amd"):
       expected = check.load_expected("amd", version)
       fifo = [e for e in expected["expect"] if e["case"].startswith("fifo_")]
-      self.assertEqual(len(fifo), 6, version)
+      self.assertEqual(len(fifo), fifo_cases[version], version)
       for entry in fifo:
         for part in entry["parts"]:
           expectation = check.find_expectation(expected, entry["case"], part)
           metrics = {"luts": 1e6, "luts_logic": 1e6, "lutram": float(entry["lutram"]), "registers": 0.0,
-                     "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0}
+                     "bram_tiles": float(entry["bram_tiles"]), "uram": 0.0,
+                     "ramb36": float(entry.get("ramb36", 0)), "ramb18": float(entry.get("ramb18", 0))}
           problems = check.compare(metrics, log, expectation, part)
           self.assertEqual(len(problems), 1, (version, entry["case"], part, problems))
           self.assertIn("luts_logic", problems[0])

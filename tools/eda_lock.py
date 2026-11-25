@@ -2,15 +2,66 @@
 # Copyright 2026 LogiMentor Srl
 """Machine-wide lock for heavy EDA runs (synthesis, large simulations).
 
-Every lm_memories script that starts a heavy tool takes this lock first, so
-sessions on the same machine queue up instead of running in parallel. The
-lock is a file with a fixed name in the system temporary directory, not tied
-to any repository, so other projects can use the same file to queue with us.
+Every script that starts a heavy tool takes this lock first, so sessions on
+the same machine queue up instead of running in parallel. The lock is a file
+with a fixed name, not tied to any repository, so every project that uses it
+queues with the others. This file depends only on the Python standard
+library (3.11 or newer): other repositories keep an identical copy.
+
+From Python: "with heavy_tool_lock(purpose, kind=...):". From a shell, a
+Tcl flow or CI, the command line runs a command holding the lock:
+
+  python3 eda_lock.py [--kind synthesis|simulation] [--timeout SECONDS]
+                      [--kill-after SECONDS] [--purpose TEXT] -- COMMAND [ARG...]
+
+It waits for the lock and then for free memory (--kind, default synthesis),
+runs COMMAND, and releases the lock when COMMAND exits. Its exit code is
+that of COMMAND (128 + N if signal N stopped it); 125 if COMMAND did not run
+(wrong options, a malformed setting in the environment, a lock directory or
+file that cannot be created or opened, lock or memory timeout), 126 if it
+cannot be started, 127 if it does not exist; an error while releasing the
+lock after COMMAND does not change its exit code. Messages go to stderr.
+The lock is released only after COMMAND has exited: the signals a terminal
+sends to its whole foreground process group (SIGINT, SIGQUIT; SIGBREAK on
+Windows) reach COMMAND directly and the command line ignores them. SIGTERM
+and SIGHUP are relayed to COMMAND and, on Linux, to all its descendants.
+While COMMAND runs, the command line is a child subreaper: a descendant
+whose parent exits is adopted by the command line instead of init, so it
+stays in its process tree (setsid and double forks included). When the
+signal arrives, the command line reads that tree from /proc, sends the
+signal to every process in it and to those that appear later, and sends
+SIGKILL to those still running --kill-after seconds later (default 30). It
+releases the lock only when none of them is left (after SIGKILL it waits at
+most 10 s more, then names the survivors). The exit code stays that of
+COMMAND, 128 + N if it stopped only at the SIGKILL that followed signal N.
+A process is recognised by its id and start time and signalled through a
+pidfd, so a process that reuses an id does not receive the signal; where a
+pidfd cannot be opened or used (kernels before 5.3, a seccomp filter, no
+free descriptor) the identity is checked again just before kill, which
+leaves only a very short window. Adopted orphans are
+reaped by their own process id, never with waitpid(-1), which would take
+the exit status of COMMAND. A signal before COMMAND starts stops the wait,
+and COMMAND does not run. Limits:
+- when COMMAND exits by itself, the processes it leaves in the background
+  are not waited for: the lock is released when COMMAND exits. For example
+  the Quartus programming tools start the JTAG server jtagd, which keeps
+  running after them;
+- a descendant adopted by another subreaper below COMMAND, or that the
+  command line may not signal (another user), escapes;
+- if the child-subreaper attribute cannot be set (prctl not reachable
+  through ctypes), the command line says so in one line on stderr and runs
+  COMMAND all the same: a descendant whose parent exits is then adopted by
+  init and may escape;
+- on other POSIX systems and on Windows the signals reach COMMAND only;
+- a command line killed with SIGKILL cannot do any of this: the operating
+  system releases the lock and COMMAND goes on without it.
 
 - The lock is an operating-system lock on that file (msvcrt.locking on
   Windows, flock elsewhere). The operating system releases it when the holder
   exits, also after a crash, so there is no stale-lock cleanup and no window
-  where two waiters can both take it. No process is ever terminated.
+  where two waiters can both take it. The lock never terminates a process
+  (the command line only relays the signals it receives itself, and
+  escalates them to SIGKILL after --kill-after).
 - The file holds JSON describing the holder (pid, host, user, purpose,
   command, start time); a waiting process prints it. The file itself is never
   deleted.
@@ -31,6 +82,15 @@ to any repository, so other projects can use the same file to queue with us.
   keeps the lock, so the queue order is kept. Timeout: LM_EDA_MEMORY_TIMEOUT
   (seconds), default 4 hours. Where free memory cannot be read, it does not
   wait and says so.
+- Timeouts and thresholds, from an argument or from the environment, must be
+  finite numbers, not negative; LM_EDA_LOCK_DIR must not name an existing
+  file that is not a directory. Anything else raises LockConfigError (a
+  ValueError) before the run queues; the command line then exits with 125.
+- A lock directory, lock file or ticket that cannot be created, opened,
+  locked or written raises LockSetupError (an OSError) naming the path and
+  the error; the command line then exits with 125 without starting the
+  command. An error while releasing the lock after the command has run does
+  not change the exit code of the command.
 - Child processes of the holder inherit LM_EDA_LOCK_TOKEN and do not wait
   for the lock their parent already holds.
 - Directory: LM_EDA_LOCK_DIR, else the system temporary directory. On
@@ -43,10 +103,15 @@ to any repository, so other projects can use the same file to queue with us.
 
 from __future__ import annotations
 
+import argparse
+import errno
 import getpass
 import json
+import math
 import os
+import signal
 import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -55,6 +120,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NoReturn
 
 LOCK_NAME = "lm_eda_heavy_tools.lock"
 TOKEN_ENV = "LM_EDA_LOCK_TOKEN"
@@ -83,6 +149,56 @@ class LockTimeout(TimeoutError):
 
 class MemoryTimeout(TimeoutError):
   """Raised when the free memory stays below the threshold until the timeout."""
+
+
+class LockConfigError(ValueError):
+  """Raised when a setting of the lock (argument or environment) is malformed."""
+
+
+class LockSetupError(OSError):
+  """Raised when the lock directory, the lock file or a ticket cannot be created, opened, locked or written
+  before the block starts."""
+
+
+@contextmanager
+def _setup_step(action: str, target: Path) -> Iterator[None]:
+  """Turn an OSError of one step of the lock setup into LockSetupError naming the step, the path and the error."""
+  try:
+    yield
+  except OSError as exc:
+    detail = exc.strerror or str(exc)
+    if exc.filename is not None and os.fspath(exc.filename) != os.fspath(target):
+      detail += f" ({os.fspath(exc.filename)})"
+    raise LockSetupError(f"[eda-lock] cannot {action} {target}: {detail}") from exc
+
+
+def _number(value: object, name: str, unit: str) -> float:
+  """value as a finite, non-negative number; LockConfigError naming name otherwise."""
+  try:
+    number = float(value)  # type: ignore[arg-type]
+  except (TypeError, ValueError):
+    number = math.nan
+  if not math.isfinite(number) or number < 0:
+    raise LockConfigError(f"[eda-lock] {name}={value!r} is not valid: a finite number of {unit}, not negative, "
+                          "is required")
+  return number
+
+
+def _env_number(env: str, default: float, unit: str) -> float:
+  value = os.environ.get(env)
+  return default if value is None else _number(value, env, unit)
+
+
+def lock_timeout_s(timeout_s: float | None = None) -> float:
+  """Timeout for the lock in seconds: the argument, else LM_EDA_LOCK_TIMEOUT, else the default."""
+  if timeout_s is not None:
+    return _number(timeout_s, "timeout", "seconds")
+  return _env_number(TIMEOUT_ENV, DEFAULT_TIMEOUT_S, "seconds")
+
+
+def memory_timeout_s() -> float:
+  """Timeout for free memory in seconds: LM_EDA_MEMORY_TIMEOUT, else the default."""
+  return _env_number(MEMORY_TIMEOUT_ENV, DEFAULT_TIMEOUT_S, "seconds")
 
 
 def free_physical_mb() -> float | None:
@@ -120,7 +236,7 @@ def min_free_mb(kind: str) -> tuple[float, str]:
   if kind not in MIN_FREE_MB:
     raise ValueError(f"unknown kind of run '{kind}' (known: {', '.join(MIN_FREE_MB)})")
   env, default = MIN_FREE_MB[kind]
-  return float(os.environ.get(env, default)), env
+  return _env_number(env, default, "MB"), env
 
 
 def _wait_for_memory(
@@ -130,7 +246,7 @@ def _wait_for_memory(
   free_mb: Callable[[], float | None],
 ) -> None:
   need, env = min_free_mb(kind)
-  timeout_s = float(os.environ.get(MEMORY_TIMEOUT_ENV, DEFAULT_TIMEOUT_S))
+  timeout_s = memory_timeout_s()
   start = time.monotonic()
   last_report = None
   while True:
@@ -158,6 +274,8 @@ LOCK_DIR_ENV = "LM_EDA_LOCK_DIR"
 
 def default_lock_path() -> Path:
   directory = os.environ.get(LOCK_DIR_ENV)
+  if directory and os.path.exists(directory) and not os.path.isdir(directory):
+    raise LockConfigError(f"[eda-lock] {LOCK_DIR_ENV}={directory!r} is not valid: it exists and is not a directory")
   return Path(directory or tempfile.gettempdir()) / LOCK_NAME
 
 
@@ -271,7 +389,11 @@ def heavy_tool_lock(
   kind ("synthesis" or "simulation") selects the free-memory threshold that
   must be reached, with the lock held, before the block starts.
   """
-  min_free_mb(kind)  # reject an unknown kind before queuing
+  # Every setting is checked before queuing: a malformed one raises
+  # LockConfigError here, not after the wait.
+  min_free_mb(kind)
+  memory_timeout_s()
+  timeout_s = lock_timeout_s(timeout_s)
   path = lock_path or default_lock_path()
   inherited = os.environ.get(TOKEN_ENV)
   if inherited:
@@ -280,8 +402,6 @@ def heavy_tool_lock(
       yield path
       return
 
-  if timeout_s is None:
-    timeout_s = float(os.environ.get(TIMEOUT_ENV, DEFAULT_TIMEOUT_S))
   token = uuid.uuid4().hex
   info = {
     "token": token,
@@ -296,15 +416,21 @@ def heavy_tool_lock(
   announced = False
   flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
   ticket = path.parent / f"{path.name}.q.{time.time_ns():020d}-{os.getpid()}-{token[:8]}"
-  path.parent.mkdir(parents=True, exist_ok=True)
-  ticket_fd = _open_shared(ticket, flags)
-  _try_lock(ticket_fd)  # a fresh, unique file: always succeeds
-  fd = _open_shared(path, flags)
+  with _setup_step("create the lock directory", path.parent):
+    path.parent.mkdir(parents=True, exist_ok=True)
+  with _setup_step("create the ticket", ticket):
+    ticket_fd = _open_shared(ticket, flags)
+  fd = None
   try:
+    with _setup_step("lock the ticket", ticket):
+      _try_lock(ticket_fd)  # a fresh, unique file: always succeeds
+    with _setup_step("open the lock file", path):
+      fd = _open_shared(path, flags)
     while True:
       ahead = _older_live_ticket(path, ticket)
-      if ahead is None and _try_lock(fd):
-        break
+      with _setup_step("lock", path):
+        if ahead is None and _try_lock(fd):
+          break
       holder = _read_holder(path)
       if time.monotonic() >= deadline:
         raise LockTimeout(f"[eda-lock] gave up after {timeout_s:.0f} s waiting for {path}, held by {describe(holder)}")
@@ -315,14 +441,16 @@ def heavy_tool_lock(
       time.sleep(min(poll_s, max(0.05, deadline - time.monotonic())))
     _release_ticket(ticket, ticket_fd)
     ticket_fd = None
-    _write_record(fd, {**info, "state": "waiting for free memory"})
+    with _setup_step("write the holder record to", path):
+      _write_record(fd, {**info, "state": "waiting for free memory"})
 
     log(f"[eda-lock] acquired {path} for '{purpose}'")
     previous = os.environ.get(TOKEN_ENV)
     os.environ[TOKEN_ENV] = token
     try:
       _wait_for_memory(kind, poll_s, log, free_mb)
-      _write_record(fd, {**info, "state": "running"})
+      with _setup_step("write the holder record to", path):
+        _write_record(fd, {**info, "state": "running"})
       yield path
     finally:
       if previous is None:
@@ -333,7 +461,8 @@ def heavy_tool_lock(
       _unlock(fd)
       log(f"[eda-lock] released {path}")
   finally:
-    os.close(fd)
+    if fd is not None:
+      os.close(fd)
     if ticket_fd is not None:
       _release_ticket(ticket, ticket_fd)
 
@@ -348,3 +477,415 @@ def _release_ticket(ticket: Path, fd: int) -> None:
     ticket.unlink()
   except OSError:
     pass
+
+
+# Command line ----------------------------------------------------------------
+
+# Exit codes of the command line besides the exit code of the command, as GNU
+# env and timeout use them.
+EXIT_LOCK_FAILED = 125  # wrong options or settings, lock error or timeout, memory timeout: the command did not run
+EXIT_CANNOT_RUN = 126  # the command exists but cannot be started
+EXIT_NOT_FOUND = 127  # no such command
+
+# Signals that a terminal sends to its whole foreground process group: the
+# command receives them itself, so the command line only ignores them while
+# the command runs. The others are relayed to the command.
+_TERMINAL_SIGNALS = ("SIGINT", "SIGQUIT", "SIGBREAK")
+_RELAYED_SIGNALS = ("SIGTERM", "SIGHUP")
+
+
+# After SIGTERM or SIGHUP, the time the command and its descendants have to
+# exit before the survivors receive SIGKILL (--kill-after), and the time the
+# command line then waits for them to disappear before it releases the lock
+# anyway, reporting them.
+DEFAULT_KILL_AFTER_S = 30.0
+_KILL_WAIT_S = 10.0
+_STOP_POLL_S = 0.1
+
+
+_PR_SET_CHILD_SUBREAPER = 36  # prctl options, linux/prctl.h
+_PR_GET_CHILD_SUBREAPER = 37
+
+
+def _process_tree_supported() -> bool:
+  """The process tree of the command is handled on Linux, where /proc lists every process."""
+  return sys.platform.startswith("linux") and os.path.isdir("/proc/self")
+
+
+def _stat(pid: int) -> tuple[int, str, str] | None:
+  """(parent process id, start time, state) of process pid from /proc; None if it does not exist.
+
+  The start time, in clock ticks since boot, tells a process from a later one that reuses its id."""
+  try:
+    with open(f"/proc/{pid}/stat", "rb") as handle:
+      stat = handle.read().decode("ascii", "replace")
+    fields = stat[stat.rindex(")") + 2:].split()  # the name, in brackets, may contain spaces
+    return int(fields[1]), fields[19], fields[0]
+  except (OSError, ValueError, IndexError):
+    return None  # exited meanwhile
+
+
+def _process_table() -> dict[int, tuple[int, str, str]]:
+  """Process id -> (parent process id, start time, state) of every process, from /proc (Linux)."""
+  table: dict[int, tuple[int, str, str]] = {}
+  for entry in os.scandir("/proc"):
+    if entry.name.isdigit():
+      stat = _stat(int(entry.name))
+      if stat is not None:
+        table[int(entry.name)] = stat
+  return table
+
+
+def _alive(pid: int, start: str, table: dict[int, tuple[int, str, str]]) -> bool:
+  """True if the process pid that started at start still runs (not a zombie, id not reused)."""
+  entry = table.get(pid)
+  return entry is not None and entry[1] == start and entry[2] != "Z"
+
+
+def _descendants(roots: list[int], table: dict[int, tuple[int, str, str]]) -> dict[int, str]:
+  """Process id -> start time of every descendant of roots in table."""
+  children: dict[int, list[int]] = {}
+  for pid, (ppid, _, _) in table.items():
+    children.setdefault(ppid, []).append(pid)
+  found: dict[int, str] = {}
+  todo = list(roots)
+  while todo:
+    for pid in children.get(todo.pop(), ()):
+      if pid not in found:
+        found[pid] = table[pid][1]
+        todo.append(pid)
+  return found
+
+
+def _send_signal(pid: int, start: str, signum: int) -> bool:
+  """Send signum to process pid if it is still the one that started at start; True if sent.
+
+  Through a pidfd where one can be opened (Linux 5.3 or newer): the start time is checked after the
+  pidfd is opened, so the signal cannot reach a process that reused the id. Where it cannot be opened
+  or used (no pidfd in the kernel, a seccomp filter, no free descriptor), the check comes again just
+  before kill, which leaves only a very short window: a failure of the pidfd never skips the signal."""
+
+  def same() -> bool:
+    stat = _stat(pid)
+    return stat is not None and stat[1] == start and stat[2] != "Z"
+
+  pidfd = None
+  if hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"):
+    try:
+      pidfd = os.pidfd_open(pid)
+    except ProcessLookupError:
+      return False  # no such process
+    except OSError:
+      pidfd = None  # ENOSYS, EPERM from a seccomp filter, EMFILE...: kill below
+  try:
+    if pidfd is not None:
+      if not same():
+        return False
+      try:
+        signal.pidfd_send_signal(pidfd, signum)
+        return True
+      except ProcessLookupError:
+        return False  # exited meanwhile
+      except OSError:
+        pass  # refused through the pidfd (a seccomp filter): kill below
+    if not same():
+      return False
+    os.kill(pid, signum)
+    return True
+  except OSError:
+    return False  # exited meanwhile, or not ours to signal (another user)
+  finally:
+    if pidfd is not None:
+      os.close(pidfd)
+
+
+def _child_subreaper(value: int) -> int | None:
+  """Set the child-subreaper attribute of this process (Linux) and return its previous value; None if not set.
+
+  A subreaper adopts the descendants whose parent exits, instead of init: the descendants of the command
+  stay in the process tree of the command line, where it finds them."""
+  try:
+    import ctypes
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    previous = ctypes.c_int(0)
+    zero = ctypes.c_ulong(0)
+    if libc.prctl(ctypes.c_int(_PR_GET_CHILD_SUBREAPER), ctypes.byref(previous), zero, zero, zero) != 0:
+      return None
+    if libc.prctl(ctypes.c_int(_PR_SET_CHILD_SUBREAPER), ctypes.c_ulong(value), zero, zero, zero) != 0:
+      return None
+    return previous.value
+  except (ImportError, OSError, AttributeError):
+    return None
+
+
+class _Relayed(Exception):
+  """The first SIGTERM or SIGHUP while the command runs: stop waiting for it and stop its process tree."""
+
+
+class _Interrupted(Exception):
+  """A signal arrived before the command started."""
+
+  def __init__(self, signum: int) -> None:
+    super().__init__(signum)
+    self.signum = signum
+
+
+def exit_code(returncode: int) -> int:
+  """Exit code of a command as a shell reports it: 128 + N when signal N stopped it."""
+  return 128 - returncode if returncode < 0 else returncode
+
+
+def run(
+  command: list[str],
+  kind: str = "synthesis",
+  timeout_s: float | None = None,
+  purpose: str | None = None,
+  lock_path: Path | None = None,
+  log: Callable[[str], None] = print,
+  free_mb: Callable[[], float | None] = free_physical_mb,
+  kill_after_s: float = DEFAULT_KILL_AFTER_S,
+) -> int:
+  """Run a command holding the lock (heavy_tool_lock) and return its exit code.
+
+  The lock is released only after the command has exited, whatever happens:
+  an error, a signal, an interruption. A signal before the command starts
+  stops the wait and returns 128 + N; the command is then not started.
+  SIGTERM or SIGHUP while the command runs goes to the command and, on Linux,
+  to all its descendants; those still running kill_after_s seconds later
+  receive SIGKILL, and only then is the lock released. On Linux this process
+  is a child subreaper while the command runs, and reaps only the orphans of
+  the command it adopted: call it from a process that does not start other
+  processes meanwhile, as the command line does."""
+  signal_names = {getattr(signal, name): name for name in _TERMINAL_SIGNALS + _RELAYED_SIGNALS if hasattr(signal, name)}
+  relayed = {getattr(signal, name) for name in _RELAYED_SIGNALS if hasattr(signal, name)}
+  linux = _process_tree_supported()
+  me = os.getpid()
+  # tree: process id -> start time of the descendants of the command and of
+  # the orphans this process adopted from them (Linux). before: (id, start)
+  # of the children this process already had before the command.
+  state: dict = {"child": None, "child_start": None, "starting": False, "pending": [], "signal": None, "tree": {},
+                 "before": set()}
+
+  def signal_command(signum: int | None) -> None:
+    """Send signum to the command, None for SIGKILL (Popen.kill elsewhere than Linux). On Linux through
+    _send_signal, like its descendants, so that the signal cannot reach a process that reused the id of
+    the command once it has exited (Popen.send_signal leaves a short window)."""
+    child = state["child"]
+    if state["child_start"] is not None:
+      if child.returncode is None:
+        _send_signal(child.pid, state["child_start"], signal.SIGKILL if signum is None else signum)
+    elif signum is None:
+      child.kill()
+    else:
+      child.send_signal(signum)
+
+  def scan(table: dict[int, tuple[int, str, str]]) -> dict[int, str]:
+    """The descendants of the command in table: our children since the command started, but the command
+    itself (adopted orphans), the processes they started, and those of the known tree still running."""
+    top = {pid: start for pid, (ppid, start, _) in table.items()
+           if ppid == me and (pid, start) not in state["before"]}
+    known = [pid for pid, start in state["tree"].items() if _alive(pid, start, table)]
+    found = {**top, **_descendants(list(top) + known, table)}
+    found.pop(state["child"].pid, None)  # signalled and reaped through its Popen
+    return found
+
+  def reap(table: dict[int, tuple[int, str, str]]) -> None:
+    """Reap the adopted orphans that have exited, each by its own process id: never waitpid(-1), which
+    would take the exit status of the command (or of another child of this process) from its owner."""
+    for pid, start in state["tree"].items():
+      entry = table.get(pid)
+      if entry is not None and entry[0] == me and entry[1] == start and entry[2] == "Z":
+        try:
+          os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+          pass
+
+  def relay(signum: int) -> bool:
+    """Send signum to the command and its descendants; True for the first relayed signal."""
+    child = state["child"]
+    if child.returncode is not None:
+      return False  # the command has exited: its process id may be reused
+    if linux:
+      table = _process_table()
+      state["tree"].update(scan(table))  # before the signal, while the tree is linked
+      for pid, start in list(state["tree"].items()):
+        _send_signal(pid, start, signum)
+    signal_command(signum)
+    first = state["signal"] is None
+    if first:
+      state["signal"] = signum
+      log(f"[eda-lock] {signal_names.get(signum, signum)} relayed to {command[0]}"
+          + (f" and {len(state['tree'])} descendant process(es)" if state["tree"] else ""))
+    return first
+
+  def handler(signum: int, frame: object) -> None:
+    child = state["child"]
+    if child is not None:
+      if signum in relayed and relay(signum):
+        raise _Relayed()
+      return
+    if state["starting"]:
+      state["pending"].append(signum)  # sent to the command once it exists
+      return
+    raise _Interrupted(signum)
+
+  def stop_tree() -> int:
+    """After a relayed signal: wait for the command and its descendants, SIGKILL the survivors; exit code."""
+    child = state["child"]
+    tree = state["tree"]
+    killed = False
+    deadline = time.monotonic() + kill_after_s
+    while True:
+      running = child.poll() is None
+      table = _process_table() if linux else {}
+      if linux:
+        for pid, start in scan(table).items():
+          if tree.get(pid) != start:  # started or adopted since the signal: it gets the signal too
+            tree[pid] = start
+            _send_signal(pid, start, signal.SIGKILL if killed else state["signal"])
+        reap(table)
+      alive = [pid for pid, start in tree.items() if _alive(pid, start, table)]
+      if not running and not alive:
+        break
+      if killed and time.monotonic() >= deadline:
+        log(f"[eda-lock] still present {_KILL_WAIT_S:.0f} s after SIGKILL, lock released anyway: "
+            + ", ".join(str(pid) for pid in ([child.pid] if running else []) + alive))
+        break
+      if not killed and time.monotonic() >= deadline:
+        log(f"[eda-lock] SIGKILL to the processes still running {kill_after_s:g} s after "
+            f"{signal_names.get(state['signal'], state['signal'])}: "
+            + ", ".join(str(pid) for pid in ([child.pid] if running else []) + alive))
+        for pid in alive:
+          _send_signal(pid, tree[pid], signal.SIGKILL)
+        if running:
+          signal_command(None)
+        killed = True
+        deadline = time.monotonic() + _KILL_WAIT_S
+      time.sleep(_STOP_POLL_S)
+    returncode = child.wait() if child.returncode is None else child.returncode
+    if killed and returncode == -signal.SIGKILL:
+      return 128 + state["signal"]  # stopped because of the relayed signal, not of our SIGKILL
+    return exit_code(returncode)
+
+  outcome: int | None = None  # exit code, once the command has been started (or could not be)
+  subreaper: int | None = None  # previous child-subreaper attribute, to restore
+  previous = {}
+  for signum in signal_names:
+    if signal.getsignal(signum) is signal.SIG_IGN:
+      continue  # an ignored signal stays ignored (nohup), for the command too
+    previous[signum] = signal.signal(signum, handler)
+  try:
+    kill_after_s = _number(kill_after_s, "kill_after", "seconds")
+    with heavy_tool_lock(purpose or Path(command[0]).name, timeout_s=timeout_s, lock_path=lock_path, log=log,
+                         kind=kind, free_mb=free_mb):
+      state["starting"] = True
+      if linux:
+        subreaper = _child_subreaper(1)
+        if subreaper is None:
+          log("[eda-lock] child subreaper not available: on SIGTERM or SIGHUP, descendants whose parent "
+              "exits may escape")
+        state["before"] = {(pid, start) for pid, (ppid, start, _) in _process_table().items() if ppid == me}
+      try:
+        child = subprocess.Popen(command)
+      except FileNotFoundError as exc:
+        log(f"[eda-lock] command not found: {command[0]} ({exc})")
+        outcome = EXIT_NOT_FOUND
+      except OSError as exc:
+        log(f"[eda-lock] cannot run {command[0]}: {exc}")
+        outcome = EXIT_CANNOT_RUN
+      else:
+        if linux:  # the command cannot be reaped by anyone else yet: this is its start time
+          state["child_start"] = (_stat(child.pid) or (0, None, ""))[1]
+        try:
+          state["child"] = child  # from here a relayed signal may raise _Relayed
+          for signum in state["pending"]:
+            if signum in relayed:
+              relay(signum)
+            else:
+              signal_command(signum)
+          if state["signal"] is None:
+            returncode = child.wait()
+        except _Relayed:
+          pass
+        outcome = stop_tree() if state["signal"] is not None else exit_code(returncode)
+        if linux:  # orphans that exited after the command, or before it without a signal
+          table = _process_table()
+          state["tree"].update(scan(table))
+          reap(table)
+    return outcome
+  except _Interrupted as exc:
+    log(f"[eda-lock] {signal_names.get(exc.signum, exc.signum)} before the command started: not started")
+    return 128 + exc.signum
+  except (LockTimeout, MemoryTimeout, LockConfigError) as exc:
+    log(str(exc))
+    return EXIT_LOCK_FAILED
+  except OSError as exc:
+    if outcome is not None:
+      # Releasing the lock failed after the command: its exit code stands.
+      log(f"[eda-lock] error while releasing the lock, exit code of the command kept: {exc}")
+      return outcome
+    log(str(exc) if isinstance(exc, LockSetupError) else f"[eda-lock] lock failed, command not started: {exc}")
+    return EXIT_LOCK_FAILED
+  finally:
+    for signum, old in previous.items():
+      signal.signal(signum, old)
+    if subreaper is not None:
+      _child_subreaper(subreaper)
+
+
+class _UsageError(Exception):
+  pass
+
+
+class _Parser(argparse.ArgumentParser):
+  def error(self, message: str) -> NoReturn:
+    raise _UsageError(message)
+
+
+def main(argv: list[str] | None = None) -> int:
+  """python3 eda_lock.py [--kind KIND] [--timeout SECONDS] [--kill-after SECONDS] [--purpose TEXT] -- COMMAND ..."""
+  argv = sys.argv[1:] if argv is None else argv
+  parser = _Parser(
+    prog="eda_lock.py",
+    usage="%(prog)s [--kind {" + ",".join(MIN_FREE_MB) + "}] [--timeout SECONDS] [--kill-after SECONDS] "
+          "[--purpose TEXT] -- COMMAND [ARG...]",
+    description="Run COMMAND holding the machine-wide EDA lock: wait for the lock, then for free memory, "
+                "run the command, release the lock when it exits. Exit code: that of the command (128 + N "
+                f"if signal N stopped it); {EXIT_LOCK_FAILED} if the command did not run (wrong options, a "
+                "malformed setting in the environment, a lock directory or file that cannot be created or "
+                "opened, lock or memory timeout), "
+                f"{EXIT_CANNOT_RUN} if it cannot be started, {EXIT_NOT_FOUND} if it does not exist. Lock "
+                f"directory: LM_EDA_LOCK_DIR. Timeouts and thresholds ({TIMEOUT_ENV}, {MEMORY_TIMEOUT_ENV}, "
+                + ", ".join(env for env, _ in MIN_FREE_MB.values()) + ") must be finite numbers, not negative.")
+  parser.add_argument("--kind", choices=list(MIN_FREE_MB), default="synthesis",
+                      help="kind of run, selects the free-memory threshold (default: synthesis)")
+  parser.add_argument("--timeout", type=float, metavar="SECONDS",
+                      help=f"maximum wait for the lock (default: {TIMEOUT_ENV}, else {DEFAULT_TIMEOUT_S:.0f} s)")
+  parser.add_argument("--kill-after", type=float, metavar="SECONDS", default=DEFAULT_KILL_AFTER_S,
+                      help="after SIGTERM or SIGHUP, time the command and its descendants have to exit before "
+                           f"the survivors receive SIGKILL (default: {DEFAULT_KILL_AFTER_S:.0f} s)")
+  parser.add_argument("--purpose", metavar="TEXT", help="shown to waiting runs (default: the command name)")
+  split = argv.index("--") if "--" in argv else len(argv)
+  options, command = argv[:split], argv[split + 1:]
+
+  def log(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+  try:
+    args = parser.parse_args(options)
+    if split == len(argv) or not command:
+      raise _UsageError("give the command after --")
+    for option, value in (("--timeout", args.timeout), ("--kill-after", args.kill_after)):
+      if value is not None and not (math.isfinite(value) and value >= 0):
+        raise _UsageError(f"{option} {value}: a finite number of seconds, not negative, is required")
+  except _UsageError as exc:
+    parser.print_usage(sys.stderr)
+    log(f"eda_lock.py: {exc}")
+    return EXIT_LOCK_FAILED
+  return run(command, kind=args.kind, timeout_s=args.timeout, purpose=args.purpose, log=log,
+             kill_after_s=args.kill_after)
+
+
+if __name__ == "__main__":
+  sys.exit(main())

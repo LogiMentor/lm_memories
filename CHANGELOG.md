@@ -68,6 +68,28 @@ All notable changes to this project are documented here.
   reruns included (for post-synthesis, both the Vivado of the synthesis
   and the simulator, GHDL or xsim), and VUnit and mutation runs of
   another simulator (GHDL, or Questa of another version or edition).
+- **Command line of the EDA lock (issue #10).** `python3 tools/eda_lock.py
+  [--kind synthesis|simulation] [--timeout SECONDS] [--kill-after SECONDS]
+  [--purpose TEXT] -- COMMAND [ARG...]` runs any command (a Tcl flow, a CI job) holding the
+  machine-wide lock. It waits for the lock and then for free memory, and
+  releases the lock only after the command has exited, also after an error
+  or an interruption. Exit code: the command's (128 + N if signal N stopped
+  it); 125 if the command did not run (lock or memory timeout, wrong
+  options, a malformed setting in the environment, a lock directory, lock
+  file or ticket that cannot be created or opened: `LockSetupError`, which
+  names the path and the error), 126 if it cannot be started, 127 if it
+  does not exist; an error while releasing the lock after the command does
+  not change its exit code. Timeouts and memory thresholds, from the
+  options or the environment, must be finite numbers, not negative; the
+  lock refuses anything else before it queues (`LockConfigError`).
+  SIGTERM and SIGHUP are relayed to the command and, on Linux, to all its
+  descendants, which stay in the tree of the command line (a child
+  subreaper) and are signalled through a pidfd; those still running
+  `--kill-after` seconds later (default 30) receive SIGKILL, and the lock is
+  released only then. Processes left in the background by a command that
+  exits by itself (such as `jtagd`) are not waited for; on other POSIX
+  systems and on Windows the signals reach the command only. The file depends only on the Python standard library, so other
+  repositories can keep an identical copy.
 
 ### Changed
 

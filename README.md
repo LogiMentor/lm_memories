@@ -278,6 +278,43 @@ in MB) and 2 GB for simulation (`LM_EDA_MIN_FREE_MB_SIM`). The timeout is
 projects do not take this lock; the memory check keeps a run from starting
 while they fill the memory.
 
+Any other command can run under the same lock, for example a Tcl flow or a
+CI job:
+
+```sh
+python3 tools/eda_lock.py --kind synthesis --timeout 3600 -- vivado -mode batch -source build.tcl
+```
+
+It waits for the lock and then for free memory (`--kind synthesis` or
+`simulation`), runs the command, and releases the lock when the command
+exits, also after an error or an interruption. Its exit code is the
+command's; 125 means that the command did not run (lock or memory timeout,
+wrong options, a malformed setting such as `LM_EDA_MEMORY_TIMEOUT=abc`:
+timeouts and thresholds must be finite numbers, not negative, or a lock
+directory, lock file or ticket that cannot be created or opened, for
+example without write permission), 126 and 127 that it cannot be started
+or does not exist. An error while releasing the lock after the command does
+not change the command's exit code.
+
+SIGTERM and SIGHUP (a CI job cancelled, a terminal closed) are relayed to
+the command and, on Linux, to all its descendants: `vivado` on Linux is a
+shell script that starts the tool as a child, so signalling the command
+alone would release the lock while Vivado runs on. While the command runs,
+the lock command line is a child subreaper, so descendants whose parent
+exits stay in its process tree; processes are signalled through a pidfd,
+never by a process id that another process may have reused. Processes still
+running `--kill-after` seconds later (default 30) receive SIGKILL; only then
+is the lock released. Limits: when the command exits by itself, processes
+it leaves in the background are not waited for (for example the JTAG server
+`jtagd` that the Quartus programming tools start); on other POSIX systems
+and on Windows the signals reach the command only. Where the
+child-subreaper attribute cannot be set, the command line says so in one
+line on stderr and runs the command all the same, and a descendant whose
+parent exits may then escape.
+`python3 tools/eda_lock.py --help` lists the options. The file depends only
+on the Python standard library, so other repositories keep an identical
+copy and queue on the same lock.
+
 ## Local Vendor Synthesis
 
 Vendor synthesis checks run as local scripts rather than in hosted CI, because

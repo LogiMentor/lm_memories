@@ -807,9 +807,10 @@ and FIFO, default `"auto"`, that sets the storage attributes of each tool:
   combinations the core cannot honour (for example `"ultra"` with two
   clocks). Each value would need its own expected results.
 
-**Shared EDA lock:** approved in principle (public repository
-`lm-eda-lock`, a CLI for Tcl flows). It is implemented after PR #4 is
-merged, as separate work.
+**Shared EDA lock:** a command line for Tcl flows and CI, in
+`tools/eda_lock.py` itself rather than in a separate repository: the file
+depends only on the Python standard library, and other repositories keep
+an identical copy (section 3.15).
 
 ### 3.14 Corrections after the reviews of PR #4
 
@@ -994,7 +995,16 @@ the summary in `<campaign root>/summary.md`.
 
 ### 3.15 Cross-cutting work (other LogiMentor repositories)
 
-- **Shared EDA lock** (`lm-eda-lock`): section 3.13, after the merge of PR #4.
+- **Shared EDA lock:** `python3 tools/eda_lock.py [--kind synthesis|simulation]
+  [--timeout SECONDS] [--kill-after SECONDS] [--purpose TEXT] -- COMMAND
+  [ARG...]` runs a command holding the lock: it waits for the lock and for
+  free memory, and releases the lock only after the command has exited (the
+  signals of a terminal reach the command; SIGTERM and SIGHUP are relayed
+  to it and, on Linux, to all its descendants, and those still running
+  `--kill-after` seconds later, default 30, receive SIGKILL). Exit code: the
+  command's, 128 + N after signal N, 125 if it did not run, 126 and 127 if
+  it cannot be started or does not exist. Other repositories keep an
+  identical copy of the file (standard library only, checked by a test).
 - **`vivado.bat` without `call`:** a Windows batch file that runs
   `vivado.bat` without `call` never gets control back, so the lines after
   it (`exit /b %ERRORLEVEL%`) do not run and the caller sees an exit code

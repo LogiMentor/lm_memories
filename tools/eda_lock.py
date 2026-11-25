@@ -17,14 +17,17 @@ Tcl flow or CI, the command line runs a command holding the lock:
 It waits for the lock and then for free memory (--kind, default synthesis),
 runs COMMAND, and releases the lock when COMMAND exits. Its exit code is
 that of COMMAND (128 + N if signal N stopped it); 125 if COMMAND did not run
-(wrong options, a malformed setting in the environment, lock or memory
-timeout), 126 if it cannot be started, 127 if it does not exist. Messages go to stderr. The lock is released only after
-COMMAND has exited: the signals a terminal sends to its whole foreground
-process group (SIGINT, SIGQUIT; SIGBREAK on Windows) reach COMMAND directly
-and the command line ignores them; SIGTERM and SIGHUP are relayed to COMMAND.
-A signal before COMMAND starts stops the wait, and COMMAND does not run. A
-process killed with SIGKILL cannot do any of this: the operating system
-releases the lock and COMMAND goes on without it.
+(wrong options, a malformed setting in the environment, a lock directory or
+file that cannot be created or opened, lock or memory timeout), 126 if it
+cannot be started, 127 if it does not exist; an error while releasing the
+lock after COMMAND does not change its exit code. Messages go to stderr.
+The lock is released only after COMMAND has exited: the signals a terminal
+sends to its whole foreground process group (SIGINT, SIGQUIT; SIGBREAK on
+Windows) reach COMMAND directly and the command line ignores them; SIGTERM
+and SIGHUP are relayed to COMMAND. A signal before COMMAND starts stops the
+wait, and COMMAND does not run. A process killed with SIGKILL cannot do any
+of this: the operating system releases the lock and COMMAND goes on without
+it.
 
 - The lock is an operating-system lock on that file (msvcrt.locking on
   Windows, flock elsewhere). The operating system releases it when the holder
@@ -55,6 +58,11 @@ releases the lock and COMMAND goes on without it.
   finite numbers, not negative; LM_EDA_LOCK_DIR must not name an existing
   file that is not a directory. Anything else raises LockConfigError (a
   ValueError) before the run queues; the command line then exits with 125.
+- A lock directory, lock file or ticket that cannot be created, opened,
+  locked or written raises LockSetupError (an OSError) naming the path and
+  the error; the command line then exits with 125 without starting the
+  command. An error while releasing the lock after the command has run does
+  not change the exit code of the command.
 - Child processes of the holder inherit LM_EDA_LOCK_TOKEN and do not wait
   for the lock their parent already holds.
 - Directory: LM_EDA_LOCK_DIR, else the system temporary directory. On
@@ -116,6 +124,23 @@ class MemoryTimeout(TimeoutError):
 
 class LockConfigError(ValueError):
   """Raised when a setting of the lock (argument or environment) is malformed."""
+
+
+class LockSetupError(OSError):
+  """Raised when the lock directory, the lock file or a ticket cannot be created, opened, locked or written
+  before the block starts."""
+
+
+@contextmanager
+def _setup_step(action: str, target: Path) -> Iterator[None]:
+  """Turn an OSError of one step of the lock setup into LockSetupError naming the step, the path and the error."""
+  try:
+    yield
+  except OSError as exc:
+    detail = exc.strerror or str(exc)
+    if exc.filename is not None and os.fspath(exc.filename) != os.fspath(target):
+      detail += f" ({os.fspath(exc.filename)})"
+    raise LockSetupError(f"[eda-lock] cannot {action} {target}: {detail}") from exc
 
 
 def _number(value: object, name: str, unit: str) -> float:
@@ -362,15 +387,21 @@ def heavy_tool_lock(
   announced = False
   flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
   ticket = path.parent / f"{path.name}.q.{time.time_ns():020d}-{os.getpid()}-{token[:8]}"
-  path.parent.mkdir(parents=True, exist_ok=True)
-  ticket_fd = _open_shared(ticket, flags)
-  _try_lock(ticket_fd)  # a fresh, unique file: always succeeds
-  fd = _open_shared(path, flags)
+  with _setup_step("create the lock directory", path.parent):
+    path.parent.mkdir(parents=True, exist_ok=True)
+  with _setup_step("create the ticket", ticket):
+    ticket_fd = _open_shared(ticket, flags)
+  fd = None
   try:
+    with _setup_step("lock the ticket", ticket):
+      _try_lock(ticket_fd)  # a fresh, unique file: always succeeds
+    with _setup_step("open the lock file", path):
+      fd = _open_shared(path, flags)
     while True:
       ahead = _older_live_ticket(path, ticket)
-      if ahead is None and _try_lock(fd):
-        break
+      with _setup_step("lock", path):
+        if ahead is None and _try_lock(fd):
+          break
       holder = _read_holder(path)
       if time.monotonic() >= deadline:
         raise LockTimeout(f"[eda-lock] gave up after {timeout_s:.0f} s waiting for {path}, held by {describe(holder)}")
@@ -381,14 +412,16 @@ def heavy_tool_lock(
       time.sleep(min(poll_s, max(0.05, deadline - time.monotonic())))
     _release_ticket(ticket, ticket_fd)
     ticket_fd = None
-    _write_record(fd, {**info, "state": "waiting for free memory"})
+    with _setup_step("write the holder record to", path):
+      _write_record(fd, {**info, "state": "waiting for free memory"})
 
     log(f"[eda-lock] acquired {path} for '{purpose}'")
     previous = os.environ.get(TOKEN_ENV)
     os.environ[TOKEN_ENV] = token
     try:
       _wait_for_memory(kind, poll_s, log, free_mb)
-      _write_record(fd, {**info, "state": "running"})
+      with _setup_step("write the holder record to", path):
+        _write_record(fd, {**info, "state": "running"})
       yield path
     finally:
       if previous is None:
@@ -399,7 +432,8 @@ def heavy_tool_lock(
       _unlock(fd)
       log(f"[eda-lock] released {path}")
   finally:
-    os.close(fd)
+    if fd is not None:
+      os.close(fd)
     if ticket_fd is not None:
       _release_ticket(ticket, ticket_fd)
 
@@ -420,7 +454,7 @@ def _release_ticket(ticket: Path, fd: int) -> None:
 
 # Exit codes of the command line besides the exit code of the command, as GNU
 # env and timeout use them.
-EXIT_LOCK_FAILED = 125  # wrong options or settings, lock or memory timeout: the command did not run
+EXIT_LOCK_FAILED = 125  # wrong options or settings, lock error or timeout, memory timeout: the command did not run
 EXIT_CANNOT_RUN = 126  # the command exists but cannot be started
 EXIT_NOT_FOUND = 127  # no such command
 
@@ -473,6 +507,7 @@ def run(
       return
     raise _Interrupted(signum)
 
+  outcome: int | None = None  # exit code, once the command has been started (or could not be)
   previous = {}
   for signum in signal_names:
     if signal.getsignal(signum) is signal.SIG_IGN:
@@ -486,20 +521,28 @@ def run(
         child = subprocess.Popen(command)
       except FileNotFoundError as exc:
         log(f"[eda-lock] command not found: {command[0]} ({exc})")
-        return EXIT_NOT_FOUND
+        outcome = EXIT_NOT_FOUND
       except OSError as exc:
         log(f"[eda-lock] cannot run {command[0]}: {exc}")
-        return EXIT_CANNOT_RUN
-      state["child"] = child
-      for signum in state["pending"]:
-        child.send_signal(signum)
-      returncode = child.wait()
-    return exit_code(returncode)
+        outcome = EXIT_CANNOT_RUN
+      else:
+        state["child"] = child
+        for signum in state["pending"]:
+          child.send_signal(signum)
+        outcome = exit_code(child.wait())
+    return outcome
   except _Interrupted as exc:
     log(f"[eda-lock] {signal_names.get(exc.signum, exc.signum)} before the command started: not started")
     return 128 + exc.signum
   except (LockTimeout, MemoryTimeout, LockConfigError) as exc:
     log(str(exc))
+    return EXIT_LOCK_FAILED
+  except OSError as exc:
+    if outcome is not None:
+      # Releasing the lock failed after the command: its exit code stands.
+      log(f"[eda-lock] error while releasing the lock, exit code of the command kept: {exc}")
+      return outcome
+    log(str(exc) if isinstance(exc, LockSetupError) else f"[eda-lock] lock failed, command not started: {exc}")
     return EXIT_LOCK_FAILED
   finally:
     for signum, old in previous.items():
@@ -524,7 +567,8 @@ def main(argv: list[str] | None = None) -> int:
     description="Run COMMAND holding the machine-wide EDA lock: wait for the lock, then for free memory, "
                 "run the command, release the lock when it exits. Exit code: that of the command (128 + N "
                 f"if signal N stopped it); {EXIT_LOCK_FAILED} if the command did not run (wrong options, a "
-                "malformed setting in the environment, lock or memory timeout), "
+                "malformed setting in the environment, a lock directory or file that cannot be created or "
+                "opened, lock or memory timeout), "
                 f"{EXIT_CANNOT_RUN} if it cannot be started, {EXIT_NOT_FOUND} if it does not exist. Lock "
                 f"directory: LM_EDA_LOCK_DIR. Timeouts and thresholds ({TIMEOUT_ENV}, {MEMORY_TIMEOUT_ENV}, "
                 + ", ".join(env for env, _ in MIN_FREE_MB.values()) + ") must be finite numbers, not negative.")

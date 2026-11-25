@@ -75,10 +75,13 @@ All notable changes to this project are documented here.
   releases the lock only after the command has exited, also after an error
   or an interruption. Exit code: the command's (128 + N if signal N stopped
   it); 125 if the command did not run (lock or memory timeout, wrong
-  options, a malformed setting in the environment), 126 if it cannot be
-  started, 127 if it does not exist. Timeouts and memory thresholds, from
-  the options or the environment, must be finite numbers, not negative;
-  the lock refuses anything else before it queues (`LockConfigError`). The
+  options, a malformed setting in the environment, a lock directory, lock
+  file or ticket that cannot be created or opened: `LockSetupError`, which
+  names the path and the error), 126 if it cannot be started, 127 if it
+  does not exist; an error while releasing the lock after the command does
+  not change its exit code. Timeouts and memory thresholds, from the
+  options or the environment, must be finite numbers, not negative; the
+  lock refuses anything else before it queues (`LockConfigError`). The
   file depends only on the Python standard library, so other repositories
   can keep an identical copy.
 

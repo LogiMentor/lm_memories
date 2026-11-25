@@ -289,9 +289,12 @@ It waits for the lock and then for free memory (`--kind synthesis` or
 `simulation`), runs the command, and releases the lock when the command
 exits, also after an error or an interruption. Its exit code is the
 command's; 125 means that the command did not run (lock or memory timeout,
-wrong options, or a malformed setting such as `LM_EDA_MEMORY_TIMEOUT=abc`:
-timeouts and thresholds must be finite numbers, not negative), 126 and 127
-that it cannot be started or does not exist.
+wrong options, a malformed setting such as `LM_EDA_MEMORY_TIMEOUT=abc`:
+timeouts and thresholds must be finite numbers, not negative, or a lock
+directory, lock file or ticket that cannot be created or opened, for
+example without write permission), 126 and 127 that it cannot be started
+or does not exist. An error while releasing the lock after the command does
+not change the command's exit code.
 `python3 tools/eda_lock.py --help` lists the options. The file depends only
 on the Python standard library, so other repositories keep an identical
 copy and queue on the same lock.

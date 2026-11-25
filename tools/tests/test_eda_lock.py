@@ -19,6 +19,8 @@ from pathlib import Path
 from tools.eda_lock import (LOCK_DIR_ENV, LOCK_NAME, MEMORY_TIMEOUT_ENV, TIMEOUT_ENV, TOKEN_ENV, LockConfigError,
                             LockTimeout, MemoryTimeout, free_physical_mb, heavy_tool_lock, min_free_mb)
 
+import tools.eda_lock as eda_lock
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 # Holder in another process. argv: lock path, mode, log path.
@@ -306,6 +308,56 @@ class EdaLockSettingsTest(unittest.TestCase):
         pass
 
 
+def _write_protection_is_enforced() -> bool:
+  """False where a directory without write permission can still be written (root, Windows)."""
+  return os.name != "nt" and os.geteuid() != 0
+
+
+class EdaLockSetupErrorTest(unittest.TestCase):
+  """Review of PR #11: a lock directory or file that cannot be created or opened raises LockSetupError."""
+
+  def setUp(self) -> None:
+    self.tmp = tempfile.TemporaryDirectory()
+    self.dir = Path(self.tmp.name)
+
+  def tearDown(self) -> None:
+    for path in self.dir.rglob("*"):
+      if path.is_dir():
+        path.chmod(0o755)
+    self.tmp.cleanup()
+
+  def _enter(self, lock: Path) -> str:
+    with self.assertRaises(eda_lock.LockSetupError) as raised:
+      with heavy_tool_lock("setup", lock_path=lock, log=lambda m: None, free_mb=lambda: 1e9):
+        self.fail("the block must not run")
+    self.assertIsInstance(raised.exception, OSError)
+    return str(raised.exception)
+
+  def test_directory_below_a_file(self) -> None:
+    a_file = self.dir / "a_file"
+    a_file.write_text("")
+    message = self._enter(a_file / "sub" / LOCK_NAME)
+    self.assertIn(f"cannot create the lock directory {a_file / 'sub'}", message)
+    self.assertEqual(a_file.read_text(), "")
+
+  @unittest.skipUnless(_write_protection_is_enforced(), "POSIX permissions, not as root")
+  def test_directory_without_write_permission(self) -> None:
+    locked = self.dir / "read_only"
+    locked.mkdir()
+    locked.chmod(0o555)
+    message = self._enter(locked / LOCK_NAME)
+    self.assertIn(f"cannot create the ticket {locked / LOCK_NAME}.q.", message)
+    self.assertIn("Permission denied", message)
+    self.assertEqual(list(locked.iterdir()), [])
+
+  def test_lock_file_that_cannot_be_opened_leaves_no_ticket(self) -> None:
+    lock = self.dir / LOCK_NAME
+    lock.mkdir()  # a directory where the lock file should be
+    message = self._enter(lock)
+    self.assertIn(f"cannot open the lock file {lock}", message)
+    self.assertEqual(list(self.dir.glob(LOCK_NAME + ".q.*")), [], "the ticket is released")
+
+
 class EdaLockCliTest(unittest.TestCase):
   """python3 tools/eda_lock.py [options] -- COMMAND: run as a script, as other repositories do."""
 
@@ -316,6 +368,9 @@ class EdaLockCliTest(unittest.TestCase):
     self.marker = self.dir / "marker"
 
   def tearDown(self) -> None:
+    for path in self.dir.rglob("*"):
+      if path.is_dir():
+        path.chmod(0o755)
     self.tmp.cleanup()
 
   def _env(self, **extra: str) -> dict[str, str]:
@@ -396,6 +451,36 @@ class EdaLockCliTest(unittest.TestCase):
         self.assertNotIn("Traceback", done.stderr)
         self.assertFalse(self.marker.exists())
         self.assertEqual(list(self.dir.glob(LOCK_NAME + "*")), [], "refused before queuing")
+
+  def test_lock_setup_errors_do_not_run_the_command(self) -> None:
+    # Review of PR #11: an OSError while preparing the lock stopped with a traceback and exit code 1.
+    a_file = self.dir / "a_file"
+    a_file.write_text("")
+    cases = [(a_file / "sub", f"cannot create the lock directory {a_file / 'sub'}")]
+    if _write_protection_is_enforced():
+      locked = self.dir / "read_only"
+      locked.mkdir()
+      locked.chmod(0o555)
+      cases.append((locked, f"cannot create the ticket {locked / LOCK_NAME}.q."))
+    for directory, expected in cases:
+      with self.subTest(directory=directory.name):
+        done = self._cli("--", sys.executable, "-c", MARK, str(self.marker), **{LOCK_DIR_ENV: str(directory)})
+        self.assertEqual(done.returncode, 125, done.stderr)
+        self.assertIn(expected, done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
+        self.assertFalse(self.marker.exists())
+
+  def test_release_errors_keep_the_exit_code_of_the_command(self) -> None:
+    # Review of PR #11: once the command has started, its exit code stands.
+    from unittest import mock
+    for command, expected in (([sys.executable, "-c", "raise SystemExit(4)"], 4),
+                              (["lm-no-such-command"], eda_lock.EXIT_NOT_FOUND)):
+      with self.subTest(command=command[-1]):
+        messages: list[str] = []
+        with mock.patch.object(eda_lock, "_unlock", side_effect=OSError(5, "Input/output error")):
+          code = eda_lock.run(command, lock_path=self.lock, log=messages.append, free_mb=lambda: 1e9)
+        self.assertEqual(code, expected, messages)
+        self.assertTrue(any("exit code of the command kept" in m for m in messages), messages)
 
   def test_lock_timeout_does_not_run_the_command(self) -> None:
     with heavy_tool_lock("holder", lock_path=self.lock, log=lambda m: None, free_mb=lambda: 1e9):

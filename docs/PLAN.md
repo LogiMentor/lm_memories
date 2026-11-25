@@ -996,10 +996,12 @@ the summary in `<campaign root>/summary.md`.
 ### 3.15 Cross-cutting work (other LogiMentor repositories)
 
 - **Shared EDA lock:** `python3 tools/eda_lock.py [--kind synthesis|simulation]
-  [--timeout SECONDS] [--purpose TEXT] -- COMMAND [ARG...]` runs a command
-  holding the lock: it waits for the lock and for free memory, and releases
-  the lock only after the command has exited (the signals of a terminal
-  reach the command, SIGTERM and SIGHUP are relayed to it). Exit code: the
+  [--timeout SECONDS] [--kill-after SECONDS] [--purpose TEXT] -- COMMAND
+  [ARG...]` runs a command holding the lock: it waits for the lock and for
+  free memory, and releases the lock only after the command has exited (the
+  signals of a terminal reach the command; SIGTERM and SIGHUP are relayed
+  to it and, on Linux, to all its descendants, and those still running
+  `--kill-after` seconds later, default 30, receive SIGKILL). Exit code: the
   command's, 128 + N after signal N, 125 if it did not run, 126 and 127 if
   it cannot be started or does not exist. Other repositories keep an
   identical copy of the file (standard library only, checked by a test).

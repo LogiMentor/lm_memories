@@ -7,6 +7,24 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-25
+
+Optional synchronous reset of the read output (issue #7, PR #16), and the
+campaigns on Linux with other tool versions (issue #8, PR #9). No breaking
+change: instances of v0.2.0 keep their behaviour and, with Vivado 2024.1,
+their netlist; read **Migration** below before using the reset.
+
+**Validated vendors:** AMD Vivado 2024.1 on Artix-7 (`xc7a35tfgg484-2`) and
+Kintex UltraScale+ (`xcku3p-ffva676-2-e`): campaign
+[`docs/results/v0.3.0-pcl01/`](docs/results/v0.3.0-pcl01/README.md) on
+PCL01 (synthesis 92/92, static checks 30/30, post-synthesis 124/124, VUnit
+74/74 on GHDL 6.0.0 and Questa Starter 2025.2, mutation 20/20). Intel
+Quartus 25.1std (`5CEBA4F23C7`): static checks only (12/12); phase 4
+(issue #6) is still to come. Lattice and Microchip not verified. Known
+defect: on a common clock, `lm_mem_ram_r_w_ratio` with a read port
+narrower than the write port returns undefined data on a read during write
+on the AMD netlist (issue #15).
+
 ### Added
 
 - **Optional synchronous reset of the read output (issue #7).** New ports,

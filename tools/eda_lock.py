@@ -47,6 +47,10 @@ and COMMAND does not run. Limits:
   running after them;
 - a descendant adopted by another subreaper below COMMAND, or that the
   command line may not signal (another user), escapes;
+- if the child-subreaper attribute cannot be set (prctl not reachable
+  through ctypes), the command line says so in one line on stderr and runs
+  COMMAND all the same: a descendant whose parent exits is then adopted by
+  init and may escape;
 - on other POSIX systems and on Windows the signals reach COMMAND only;
 - a command line killed with SIGKILL cannot do any of this: the operating
   system releases the lock and COMMAND goes on without it.
@@ -764,6 +768,9 @@ def run(
       state["starting"] = True
       if linux:
         subreaper = _child_subreaper(1)
+        if subreaper is None:
+          log("[eda-lock] child subreaper not available: on SIGTERM or SIGHUP, descendants whose parent "
+              "exits may escape")
         state["before"] = {(pid, start) for pid, (ppid, start, _) in _process_table().items() if ppid == me}
       try:
         child = subprocess.Popen(command)

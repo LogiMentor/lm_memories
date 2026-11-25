@@ -307,7 +307,10 @@ running `--kill-after` seconds later (default 30) receive SIGKILL; only then
 is the lock released. Limits: when the command exits by itself, processes
 it leaves in the background are not waited for (for example the JTAG server
 `jtagd` that the Quartus programming tools start); on other POSIX systems
-and on Windows the signals reach the command only.
+and on Windows the signals reach the command only. Where the
+child-subreaper attribute cannot be set, the command line says so in one
+line on stderr and runs the command all the same, and a descendant whose
+parent exits may then escape.
 `python3 tools/eda_lock.py --help` lists the options. The file depends only
 on the Python standard library, so other repositories keep an identical
 copy and queue on the same lock.

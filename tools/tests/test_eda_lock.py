@@ -470,6 +470,17 @@ class EdaLockProcessTreeTest(unittest.TestCase):
     self.assertTrue([c for c in sent.call_args_list if c.args[0] == pid and c.args[2] == signal.SIGTERM],
                     sent.call_args_list)
 
+  def test_without_subreaper_the_command_runs_with_a_warning(self) -> None:
+    # Review of PR #11: a failed prctl was ignored without a word.
+    from unittest import mock
+    messages: list[str] = []
+    with mock.patch.object(eda_lock, "_child_subreaper", return_value=None):
+      code = eda_lock.run(["sh", "-c", "exit 4"], lock_path=self.lock, log=messages.append, free_mb=lambda: 1e9)
+    self.assertEqual(code, 4, messages)
+    warnings = [m for m in messages if "child subreaper not available" in m]
+    self.assertEqual(len(warnings), 1, messages)
+    self.assertNotIn("\n", warnings[0])
+
   def test_orphans_never_take_the_exit_status_of_the_command(self) -> None:
     # The adopted orphans are reaped by their own process id: the exit status of
     # the command, and of another child of this process, stay with their owners.
